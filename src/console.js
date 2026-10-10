@@ -134,7 +134,13 @@ async function todo(db, env) {
 }
 
 async function overview(db, env) {
-  const c = await takeSnapshot(db);
+  // L'instantané du jour n'est réécrit qu'au plus toutes les 15 minutes (ouverture de la console plus rapide).
+  const last = await db.prepare("SELECT value FROM platform_meta WHERE key = 'snapshot_at'").first();
+  let c;
+  if (!last || Date.now() - Number(last.value) > 15 * 60000) {
+    c = await takeSnapshot(db);
+    await db.prepare("INSERT OR REPLACE INTO platform_meta (key, value) VALUES ('snapshot_at', ?)").bind(String(Date.now())).run();
+  } else c = await platformCounts(db);
   const history = await all(db.prepare('SELECT * FROM platform_daily WHERE day >= ? ORDER BY day').bind(addDays(today(), -89)));
   const week = history.find((h) => h.day === addDays(today(), -7));
   const trend = (k) => (week ? c[k === 'stores' ? 'stores' : k] - week[k] : null);

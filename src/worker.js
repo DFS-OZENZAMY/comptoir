@@ -10,6 +10,7 @@ import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './catalo
 import { signup, login, logout, getContext, me, changePassword, touchStore } from './auth.js';
 import { storeRoutes, getSettings, imageUrl, runDailyDigests } from './store.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './console.js';
+import { renderLanding, renderMetier, renderHub, renderVitrine, sitemap, robots, html } from './seo.js';
 
 async function publicCatalog(db, slug) {
   const store = await db.prepare('SELECT id, name, slug, status, business_type FROM stores WHERE slug = ?').bind(slug).first();
@@ -103,6 +104,15 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
+    // Un seul domaine pour Google : si APP_URL est réglé, les autres adresses (workers.dev…) redirigent vers lui.
+    if (env.APP_URL && (request.method === 'GET' || request.method === 'HEAD') && !p.startsWith('/api/')) {
+      try {
+        const main = new URL(env.APP_URL);
+        if (main.host !== url.host && !/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(url.host)) {
+          return Response.redirect(main.origin + p + url.search, 301);
+        }
+      } catch { /* APP_URL invalide : ignoré */ }
+    }
     if (p === '/api' || p.startsWith('/api/')) {
       const t0 = Date.now();
       const info = { route: 'api' };
@@ -118,8 +128,30 @@ export default {
       }
       return res;
     }
-    // Catalogue public d'un commerce : même page pour tous, le JavaScript lit le slug dans l'adresse.
-    if (/^\/s\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/store/', url), request));
+    // Pages publiques rendues côté serveur pour le référencement
+    try {
+      if (p === '/robots.txt') return robots(url);
+      if (p === '/sitemap.xml') return await sitemap(env, url);
+      if (p === '/' || p === '/index.html') return await renderLanding(env, request, url);
+      if (p === '/logiciel-de-caisse' || p === '/logiciel-de-caisse/') {
+        if (p === '/logiciel-de-caisse') return Response.redirect(url.origin + '/logiciel-de-caisse/', 301);
+        return html(renderHub(url.origin));
+      }
+      const mm = p.match(/^\/logiciel-de-caisse\/([a-z-]+)\/?$/);
+      if (mm) {
+        if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);
+        const page = renderMetier(url.origin, mm[1]);
+        if (page) return html(page);
+        return Response.redirect(url.origin + '/logiciel-de-caisse/', 302);
+      }
+      const sm = p.match(/^\/s\/([a-z0-9-]+)\/?$/);
+      if (sm) {
+        if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);
+        return await renderVitrine(env, request, url, sm[1]);
+      }
+    } catch (e) {
+      console.error('Page publique :', e);
+    }
     return env.ASSETS.fetch(request);
   },
 

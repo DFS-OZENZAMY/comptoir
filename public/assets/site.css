@@ -143,3 +143,37 @@ h3 { margin: 0; }
   .hero-cta .btn { width: 100%; }
   .final .btn { width: 100%; }
 }
+
+/* Liens des métiers (accueil) */
+.chips li a { text-decoration: none; }
+.chips li:has(a):hover { border-color: var(--ink); }
+.chips li:has(a) { padding: 0; }
+.chips li a { display: block; padding: 7px 16px; }
+
+/* Pied de page en colonnes */
+.footer-cols { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 32px; padding-top: 44px; padding-bottom: 20px; }
+.footer-cols p { margin: 10px 0 0; max-width: 28rem; }
+.footer-cols nav { display: flex; flex-direction: column; gap: 8px; }
+.footer-cols strong { color: #fff; margin-bottom: 4px; }
+.footer-cols a { text-decoration: none; }
+.footer-cols a:hover { color: #fff; }
+.footer-in { border-top: 1px solid #2A2C33; }
+@media (max-width: 760px) { .footer-cols { grid-template-columns: 1fr; gap: 24px; } }
+
+/* Pages métier */
+.breadcrumb { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 18px; font-size: .88rem; color: var(--muted); }
+.breadcrumb a { color: var(--muted); }
+.breadcrumb [aria-current] { color: var(--ink); }
+.hero-metier { grid-template-columns: 1fr; padding-top: clamp(28px, 5vw, 64px); padding-bottom: clamp(40px, 6vw, 80px); }
+.hero-metier h1 { max-width: 16em; font-size: clamp(2.8rem, 6vw, 4.6rem); }
+.features-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.related { padding-bottom: clamp(56px, 7vw, 96px); }
+.related h2 { font-size: clamp(1.7rem, 3vw, 2.2rem); margin-bottom: 18px; }
+.related-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.related-list a { display: block; padding: 8px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); text-decoration: none; font-weight: 600; font-size: .9rem; }
+.related-list a:hover { border-color: var(--ink); }
+.metier-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important; }
+.metier-title { font-size: 1.3rem !important; margin: 0 0 8px; font-family: var(--font); font-weight: 600; letter-spacing: 0; }
+.metier-title a { text-decoration: none; }
+.metier-more { display: inline-block; margin-top: 14px; font-weight: 600; color: var(--signal-strong); }
+@media (max-width: 900px) { .features-2 { grid-template-columns: 1fr; } }

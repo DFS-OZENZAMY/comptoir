@@ -77,6 +77,40 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Référencement naturel (SEO)
+
+Les pages publiques sont **rendues côté serveur** (`src/seo.js`) : Google lit leur contenu sans exécuter de JavaScript.
+
+- **Accueil (`/`)** :
+  - titre, description et adresse canonique ;
+  - balises de partage (Open Graph, Twitter) avec l'image `assets/og-image.png` ;
+  - données structurées : `Organization`, `WebSite`, `SoftwareApplication` (tarifs) et `FAQPage` ;
+  - tarifs et liens vers les métiers directement dans le HTML.
+- **Pages métier (`/logiciel-de-caisse/…`)** : 7 pages ciblant les recherches des commerçants (quincaillerie, épicerie, mode, beauté, téléphonie, librairie, décoration). Chacune a son texte, ses avantages, sa FAQ, son fil d'Ariane et ses liens croisés. La page `/logiciel-de-caisse/` les regroupe. Le contenu se modifie dans `METIERS`, dans `src/seo.js`.
+- **Vitrines (`/s/<commerce>`)** :
+  - titre et description propres à chaque commerce ;
+  - produits, prix et disponibilité dans le HTML ;
+  - données structurées `Store` : adresse, téléphone et catalogue d'offres avec prix et disponibilité ;
+  - erreur 404 réelle pour un commerce inconnu ou suspendu.
+- **`/sitemap.xml`** : généré automatiquement, il inclut chaque vitrine publique dès qu'elle a des produits. **`/robots.txt`** ferme `/app/`, `/console/` et `/api/` aux moteurs de recherche, sauf les images de produits.
+- **Domaine unique** : si `APP_URL` est réglé (par exemple `https://comptoir.app`), toute autre adresse, dont `*.workers.dev`, redirige vers lui pour éviter le contenu en double.
+
+**Après la mise en ligne sur votre domaine** : déclarez le site dans Google Search Console, puis soumettez `https://votre-domaine/sitemap.xml`.
+
+## Performances
+
+- **Polices hébergées sur le site** (`public/assets/fonts/`, 75 Ko en woff2, latin) et préchargées : aucune requête vers Google Fonts, ce qui est aussi plus simple pour le RGPD.
+- **Espace commerçant et console** :
+  - mémoire courte de 30 secondes pour les lectures, vidée à chaque modification ;
+  - préchargement des données d'une rubrique dès le survol ou le toucher de son lien, et des rubriques principales après la connexion ;
+  - « Chargement… » affiché seulement au-delà de 180 ms.
+
+  Résultat : environ 80 ms pour changer de rubrique.
+- **Compteurs du menu** : une seule requête légère (`/api/store/badges`) au lieu de charger les alertes et toutes les commandes.
+- **Console** : l'instantané quotidien est réécrit au plus toutes les 15 minutes.
+- **Vitrine** : les données arrivent avec la page, sans appel supplémentaire à l'API.
+- **Cache navigateur** (`public/_headers`) : polices mises en cache pour un an, images pour une semaine.
+
 ## Design
 
 Maquettes et système de design : **https://www.figma.com/design/3CaB0cSmhpdObFGUVA9Ktm**

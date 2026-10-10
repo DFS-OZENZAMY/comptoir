@@ -24,7 +24,7 @@
   // Sans photo : les trois premières lettres du nom (« Café moulu » donne CAF).
   const initials = (p) => esc(norm(p.name).replace(/[^a-z0-9]/g, '').slice(0, 3).toUpperCase() || '·');
   const media = (p) => p.image
-    ? `<img src="${esc(p.image)}" alt="" loading="lazy">`
+    ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" decoding="async" width="300" height="225">`
     : `<span class="placeholder" aria-hidden="true">${initials(p)}</span>`;
   const telHref = () => (state.settings.phone ? 'tel:' + state.settings.phone.replace(/[^\d+]/g, '') : '#infos');
 
@@ -94,7 +94,7 @@
           <div class="card-media">${media(p)}</div>
           <div class="card-body">
             <span class="card-ref">${esc(p.ref)}</span>
-            <span class="card-name">${esc(p.name)}</span>
+            <h3 class="card-name">${esc(p.name)}</h3>
             ${p.availability ? `<span class="avail ${p.availability}">${AVAIL[p.availability]}</span>` : ''}
           </div>
           ${p.price_ttc !== null ? `<div class="card-foot">
@@ -135,8 +135,11 @@
   /* --- Chargement --- */
   (async () => {
     try {
-      const res = await fetch(`/api/public/stores/${encodeURIComponent(slug)}`);
-      const data = await res.json();
+      // Données livrées avec la page par le serveur (aucun aller-retour) ; sinon, appel à l'API.
+      let data, status = 200;
+      if (window.__STORE__ !== undefined) { data = window.__STORE__; status = data ? 200 : 404; }
+      else { const res = await fetch(`/api/public/stores/${encodeURIComponent(slug)}`); data = await res.json(); status = res.status; }
+      const res = { status, ok: status === 200 };
       if (res.status === 404) {
         document.querySelectorAll('.topbar, .hero, .cats, .catalog, .infos').forEach((el) => { el.hidden = true; });
         $('#notFound').hidden = false; document.title = 'Commerce introuvable';

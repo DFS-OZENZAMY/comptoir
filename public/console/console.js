@@ -36,7 +36,25 @@
   const state = { plans: {}, stores: null, me: null, filter: { q: '', health: '', plan: '', sort: 'activity' }, timer: null, drawer: null };
 
   /* ---------------- Outils ---------------- */
-  async function api(path, { method = 'GET', body } = {}) {
+  const CACHE_TTL = 30000;
+  const cache = new Map(), inflight = new Map();
+  async function api(path, opts = {}) {
+    const { method = 'GET', fresh = false } = opts;
+    if (method === 'GET' && !fresh) {
+      const c = cache.get(path);
+      if (c && Date.now() - c.t < CACHE_TTL) return c.data;
+      if (inflight.has(path)) return inflight.get(path);
+    }
+    const run = rawApi(path, opts).then((data) => { if (method === 'GET') cache.set(path, { t: Date.now(), data }); else cache.clear(); return data; });
+    if (method === 'GET') { inflight.set(path, run); run.finally(() => inflight.delete(path)).catch(() => {}); }
+    return run;
+  }
+  const PREFETCH = { 'vue-d-ensemble': ['/console/overview'], 'a-traiter': ['/console/todo'], commerces: ['/console/stores'], activite: ['/console/activity'], revenus: ['/console/revenue'], systeme: ['/console/system'], journal: ['/console/events?'], utilisateurs: ['/console/users'] };
+  const prefetch = (key) => { for (const p of PREFETCH[key] || []) { const c = cache.get(p); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(p)) api(p).catch(() => {}); } };
+  const onIntent = (e) => { const a = e.target.closest && e.target.closest('a[href^="#/"]'); if (a) prefetch(a.getAttribute('href').slice(2).split('?')[0]); };
+  document.addEventListener('mouseover', onIntent, { passive: true });
+  document.addEventListener('touchstart', onIntent, { passive: true });
+  async function rawApi(path, { method = 'GET', body } = {}) {
     const res = await fetch('/api' + path, {
       method, credentials: 'same-origin',
       headers: body !== undefined ? { 'content-type': 'application/json' } : {},
@@ -590,7 +608,6 @@
     $('.console-mnav a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
     $('#viewTitle').textContent = title; $('#viewActions').innerHTML = '';
     document.title = `${title} : console Comptoir`;
-    $('#view').innerHTML = '<p class="loading">Chargement…</p>';
     for (const id of chartFns.keys()) if (!document.querySelector(`.chart-slot[data-c="${id}"]`)) chartFns.delete(id);
     load(fn);
     clearInterval(state.timer);
@@ -598,7 +615,9 @@
   }
   function load(fn, silent = false) {
     const y = window.scrollY;
-    Promise.resolve(fn()).then(() => { lastRefresh = Date.now(); renderRefreshed(); if (silent) window.scrollTo(0, y); }).catch(fail);
+    if (silent) cache.clear(); // la mise à jour automatique va toujours chercher des chiffres frais
+    const slow = silent ? null : setTimeout(() => { $('#view').innerHTML = '<p class="loading">Chargement…</p>'; }, 180);
+    Promise.resolve(fn()).finally(() => clearTimeout(slow)).then(() => { lastRefresh = Date.now(); renderRefreshed(); if (silent) window.scrollTo(0, y); }).catch(fail);
   }
   function refreshCurrent() { const key = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0]; if (VIEWS[key]) load(VIEWS[key][1], true); state.stores = null; }
   function renderRefreshed() { $('#refreshed').textContent = lastRefresh ? `Mis à jour ${since(new Date(lastRefresh).toISOString())}` : ''; }
@@ -627,6 +646,7 @@
       $('#app').hidden = false;
       route();
       api('/console/todo').then(updateTodoBadge).catch(() => {});
+      setTimeout(() => ['commerces', 'a-traiter', 'systeme'].forEach(prefetch), 1500);
     } catch (e) { $('#gate').hidden = false; }
   })();
 })();

@@ -1,0 +1,5 @@
+/* Polices hébergées sur le site (plus rapide, aucune requête vers un service tiers) */
+@font-face { font-family: "Archivo"; src: url("/assets/fonts/archivo.woff2") format("woff2"); font-weight: 400 800; font-style: normal; font-display: swap; }
+@font-face { font-family: "Archivo Narrow"; src: url("/assets/fonts/archivo-narrow.woff2") format("woff2"); font-weight: 500 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/assets/fonts/plex-mono-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "IBM Plex Mono"; src: url("/assets/fonts/plex-mono-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }

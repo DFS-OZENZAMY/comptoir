@@ -35,17 +35,48 @@
   const cap = (s) => (s === 'mobile' ? 'Paiement mobile' : s.charAt(0).toUpperCase() + s.slice(1));
 
   /* ---------------- API ---------------- */
-  async function api(path, { method = 'GET', body } = {}) {
-    const res = await fetch('/api' + path, {
-      method, credentials: 'same-origin',
-      headers: body !== undefined ? { 'content-type': 'application/json' } : {},
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (res.status === 401 && path.startsWith('/store')) { showLogin(); throw new Error(data.error || 'Session expirée.'); }
-    if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
-    return data;
+  // Mémoire courte des lectures : une rubrique déjà visitée s'affiche instantanément.
+  // Toute modification (vente, produit, réglage…) vide la mémoire pour ne jamais montrer de données périmées.
+  const CACHE_TTL = 30000;
+  const cache = new Map(), inflight = new Map();
+  async function api(path, { method = 'GET', body, fresh = false } = {}) {
+    if (method === 'GET' && !fresh) {
+      const c = cache.get(path);
+      if (c && Date.now() - c.t < CACHE_TTL) return c.data;
+      if (inflight.has(path)) return inflight.get(path);
+    }
+    const run = (async () => {
+      const res = await fetch('/api' + path, {
+        method, credentials: 'same-origin',
+        headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401 && path.startsWith('/store')) { cache.clear(); showLogin(); throw new Error(data.error || 'Session expirée.'); }
+      if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
+      if (method === 'GET') cache.set(path, { t: Date.now(), data }); else cache.clear();
+      return data;
+    })();
+    if (method === 'GET') { inflight.set(path, run); run.finally(() => inflight.delete(path)).catch(() => {}); }
+    return run;
   }
+  // Préchargement : les données d'une rubrique sont demandées dès que la souris la survole.
+  const PREFETCH = {
+    'tableau-de-bord': ['/store/dashboard', '/store/alerts'], alertes: ['/store/alerts', '/store/alerts/email-status'],
+    ventes: ['/store/documents?type=commande'], commandes: ['/store/documents?type=commande'], devis: ['/store/documents?type=devis'],
+    factures: ['/store/documents?type=facture'], stock: ['/store/stock'], parametres: ['/store/alerts/email-status'],
+    reglages: ['/store/alerts/email-status'], equipe: ['/store/team'], abonnement: ['/store/subscription'],
+  };
+  function prefetch(key) {
+    for (const p of PREFETCH[key] || []) { const c = cache.get(p); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(p)) api(p).catch(() => {}); }
+  }
+  const onIntent = (e) => {
+    const a = e.target.closest && e.target.closest('a[href^="#/"]'); if (!a) return;
+    prefetch(a.getAttribute('href').slice(2).split('?')[0]);
+  };
+  document.addEventListener('mouseover', onIntent, { passive: true });
+  document.addEventListener('touchstart', onIntent, { passive: true });
+  document.addEventListener('focusin', onIntent);
 
   function toast(msg, error = false) {
     let t = $('.toast');
@@ -74,31 +105,25 @@
   /* ---------------- Données partagées ---------------- */
   async function loadShared() {
     const [settings, products, categories, customers] = await Promise.all([
-      api('/store/settings'), api('/store/products'), api('/store/categories'), api('/store/customers'),
+      api('/store/settings', { fresh: true }), api('/store/products', { fresh: true }), api('/store/categories', { fresh: true }), api('/store/customers', { fresh: true }),
     ]);
     Object.assign(state, { settings, products, categories, customers });
     updateBadges();
   }
   async function refresh(...keys) {
     const map = { products: '/store/products', categories: '/store/categories', customers: '/store/customers', settings: '/store/settings' };
-    const res = await Promise.all(keys.map((k) => api(map[k])));
+    const res = await Promise.all(keys.map((k) => api(map[k], { fresh: true })));
     keys.forEach((k, i) => { state[k] = res[i]; });
     updateBadges();
   }
   async function updateBadges() {
-    const low = state.products.filter((p) => p.stock <= p.stock_min).length;
-    const b = $('#badgeStock'); b.hidden = !low; b.textContent = low;
     try {
-      const a = await api('/store/alerts');
-      const n = a.overdue.length + a.out_of_stock.length;
-      const ba = $('#badgeAlerts'); ba.hidden = !a.totals.count; ba.textContent = a.totals.count;
-      ba.classList.toggle('urgent', n > 0);
-      const bm = $('#badgeAlertsM'); bm.hidden = !a.totals.count; bm.textContent = a.totals.count;
-    } catch { /* silencieux */ }
-    try {
-      const orders = await api('/store/documents?type=commande');
-      const n = orders.filter((o) => ['nouvelle', 'confirmée'].includes(o.status)).length;
-      const bo = $('#badgeOrders'); bo.hidden = !n; bo.textContent = n;
+      const c = await api('/store/badges');
+      const set = (id, n) => { const el = $(id); if (el) { el.hidden = !n; el.textContent = n; } };
+      set('#badgeStock', c.out_of_stock + c.low_stock);
+      set('#badgeAlerts', c.alerts); set('#badgeAlertsM', c.alerts);
+      $('#badgeAlerts').classList.toggle('urgent', c.urgent > 0);
+      set('#badgeOrders', c.orders);
     } catch { /* silencieux */ }
   }
 
@@ -134,7 +159,7 @@
     $('#auth').hidden = true; $('#app').hidden = false;
     $('#view').innerHTML = '<p class="loading">Chargement…</p>';
     try {
-      state.me = await api('/auth/me');
+      state.me = await api('/auth/me', { fresh: true });
       if (!state.me.authenticated) return showLogin();
       if (!state.me.store) { location.href = state.me.platform_admin ? '/console/' : '/'; return; }
       await loadShared();
@@ -142,6 +167,8 @@
     renderShell();
     if (location.hash === '#/inscription' || location.hash === '') location.hash = '#/tableau-de-bord'; else route();
     if (state.me.user.must_change_password) passwordModal(true);
+    const idle = window.requestIdleCallback || ((f) => setTimeout(f, 600));
+    idle(() => ['tableau-de-bord', 'commandes', 'alertes'].forEach(prefetch));
   }
   function renderShell() {
     const me = state.me, st = me.store;
@@ -249,7 +276,8 @@
     closeMore();
     document.title = `${title} : ${state.settings.shop_name || ''} | Comptoir`;
     window.scrollTo(0, 0);
-    Promise.resolve(fn()).catch(fail);
+    const slow = setTimeout(() => { $('#view').innerHTML = '<p class="loading">Chargement…</p>'; }, 180);
+    Promise.resolve(fn()).catch(fail).finally(() => clearTimeout(slow));
   }
   window.addEventListener('hashchange', route);
   const setActions = (html) => { $('#viewActions').innerHTML = html; };
@@ -1306,7 +1334,7 @@
     const s = state.settings;
     const total = list.reduce((t, p) => t + p.suggested * (p.purchase_price || 0), 0);
     const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>Liste à commander</title>
-      <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+      <link href="${location.origin}/assets/fonts.css" rel="stylesheet">
       <style>@page{size:A4;margin:16mm 14mm}body{font-family:Archivo,Arial,sans-serif;color:#1B2530;font-size:10.5pt}
       h1{font-stretch:75%;margin:0 0 4px}p{margin:0 0 16px;color:#5A6774}table{width:100%;border-collapse:collapse}
       th{text-align:left;font-size:9pt;color:#5A6774;border-bottom:1px solid #1F2D3A;padding:6px}td{padding:8px 6px;border-bottom:1px solid #E3E6E9}
@@ -1441,7 +1469,7 @@
     const byRate = {};
     d.lines.forEach((l) => { const h = l.qty * l.unit_price_ht; byRate[l.tva_rate] = (byRate[l.tva_rate] || 0) + (h * l.tva_rate) / 100; });
     const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(title)} ${esc(d.number)}</title>
-      <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+      <link href="${location.origin}/assets/fonts.css" rel="stylesheet">
       <style>
         @page { size: A4; margin: 16mm 14mm; }
         * { box-sizing: border-box; }

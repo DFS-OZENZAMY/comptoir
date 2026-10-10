@@ -7,9 +7,9 @@
   <meta name="description" content="Comptoir réunit la caisse, le stock, les devis et factures et une vitrine en ligne pour tous les commerces de proximité. Essai gratuit de 14 jours.">
   <meta name="theme-color" content="#17181C">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Archivo+Narrow:wght@500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="preload" href="/assets/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/assets/fonts/archivo-narrow.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/fonts.css">
   <link rel="stylesheet" href="/assets/site.css">
 </head>
 <body>
@@ -18,6 +18,7 @@
     <nav aria-label="Navigation">
       <a href="#fonctions" class="nav-link">Fonctions</a>
       <a href="#etapes" class="nav-link">Comment ça marche</a>
+      <a href="/logiciel-de-caisse/" class="nav-link">Métiers</a>
       <a href="#tarifs" class="nav-link">Tarifs</a>
       <a href="/app/" class="btn btn-ghost nav-login">Se connecter</a>
       <a href="/app/#/inscription" class="btn btn-primary">Essai gratuit</a>
@@ -103,42 +104,24 @@
   </main>
 
   <footer class="footer">
-    <div class="wrap footer-in">
-      <span class="logo logo-light">Comptoir</span>
-      <span>© <span id="year"></span> Comptoir. Caisse, stock et vitrine pour les commerces.</span>
-      <a href="/app/">Espace commerçant</a>
+    <div class="wrap footer-cols">
+      <div><span class="logo logo-light">Comptoir</span><p>La caisse, le stock, les factures et la vitrine en ligne des commerces de proximité.</p></div>
+      <nav aria-label="Logiciel de caisse par métier" id="footerMetiers"><strong>Par métier</strong><a href="/logiciel-de-caisse/">Tous les métiers</a></nav>
+      <nav aria-label="Comptoir"><strong>Comptoir</strong><a href="#fonctions">Fonctions</a><a href="#tarifs">Tarifs</a><a href="/app/#/inscription">Essai gratuit</a><a href="/app/">Espace commerçant</a></nav>
     </div>
+    <div class="wrap footer-in"><span>© 2026 Comptoir</span></div>
   </footer>
 
   <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-    const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const FEATURES = { essentiel: ['Caisse et stock', 'Vitrine en ligne'], pro: ['Devis et factures', 'Alertes par e-mail'], business: ['Toutes les fonctions', 'Accompagnement prioritaire'] };
-    fetch('/api/platform').then((r) => r.json()).then((p) => {
-      const plans = p.plans;
-      document.getElementById('plans').innerHTML = plans.map((pl) => `
-        <article class="plan ${pl.key === 'pro' ? 'featured' : ''}" data-plan="${pl.key}">
-          <div class="plan-top"><h3>${esc(pl.name)}</h3>${pl.key === 'pro' ? '<span class="plan-tag">Le plus choisi</span>' : ''}</div>
-          <p class="price"><strong>${pl.price} €</strong><span>HT / mois</span></p>
-          <p class="plan-desc">${esc(pl.description)}</p>
-          <ul>
-            <li>${pl.products === null ? 'Produits illimités' : new Intl.NumberFormat('fr-FR').format(pl.products) + ' produits'}</li>
-            <li>${pl.users} utilisateur${pl.users > 1 ? 's' : ''}</li>
-            ${(FEATURES[pl.key] || []).map((f) => `<li>${esc(f)}</li>`).join('')}
-          </ul>
-          <a class="btn ${pl.key === 'pro' ? 'btn-primary' : 'btn-secondary'} btn-lg btn-block" href="/app/#/inscription">Essayer gratuitement</a>
-        </article>`).join('');
-      // Sur téléphone, une formule à la fois avec des onglets
+    // Tarifs et métiers sont rendus par le serveur ; ici, seulement les onglets des formules sur téléphone.
+    (() => {
       const tabs = document.getElementById('planTabs');
-      tabs.innerHTML = plans.map((pl) => `<button type="button" role="tab" data-tab="${pl.key}" aria-selected="${pl.key === 'pro'}">${esc(pl.name)}</button>`).join('');
       const show = (key) => {
         tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === key)));
         document.querySelectorAll('.plan').forEach((c) => c.classList.toggle('is-shown', c.dataset.plan === key));
       };
       tabs.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) show(b.dataset.tab); });
-      show('pro');
-      document.getElementById('trades').innerHTML = p.business_types.filter((t) => t.key !== 'autre').map((t) => `<li>${esc(t.label)}</li>`).join('');
-    }).catch(() => {});
+    })();
   </script>
 </body>
 </html>

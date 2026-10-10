@@ -623,6 +623,21 @@ export async function storeRoutes(ctx, parts) {
       if (m === 'GET') return json(await dashboard(db, sid));
       break;
 
+    case 'badges':
+      // Compteurs du menu en une seule requête légère (au lieu de charger alertes et commandes complètes).
+      if (m === 'GET') {
+        const st = await getSettings(db, sid);
+        const t = today(), soon = addDays(t, Math.max(0, num(st.due_soon_days, 7)));
+        const c = await db.prepare(`SELECT
+            (SELECT COUNT(*) FROM documents WHERE store_id = ?1 AND type = 'facture' AND status = 'émise' AND due_date < ?2) AS overdue,
+            (SELECT COUNT(*) FROM documents WHERE store_id = ?1 AND type = 'facture' AND status = 'émise' AND due_date BETWEEN ?2 AND ?3) AS due_soon,
+            (SELECT COUNT(*) FROM products WHERE store_id = ?1 AND track_stock = 1 AND stock <= 0) AS out_of_stock,
+            (SELECT COUNT(*) FROM products WHERE store_id = ?1 AND track_stock = 1 AND stock > 0 AND stock <= stock_min AND stock_min > 0) AS low_stock,
+            (SELECT COUNT(*) FROM documents WHERE store_id = ?1 AND type = 'commande' AND status IN ('nouvelle', 'confirmée')) AS orders`).bind(sid, t, soon).first();
+        return json({ ...c, alerts: c.overdue + c.due_soon + c.out_of_stock + c.low_stock, urgent: c.overdue + c.out_of_stock });
+      }
+      break;
+
     case 'settings':
       if (m === 'GET') return json(await getSettings(db, sid, ctx.store));
       if (m === 'PUT') {
