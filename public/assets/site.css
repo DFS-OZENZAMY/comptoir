@@ -202,3 +202,4 @@ h3 { margin: 0; }
 .price strong { white-space: nowrap; }
 .price-long { flex-wrap: wrap; }
 .price-long strong { font-size: clamp(2.2rem, 3.4vw, 2.8rem); }
+.visually-hidden { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

@@ -298,6 +298,13 @@
     factures: 'documents.view', stock: 'stock.manage', parametres: 'settings.manage', equipe: 'team.manage', abonnement: 'billing.manage',
     boutiques: 'locations.manage', rapports: 'reports.view',
   };
+  // Guide d'aide de chaque écran (centre d'aide public, /aide).
+  const HELP_FOR = {
+    'tableau-de-bord': 'bien-demarrer', caisse: 'caisse', commandes: 'devis-commandes-factures', devis: 'devis-commandes-factures',
+    factures: 'devis-commandes-factures', produits: 'produits-et-stock', stock: 'produits-et-stock', clients: 'clients-et-fidelite',
+    alertes: 'reglages-et-abonnement#les-alertes', rapports: 'boutiques-et-rapports', parametres: 'reglages-et-abonnement',
+    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', abonnement: 'reglages-et-abonnement#l-abonnement',
+  };
   const allowedView = (k) => !!VIEWS[k] && (!VIEW_PERM[k] || can(VIEW_PERM[k]));
   // Les écrans proches sont regroupés sous une seule entrée de menu, avec des onglets.
   const GROUPS = {
@@ -316,6 +323,7 @@
     const group = groupOf(key);
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === group));
     $('#viewTitle').textContent = title;
+    $('#helpBtn').href = '/aide/' + (HELP_FOR[key] || 'bien-demarrer');
     $('#viewActions').innerHTML = '';
     $('#subnav').innerHTML = GROUPS[group] ? GROUPS[group].filter(([k]) => allowedView(k)).map(([k, l]) => `<a href="#/${k}" class="${k === key ? 'active' : ''}">${l}</a>`).join('') : '';
     $('#subnav').hidden = !GROUPS[group];
@@ -382,7 +390,7 @@
         ${can('documents.edit') ? '<button type="button" data-new="devis">Faire un devis</button><button type="button" data-new="facture">Faire une facture</button>' : ''}
         <button type="button" id="shareVitrine">Partager ma vitrine</button>
       </nav>
-      ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length}</span></div>
+      ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length} · <a href="/aide/bien-demarrer" target="_blank" rel="noopener">Guide complet</a></span></div>
         <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}</ol></section>` : ''}
       <div class="home-grid">
         <section class="panel">

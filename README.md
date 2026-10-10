@@ -77,6 +77,24 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Centre d'aide
+
+Des guides courts pour les commerçants, à l'adresse `/aide`, avec une recherche :
+1. Bien démarrer
+2. Encaisser à la caisse
+3. Produits et stock
+4. Devis, commandes et factures
+5. Clients et fidélité
+6. Vitrine en ligne et commandes WhatsApp
+7. Plusieurs boutiques et rapports
+8. Équipe et droits
+9. Réglages, alertes et abonnement
+10. Questions fréquentes
+
+- **Dans l'espace commerçant** : un bouton « ? Aide » à côté du titre ouvre le guide de l'écran en cours, dans un nouvel onglet. Un lien « Centre d'aide » se trouve dans le menu, et dans « Plus » sur téléphone. L'encart « Pour bien démarrer » renvoie au guide complet.
+- **Pages publiques** rendues côté serveur, présentes dans le plan du site, avec données structurées (`TechArticle`, `FAQPage`) : elles aident aussi le référencement.
+- **Mise à jour** : le contenu est dans `GUIDES`, dans `src/help.js`, et le lien de chaque écran vers son guide dans `HELP_FOR`, dans `public/app/app.js`. Pensez à les mettre à jour quand une fonction change.
+
 ## Tarifs par pays
 
 Les formules sont affichées dans la devise du visiteur, avec des **prix ronds pensés pour chaque marché** (`LOCAL_PRICES`, dans `src/catalog.js`) :

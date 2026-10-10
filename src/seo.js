@@ -176,6 +176,7 @@ const NAV = `<header class="nav">
       <a href="/#fonctions" class="nav-link">Fonctions</a>
       <a href="/logiciel-de-caisse/" class="nav-link">Métiers</a>
       <a href="/#tarifs" class="nav-link">Tarifs</a>
+      <a href="/aide" class="nav-link">Aide</a>
       <a href="/app/" class="btn btn-ghost nav-login">Se connecter</a>
       <a href="/app/#/inscription" class="btn btn-primary">Essai gratuit</a>
     </nav>
@@ -186,7 +187,7 @@ const FOOTER = () => `<footer class="footer">
     <div class="wrap footer-cols">
       <div><span class="logo logo-light">Comptoir</span><p>La caisse, le stock, les factures et la vitrine en ligne des commerces de proximité.</p></div>
       <nav aria-label="Logiciel de caisse par métier"><strong>Par métier</strong>${footerLinks()}</nav>
-      <nav aria-label="Comptoir"><strong>Comptoir</strong><a href="/#fonctions">Fonctions</a><a href="/#tarifs">Tarifs</a><a href="/app/#/inscription">Essai gratuit</a><a href="/app/">Espace commerçant</a></nav>
+      <nav aria-label="Comptoir"><strong>Comptoir</strong><a href="/#fonctions">Fonctions</a><a href="/#tarifs">Tarifs</a><a href="/app/#/inscription">Essai gratuit</a><a href="/aide">Centre d’aide</a><a href="/app/">Espace commerçant</a></nav>
     </div>
     <div class="wrap footer-in"><span>© ${new Date().getFullYear()} Comptoir</span><span class="footer-legal">${LEGAL_LINKS}</span></div>
   </footer>`;
@@ -464,6 +465,7 @@ export async function renderVitrine(env, request, url, slug) {
 /* Plan du site et robots.txt                                          */
 /* ------------------------------------------------------------------ */
 
+const HELP_SLUGS = ['bien-demarrer', 'caisse', 'produits-et-stock', 'devis-commandes-factures', 'clients-et-fidelite', 'vitrine-et-whatsapp', 'boutiques-et-rapports', 'equipe-et-droits', 'reglages-et-abonnement', 'questions-frequentes'];
 export async function sitemap(env, url) {
   const db = env.DB;
   await init(db);
@@ -478,6 +480,8 @@ export async function sitemap(env, url) {
     { loc: '/logiciel-de-caisse/', priority: '0.8', changefreq: 'monthly', lastmod: today },
     ...Object.keys(METIERS).map((s) => ({ loc: `/logiciel-de-caisse/${s}`, priority: '0.8', changefreq: 'monthly', lastmod: today })),
     ...Object.keys(LEGAL_PAGES).map((k) => ({ loc: `/${k}`, priority: '0.3', changefreq: 'yearly', lastmod: today })),
+    { loc: '/aide', priority: '0.6', changefreq: 'monthly', lastmod: today },
+    ...HELP_SLUGS.map((s) => ({ loc: `/aide/${s}`, priority: '0.5', changefreq: 'monthly', lastmod: today })),
     ...rows.map((r) => ({ loc: `/s/${r.slug}`, priority: '0.6', changefreq: 'daily', lastmod: (r.updated || today).slice(0, 10) })),
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -614,3 +618,5 @@ export function renderLegal(origin, key, env) {
 </body>
 </html>`;
 }
+
+export { docHead, NAV, FOOTER, headTags, jsonLd };

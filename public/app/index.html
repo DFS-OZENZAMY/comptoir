@@ -96,6 +96,7 @@
         <a href="#/reglages" data-nav="reglages" data-perm-any="settings.manage team.manage billing.manage locations.manage">Réglages</a>
       </nav>
       <div class="side-foot">
+        <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
         <a href="#" id="storeLink" target="_blank" rel="noopener">Voir ma vitrine</a>
         <a href="/console/" id="consoleLink" hidden>Console plateforme</a>
         <button type="button" id="accountBtn"><span id="userName"></span></button>
@@ -111,7 +112,7 @@
     <main class="main">
       <div class="access-banner" id="accessBanner" hidden></div>
       <header class="main-head">
-        <h1 id="viewTitle"></h1>
+        <div class="title-row"><h1 id="viewTitle"></h1><a class="help-btn" id="helpBtn" href="/aide" target="_blank" rel="noopener" title="Ouvrir le guide de cet écran">Aide</a></div>
         <div class="main-actions" id="viewActions"></div>
       </header>
       <nav class="subnav" id="subnav" aria-label="Sous-sections" hidden></nav>
@@ -133,6 +134,7 @@
         <a href="#/rapports" data-perm="reports.view">Rapports</a>
         <a href="#/reglages" data-perm-any="settings.manage team.manage billing.manage locations.manage">Réglages</a>
         <a href="#" id="storeLinkM" target="_blank" rel="noopener">Voir ma vitrine</a>
+        <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
         <button type="button" data-account>Mon compte</button>
         <button type="button" data-logout>Se déconnecter</button>
       </div>

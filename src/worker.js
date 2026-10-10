@@ -11,6 +11,7 @@ import { signup, login, logout, getContext, me, changePassword, touchStore } fro
 import { storeRoutes, getSettings, imageUrl, runDailyDigests } from './store.js';
 import { resolveAccess } from './access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './console.js';
+import { renderHelpIndex, renderHelpGuide } from './help.js';
 import { renderLanding, renderMetier, renderHub, renderVitrine, renderLegal, LEGAL_PAGES, visitorCountry, sitemap, robots, html, loadCatalog } from './seo.js';
 
 async function publicCatalog(db, slug) {
@@ -137,6 +138,13 @@ export default {
         return Response.redirect(url.origin + '/logiciel-de-caisse/', 302);
       }
       if (LEGAL_PAGES[p.slice(1)]) return html(renderLegal(url.origin, p.slice(1), env), 200, 'public, max-age=3600');
+      if (p === '/aide' || p === '/aide/') return p.endsWith('/') ? Response.redirect(url.origin + '/aide', 301) : html(renderHelpIndex(url.origin), 200, 'public, max-age=3600');
+      const hm = p.match(/^\/aide\/([a-z-]+)\/?$/);
+      if (hm) {
+        if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);
+        const page = renderHelpGuide(url.origin, hm[1]);
+        return page ? html(page, 200, 'public, max-age=3600') : Response.redirect(url.origin + '/aide', 302);
+      }
       const sm = p.match(/^\/s\/([a-z0-9-]+)\/?$/);
       if (sm) {
         if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);
