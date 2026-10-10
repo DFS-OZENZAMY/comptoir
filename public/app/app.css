@@ -780,3 +780,13 @@ a.kpi:hover { background: #FAFAFB; }
 
 .imp-sig { display: block; margin-top: 8px; color: var(--muted); font-family: var(--mono); font-size: .78rem; font-weight: 400; word-break: break-all; }
 #impErr { white-space: normal; }
+
+/* Notifications */
+.push-body { padding: 6px 18px 18px; }
+.push-off p { margin: 0 0 14px; max-width: 62ch; line-height: 1.55; }
+.push-cats { display: grid; gap: 10px; margin: 14px 0; }
+.push-cats .check { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; }
+.push-cats .check input { width: auto; flex: none; margin-top: 3px; }
+.push-cats small { display: block; color: var(--muted); }
+.push-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.push-bell { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px; background: var(--signal); color: #fff; }

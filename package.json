@@ -8,7 +8,7 @@
     "dev": "node --watch src/adapters/node/server.js",
     "dev:cloudflare": "wrangler dev",
     "deploy:cloudflare": "wrangler deploy",
-    "test": "node --test \"tests/*.test.js\"",
+    "test": "node --disable-warning=ExperimentalWarning --test \"tests/*.test.js\"",
     "lint": "eslint .",
     "check": "npm run lint && npm test",
     "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js"

@@ -164,6 +164,12 @@ export const GUIDES = [
     sections: [
       ['Mon commerce', `<p>Coordonnées, vitrine, commandes WhatsApp, fidélité et facturation (TVA, délai de paiement, coordonnées bancaires, mentions légales) se règlent dans <strong>Réglages, Mon commerce</strong>. Les modifications s’appliquent aux prochains tickets et documents.</p>`],
       ['Les alertes', `<p>La page <strong>Alertes</strong> regroupe les factures en retard, les échéances proches, les ruptures et les stocks sous le seuil. Vous pouvez recevoir ce résumé <strong>chaque matin par e-mail</strong> : indiquez l’adresse dans « E-mail qui reçoit les alertes » et le nombre de jours pour être prévenu avant une échéance.</p>`],
+      ['Les notifications', `<p>Comptoir peut vous prévenir sur votre téléphone ou votre ordinateur, <strong>même quand l’application est fermée</strong> : produit passé sous son seuil ou en rupture (aussitôt après la vente), factures en retard et échéances (chaque matin), fin de l’essai.</p>
+        <ul><li>Ouvrez <strong>Notifications</strong> dans le menu (dans « Plus » sur téléphone), puis touchez <strong>Activer les notifications sur cet appareil</strong> et acceptez la demande du navigateur.</li>
+        <li>Choisissez les catégories qui vous intéressent, et envoyez une notification d’essai.</li>
+        <li>Activez-les sur chaque appareil où vous voulez être prévenu. Chacun ne reçoit que ce que son rôle lui permet de voir, et seulement pour ses boutiques.</li>
+        <li><strong>iPhone et iPad</strong> : installez d’abord Comptoir sur l’écran d’accueil (iOS 16.4 ou plus récent), puis ouvrez-le depuis son icône pour activer les notifications.</li></ul>
+        <p>Une même alerte n’est envoyée qu’une fois par jour.</p>`],
       ['L’abonnement', `<p><strong>Réglages, Abonnement</strong> montre votre formule, votre utilisation (produits et utilisateurs) et les formules disponibles, dans la devise de votre pays. Choisissez une formule : elle est activée dès réception du paiement. Sans engagement.</p>`],
     ],
   },

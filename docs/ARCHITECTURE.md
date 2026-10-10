@@ -85,9 +85,11 @@ Les erreurs métier sont des `HttpError(statut, message)` : le message, en fran�
 | `src/features/connectors.js` | Connexion directe à Loyverse, Square, Shopify, WooCommerce, Odoo ; import des photos |
 | `src/features/seo.js` | Pages publiques rendues côté serveur : accueil, métiers, vitrines, pages légales, plan du site |
 | `src/features/help.js` | Centre d'aide |
+| `src/features/push.js` | Notifications push : abonnements par appareil, destinataires selon les droits, alertes de stock en temps réel, résumé du matin, alertes de plateforme |
 | `src/features/backup.js` | Sauvegardes : export SQL, chiffrement, vérification, rotation, copie des photos (voir [BACKUP.md](BACKUP.md)) |
 | `src/platform/html.js` | Réécriture HTML portable (interface identique au HTMLRewriter de Cloudflare) |
 | `src/platform/geo.js` | Pays du visiteur, quel que soit l'hébergeur |
+| `src/platform/webpush.js` | Envoi des notifications push : signature VAPID (RFC 8292) et chiffrement aes128gcm (RFC 8291), sans dépendance |
 | `src/platform/storage.js` | Stockage des photos : base, R2, S3 (signature AWS v4 en JavaScript standard), mémoire |
 
 Côté navigateur :
@@ -96,7 +98,7 @@ Côté navigateur :
 |---|---|
 | `public/app/app.js` | Espace commerçant : état, appels d'API (mémoire courte de 30 s, préchargement), routeur par ancre (`#/caisse`…), un `view…()` par écran |
 | `public/app/import.js` | Lecture des fichiers d'import (CSV, XLSX, bases SQLite / Access / dBase), encodages, reconnaissance des logiciels |
-| `public/app/sw.js` | Service worker : application installable, page hors ligne |
+| `public/app/sw.js` | Service worker : application installable, page hors ligne, réception et affichage des notifications |
 | `public/store/store.js` | Vitrine d'un commerce, panier WhatsApp |
 | `public/console/console.js` | Console de la plateforme |
 

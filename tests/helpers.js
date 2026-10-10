@@ -5,8 +5,8 @@ import { createHandler } from '../src/adapters/node/handler.js';
 
 export async function startApp(vars = {}) {
   const env = await createEnv({ DATABASE_URL: ':memory:', STORAGE_DRIVER: 'memory', PLATFORM_ADMIN_EMAILS: 'admin@test.dev', DISABLE_CRON: 'true', ...vars });
-  const { handle } = createHandler(env);
-  return { env, handle, client: () => new Client(handle) };
+  const { handle, settle } = createHandler(env);
+  return { env, handle, settle, client: () => new Client(handle) };
 }
 
 // Un navigateur minimal : garde le cookie de session et envoie l'en-tête de boutique.

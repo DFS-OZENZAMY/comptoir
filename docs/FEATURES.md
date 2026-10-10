@@ -313,3 +313,19 @@ Les mêmes jetons sont utilisés dans le code (variables CSS en tête de `public
 - arrondis : 8 px pour les contrôles, 12 px pour les cartes, 16 px pour les grandes tuiles.
 
 L'élément signature est le **ticket de caisse au bord dentelé** : image d'accueil du site et panier en cours de la caisse.
+
+## Notifications push
+
+Chaque personne peut être prévenue sur son téléphone ou son ordinateur, **même quand Comptoir est fermé** (écran **Notifications**, dans le menu ; carte d'invitation sur l'accueil).
+
+| Catégorie | Quand | Qui la reçoit |
+|---|---|---|
+| Stock bas et ruptures | aussitôt après une vente, une sortie ou un transfert qui fait passer un produit sous son seuil ; résumé chaque matin | droits « alertes » ou « stock », pour ses boutiques |
+| Factures en retard et échéances | chaque matin | droits « alertes » ou « paiements » |
+| Essai et abonnement | 3 jours avant la fin de l'essai | droit « abonnement » |
+| Plateforme | nouvelle inscription, demande de formule, sauvegarde en échec | administrateurs de la plateforme |
+
+- Préférences **par appareil**, notification d'essai, désactivation, liste des autres appareils de la personne.
+- Une même alerte au plus **une fois par jour** ; les appareils désinstallés sont retirés automatiquement.
+- Le contenu est **chiffré pour l'appareil** (RFC 8291) : le service de notification (Google, Apple, Mozilla, Microsoft) ne peut pas le lire. Seuls ces services sont acceptés comme destination.
+- Fonctionne sur Android, Windows, Mac, Chromebook (Chrome, Edge, Firefox) et sur iPhone ou iPad (iOS 16.4 ou plus) **une fois Comptoir installé sur l'écran d'accueil**.

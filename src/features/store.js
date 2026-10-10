@@ -10,6 +10,7 @@ import { detectTool, fetchCatalogPage, importImages, PROVIDERS } from './connect
 import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, transferStock, listLocations, saveLocation, locationReport, listRoles, saveRole, deleteRole, validRoleAndLocations, updateMember } from './access.js';
 import { bump, logEvent } from '../core/db.js';
 import { saveProductImage, deleteProductImage, fromBase64 } from '../platform/storage.js';
+import { pushRoutes, stockAlerts, notifyPlatform } from './push.js';
 import { storeAccess } from './auth.js';
 
 /* ------------------------------------------------------------------ */
@@ -711,6 +712,7 @@ function guard(ctx, res, id, action, m, url) {
       return ctx.need('documents.edit');
     case 'payments': return ctx.need('payments.manage');
     case 'pos': if (id === 'journal') ctx.need('pos.journal'); return;
+    case 'push': return; // chacun gère les notifications de ses propres appareils
     case 'alerts': if (id === 'test-email') return ctx.need('settings.manage'); if (id === 'email-status') return; return ctx.need('alerts.view');
     case 'team': case 'roles': return ctx.need('team.manage');
     case 'subscription': return ctx.need('billing.manage');
@@ -829,9 +831,12 @@ export async function storeRoutes(ctx, parts) {
         return json((await db.prepare(`SELECT s.*, p.name AS product_name, p.ref AS product_ref, p.unit AS unit FROM stock_movements s
           LEFT JOIN products p ON p.id = s.product_id AND p.store_id = s.store_id WHERE s.store_id = ?${w.sql} ORDER BY s.id DESC LIMIT 300`).bind(sid, ...w.args).all()).results);
       }
-      if (id === 'transfer' && m === 'POST') return json(await transferStock(ctx, await body()), 201);
-      if (!id && m === 'POST') return json(await addStockMovement(ctx, await body()), 201);
+      if (id === 'transfer' && m === 'POST') { const b = await body(); const r = await transferStock(ctx, b); ctx.later?.(stockAlerts(env, sid, [b.product_id], b.from)); return json(r, 201); }
+      if (!id && m === 'POST') { const b = await body(); const r = await addStockMovement(ctx, b); ctx.later?.(stockAlerts(env, sid, [b.product_id], ctx.location?.id)); return json(r, 201); }
       break;
+
+    case 'push':
+      return await pushRoutes(ctx, id, m, body);
 
     case 'import':
       if (id === 'products' && m === 'POST') return json(await importProducts(ctx, await body()));
@@ -943,7 +948,11 @@ export async function storeRoutes(ctx, parts) {
       break;
 
     case 'pos':
-      if (id === 'checkout' && m === 'POST') return json(await posCheckout(ctx, await body()), 201);
+      if (id === 'checkout' && m === 'POST') {
+        const b = await body(); const r = await posCheckout(ctx, b);
+        ctx.later?.(stockAlerts(env, sid, (b.lines || []).map((l) => l.product_id), ctx.location?.id));
+        return json(r, 201);
+      }
       if (id === 'journal' && m === 'GET') return json(await posJournal(db, sid, url.searchParams.get('date'), ctx));
       break;
 
@@ -997,6 +1006,7 @@ export async function storeRoutes(ctx, parts) {
         const plan = (await body()).plan;
         if (!PAID_PLANS.includes(plan)) throw new HttpError(400, 'Formule inconnue.');
         await db.prepare('UPDATE stores SET plan_requested = ? WHERE id = ?').bind(plan, sid).run();
+        ctx.later?.(notifyPlatform(env, { title: 'Demande de formule', body: `${ctx.store.name} demande la formule ${PLANS[plan]?.name || plan}.`, url: '/console/#/a-traiter', tag: `formule-${sid}` }));
         await logEvent(db, sid, ctx.user.id, 'plan_request', PLANS[plan].name);
         return json({ ok: true, plan_requested: plan });
       }

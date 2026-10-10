@@ -330,6 +330,7 @@
     abonnement: ['Réglages', viewSubscription],
     boutiques: ['Réglages', viewLocations],
     importer: ['Produits', viewImport],
+    notifications: ['Notifications', viewNotifications],
     rapports: ['Rapports', viewReports],
   };
   // Permission nécessaire pour afficher chaque rubrique.
@@ -343,7 +344,7 @@
     'tableau-de-bord': 'bien-demarrer', caisse: 'caisse', commandes: 'devis-commandes-factures', devis: 'devis-commandes-factures',
     factures: 'devis-commandes-factures', produits: 'produits-et-stock', stock: 'produits-et-stock', clients: 'clients-et-fidelite',
     alertes: 'reglages-et-abonnement#les-alertes', rapports: 'boutiques-et-rapports', parametres: 'reglages-et-abonnement',
-    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', importer: 'importer-ses-produits', abonnement: 'reglages-et-abonnement#l-abonnement',
+    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', importer: 'importer-ses-produits', notifications: 'reglages-et-abonnement#les-notifications', abonnement: 'reglages-et-abonnement#l-abonnement',
   };
   const allowedView = (k) => !!VIEWS[k] && (!VIEW_PERM[k] || can(VIEW_PERM[k]));
   // Les écrans proches sont regroupés sous une seule entrée de menu, avec des onglets.
@@ -434,6 +435,11 @@
         <div class="install-text"><strong>Installez Comptoir sur cet appareil</strong><span>Votre caisse s’ouvre en un geste, depuis l’écran d’accueil ou le bureau, sans passer par le site.</span></div>
         <div class="install-actions"><button type="button" class="btn btn-primary" id="installCardGo">Installer</button><button type="button" class="btn" id="installCardHide">Plus tard</button></div>
       </section>
+      <section class="install-card push-card" id="pushCard" hidden>
+        <div class="install-icon push-bell" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15L6 16Zm4 4a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="install-text"><strong>Soyez prévenu même application fermée</strong><span>Stock bas, paiements en retard, fin d’essai : une notification arrive sur ce téléphone ou cet ordinateur.</span></div>
+        <div class="install-actions"><button type="button" class="btn btn-primary" id="pushCardGo">Activer</button><button type="button" class="btn" id="pushCardHide">Plus tard</button></div>
+      </section>
       ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length} · <a href="/aide/bien-demarrer" target="_blank" rel="noopener">Guide complet</a></span></div>
         <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}</ol></section>` : ''}
       <div class="home-grid">
@@ -454,6 +460,14 @@
         <div class="chart-labels">${d.months.map((m) => `<span>${monthName(m.month)}</span>`).join('')}</div>
       </section>`;
     refreshInstall();
+    (async () => {
+      let hidden = false; try { hidden = localStorage.getItem('comptoir.notifications.masquee') === '1'; } catch { /* navigation privée */ }
+      if (hidden || !push.supported() || Notification.permission === 'denied') return;
+      const sub = await push.current().catch(() => null);
+      if (!sub && $('#pushCard')) $('#pushCard').hidden = false;
+    })();
+    $('#pushCardGo')?.addEventListener('click', async () => { try { await enablePush(); $('#pushCard').hidden = true; toast('Notifications activées sur cet appareil'); } catch (ex) { fail(ex); } });
+    $('#pushCardHide')?.addEventListener('click', () => { try { localStorage.setItem('comptoir.notifications.masquee', '1'); } catch { /* navigation privée */ } $('#pushCard').hidden = true; });
     $('#shareVitrine').addEventListener('click', async () => {
       if (navigator.share) { try { await navigator.share({ title: s.shop_name, url: vitrine }); return; } catch { /* annulé */ } }
       try { await navigator.clipboard.writeText(vitrine); toast('Lien de la vitrine copié'); } catch { toast(vitrine); }
@@ -2041,6 +2055,61 @@
         <div class="imp-actions"><a class="btn btn-primary" href="#/produits">Voir mes produits</a><button class="btn" id="impAgain" type="button">Importer un autre fichier</button></div>
       </section>`;
     $('#impAgain').addEventListener('click', () => { imp.sheet = null; route(); });
+  }
+
+  /* ================= Notifications push (même application fermée) ================= */
+  const push = {
+    supported: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+    iosNeedsInstall: () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !(matchMedia('(display-mode: standalone)').matches || navigator.standalone),
+    async registration() { return (await navigator.serviceWorker.getRegistration('/app/')) || navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }); },
+    async current() { if (!push.supported()) return null; const r = await push.registration(); await navigator.serviceWorker.ready; return r.pushManager.getSubscription(); },
+    key: (b64) => { const raw = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (b64.length % 4)) % 4)); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); },
+  };
+  async function enablePush() {
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Les notifications sont bloquées pour Comptoir dans ce navigateur : autorisez-les dans ses réglages, puis réessayez.' : 'Autorisation non accordée.');
+    const { publicKey } = await api('/store/push/key');
+    const reg = await push.registration(); await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: push.key(publicKey) });
+    await api('/store/push/subscriptions', { method: 'POST', body: { subscription: sub.toJSON() } });
+    return sub;
+  }
+  async function viewNotifications() {
+    const info = await api('/store/push/key');
+    const devices = await api('/store/push/subscriptions');
+    const sub = await push.current().catch(() => null);
+    const mine = sub && devices.find((d) => d.endpoint === sub.endpoint);
+    const perm = 'Notification' in window ? Notification.permission : 'unsupported';
+    let state;
+    if (!push.supported()) state = push.iosNeedsInstall()
+      ? '<p class="notice">Sur iPhone et iPad, les notifications fonctionnent quand Comptoir est <strong>installé sur l’écran d’accueil</strong> (iOS 16.4 ou plus récent) : touchez <strong>Partager</strong>, puis <strong>Sur l’écran d’accueil</strong>, et ouvrez Comptoir depuis son icône.</p>'
+      : '<p class="notice">Ce navigateur ne permet pas les notifications. Utilisez Chrome, Edge, Firefox ou Safari récent.</p>';
+    else if (perm === 'denied') state = '<p class="notice">Les notifications sont <strong>bloquées</strong> pour Comptoir dans ce navigateur. Autorisez-les dans ses réglages (icône à gauche de l’adresse, ou réglages du téléphone), puis revenez ici.</p>';
+    else if (!mine) state = '<div class="push-off"><p>Recevez une alerte sur cet appareil dès qu’un produit passe sous son seuil, chaque matin pour les paiements à suivre, et pour la fin de votre essai, <strong>même quand Comptoir est fermé</strong>.</p><button class="btn btn-primary" id="pushOn" type="button">Activer les notifications sur cet appareil</button></div>';
+    else state = `<div class="push-on"><span class="badge s-ok">Activées sur cet appareil</span>
+        <div class="push-cats">${info.categories.map((c) => `<label class="check"><input type="checkbox" data-cat="${c.key}" ${mine.prefs[c.key] !== false ? 'checked' : ''}> <span><strong>${esc(c.label)}</strong><small>${esc(c.detail)}</small></span></label>`).join('')}</div>
+        <div class="push-actions"><button class="btn" id="pushTest" type="button">Envoyer une notification d’essai</button><button class="btn btn-ghost" id="pushOff" type="button">Désactiver sur cet appareil</button></div></div>`;
+    const others = devices.filter((d) => !sub || d.endpoint !== sub.endpoint);
+    $('#view').innerHTML = `
+      <section class="panel"><div class="panel-head"><h2>Cet appareil</h2><span class="muted">les alertes arrivent même application fermée</span></div><div class="push-body">${state}</div></section>
+      ${others.length ? `<section class="panel"><div class="panel-head"><h2>Vos autres appareils</h2></div><div class="table-wrap"><table><tbody>
+        ${others.map((d) => `<tr><td class="cell-main">${esc(d.label || 'Appareil')}</td><td class="muted">activé le ${new Date(d.created_at).toLocaleDateString('fr-FR')}</td><td class="num"><button class="btn btn-sm" data-unsub="${d.id}" type="button">Retirer</button></td></tr>`).join('')}
+      </tbody></table></div></section>` : ''}`;
+    $('#pushOn')?.addEventListener('click', async (e) => {
+      const b = e.currentTarget; b.disabled = true;
+      try { await enablePush(); toast('Notifications activées sur cet appareil'); route(); } catch (ex) { fail(ex); b.disabled = false; }
+    });
+    $$('[data-cat]').forEach((c) => c.addEventListener('change', async () => {
+      try { await api('/store/push/subscriptions', { method: 'PUT', body: { endpoint: sub.endpoint, prefs: { [c.dataset.cat]: c.checked } } }); toast('Préférence enregistrée'); } catch (ex) { fail(ex); c.checked = !c.checked; }
+    }));
+    $('#pushTest')?.addEventListener('click', async () => { try { await api('/store/push/test', { method: 'POST', body: { endpoint: sub.endpoint } }); toast('Notification envoyée : elle arrive dans quelques secondes'); } catch (ex) { fail(ex); } });
+    $('#pushOff')?.addEventListener('click', async () => {
+      try { await api('/store/push/subscriptions', { method: 'DELETE', body: { endpoint: sub.endpoint } }); await sub.unsubscribe(); toast('Notifications désactivées sur cet appareil'); route(); } catch (ex) { fail(ex); }
+    });
+    $$('[data-unsub]').forEach((b) => b.addEventListener('click', async () => {
+      try { await api('/store/push/subscriptions', { method: 'DELETE', body: { id: Number(b.dataset.unsub) } }); toast('Appareil retiré'); route(); } catch (ex) { fail(ex); }
+    }));
   }
 
   /* ================= Rapports : comparer les boutiques ================= */

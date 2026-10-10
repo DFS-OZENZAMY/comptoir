@@ -10,6 +10,7 @@ import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './core/c
 import { signup, login, logout, getContext, me, changePassword, touchStore } from './features/auth.js';
 import { storeRoutes, runDailyDigests, sendEmail } from './features/store.js';
 import { dailyBackup } from './features/backup.js';
+import { notifyPlatform, dailyPushes } from './features/push.js';
 import { resolveAccess } from './features/access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './features/console.js';
 import { renderHelpIndex, renderHelpGuide } from './features/help.js';
@@ -38,7 +39,8 @@ export function routeName(parts) {
   return b && !/^\d+$/.test(b) ? `${a}/${b}` : a;
 }
 
-async function handleApi(request, env, info) {
+async function handleApi(request, env, info, exec) {
+  const later = (p) => (exec?.waitUntil ? exec.waitUntil(p.catch((e) => console.error('Tâche de fond :', e.message))) : p.catch(() => {}));
   const url = new URL(request.url);
   const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
   info.route = routeName(parts);
@@ -67,7 +69,12 @@ async function handleApi(request, env, info) {
     if (a === 'public' && b === 'stores' && c && m === 'GET') return json(await publicCatalog(db, c));
 
     if (a === 'auth') {
-      if (b === 'signup' && m === 'POST') return await signup(db, env, await readBody(request));
+      if (b === 'signup' && m === 'POST') {
+        const body = await readBody(request);
+        const res = await signup(db, env, body);
+        later(notifyPlatform(env, { title: 'Nouvelle inscription', body: `${String(body.store_name || 'Un commerce').slice(0, 80)} vient de s’inscrire.`, url: '/console/#/commerces', tag: 'inscription' }));
+        return res;
+      }
       if (b === 'login' && m === 'POST') return await login(db, env, await readBody(request));
       if (b === 'logout' && m === 'POST') return await logout(db, request);
     }
@@ -84,7 +91,7 @@ async function handleApi(request, env, info) {
     if (a === 'store') {
       if (!ctx.store) throw new HttpError(403, "Ce compte n'est rattaché à aucun commerce.");
       await touchStore(db, ctx.store);
-      return await storeRoutes({ ...ctx, db, env, request, url }, parts.slice(1));
+      return await storeRoutes({ ...ctx, db, env, request, url, later }, parts.slice(1));
     }
     if (a === 'console') {
       if (!ctx.platformAdmin) throw new HttpError(403, 'Accès réservé à l’administrateur de la plateforme.');
@@ -114,7 +121,7 @@ export default {
     if (p === '/api' || p.startsWith('/api/')) {
       const t0 = Date.now();
       const info = { route: 'api' };
-      const res = await handleApi(request, env, info);
+      const res = await handleApi(request, env, info, ctx);
       const ms = Date.now() - t0;
       if (env.DB) {
         ctx.waitUntil((async () => {
@@ -177,11 +184,13 @@ export async function runDailyTasks(env) {
       try { await takeSnapshot(env.DB); done.push('instantané'); } catch (e) { done.push('instantané en échec : ' + e.message); }
       try { await cleanup(env.DB); done.push('nettoyage'); } catch (e) { done.push('nettoyage en échec : ' + e.message); }
       try { await runDailyDigests(env); done.push('e-mails'); } catch (e) { done.push('e-mails en échec : ' + e.message); }
+      try { const p = await dailyPushes(env); done.push(`notifications (${p.sent})`); } catch (e) { done.push('notifications en échec : ' + e.message); }
       try {
         const b = await dailyBackup(env);
         done.push(b.skipped ? `sauvegarde ${b.skipped}` : `sauvegarde ${b.id} (${Math.round(b.bytes / 1024)} ko, vérifiée)`);
       } catch (e) {
         done.push('sauvegarde en échec : ' + e.message);
+        await notifyPlatform(env, { title: 'Sauvegarde en échec', body: String(e.message).slice(0, 150), url: '/console/#/sauvegardes', tag: 'sauvegarde', urgency: 'high' }).catch(() => {});
         // Alerte immédiate des administrateurs de la plateforme.
         for (const to of String(env.PLATFORM_ADMIN_EMAILS || '').split(',').map((x) => x.trim()).filter(Boolean)) {
           await sendEmail(env, to, 'Comptoir : la sauvegarde de cette nuit a échoué', `<p>La sauvegarde automatique a échoué : <strong>${String(e.message).replace(/</g, '&lt;')}</strong>.</p><p>Consultez la console, rubrique Sauvegardes.</p>`).catch(() => {});

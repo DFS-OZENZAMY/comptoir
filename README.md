@@ -1,6 +1,6 @@
 # Comptoir
 
-Plateforme SaaS pour les commerces de proximité : caisse, stock, devis et factures, vitrine en ligne, plusieurs boutiques, équipe avec droits, fidélité, import depuis les anciens logiciels. Multi-commerces (un espace isolé par commerce), en français, pensée pour la France, le Maghreb et l'Afrique de l'Ouest.
+Plateforme SaaS pour les commerces de proximité : caisse, stock, devis et factures, vitrine en ligne, plusieurs boutiques, équipe avec droits, fidélité, import depuis les anciens logiciels, notifications push même application fermée. Multi-commerces (un espace isolé par commerce), en français, pensée pour la France, le Maghreb et l'Afrique de l'Ouest.
 
 **Fonctionne sur n'importe quel hébergeur** : Cloudflare Workers, ou n'importe où Node.js tourne (serveur, Docker, Kubernetes, AWS, Google Cloud, Azure, OVH, Scaleway, Render, Railway, Fly.io…).
 

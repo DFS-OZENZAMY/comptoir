@@ -74,6 +74,12 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS backups (id TEXT PRIMARY KEY, created_at TEXT, finished_at TEXT, status TEXT, trigger TEXT,
     bytes INTEGER DEFAULT 0, rows INTEGER DEFAULT 0, parts INTEGER DEFAULT 0, encrypted INTEGER DEFAULT 0, verified_at TEXT, error TEXT)`,
   `CREATE TABLE IF NOT EXISTS backup_files (key TEXT PRIMARY KEY, copied_at TEXT)`,
+  // Notifications push : un abonnement par appareil, et le journal anti-doublon.
+  `CREATE TABLE IF NOT EXISTS push_subscriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, user_id INTEGER NOT NULL,
+    endpoint TEXT NOT NULL UNIQUE, p256dh TEXT NOT NULL, auth TEXT NOT NULL, prefs TEXT DEFAULT '{}', label TEXT DEFAULT '',
+    created_at TEXT, last_success_at TEXT, failures INTEGER DEFAULT 0)`,
+  `CREATE INDEX IF NOT EXISTS idx_push_store ON push_subscriptions(store_id)`,
+  `CREATE TABLE IF NOT EXISTS push_log (key TEXT PRIMARY KEY, sent_at TEXT)`,
   `CREATE INDEX IF NOT EXISTS idx_locations_store ON locations(store_id)`,
   `CREATE INDEX IF NOT EXISTS idx_location_stock_store ON location_stock(store_id, product_id)`,
   `CREATE INDEX IF NOT EXISTS idx_roles_store ON roles(store_id)`,
