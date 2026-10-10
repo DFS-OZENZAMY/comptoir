@@ -30,7 +30,7 @@
   }
 
   // XLSX : un fichier ZIP de XML. Décompression native du navigateur, sans bibliothèque externe.
-  async function unzip(buf, wanted) {
+  async function unzip(buf, wanted, binary = false) {
     const dv = new DataView(buf); const u8 = new Uint8Array(buf);
     let eocd = -1;
     for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 66000); i--) if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
@@ -46,8 +46,8 @@
       if (!wanted(name)) continue;
       const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
       const data = u8.subarray(start, start + size);
-      if (method === 0) out[name] = td.decode(data);
-      else if (method === 8) out[name] = await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+      const raw = method === 0 ? new Response(data) : method === 8 ? new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))) : null;
+      if (raw) out[name] = binary ? new Uint8Array(await raw.arrayBuffer()) : await raw.text();
     }
     return out;
   }
@@ -81,13 +81,175 @@
     return rows.filter(Boolean).map((r) => Array.from(r, (x) => x ?? ''));
   }
 
+  /* ------------------------------------------------------------ */
+  /* Bases de données : SQLite, Access, dBase (lues dans le navigateur) */
+  /* ------------------------------------------------------------ */
+  const ascii = (u8, a, b) => String.fromCharCode(...u8.subarray(a, b));
+  function kindOf(u8, name = '') {
+    if (ascii(u8, 0, 15) === 'SQLite format 3') return 'sqlite';
+    const jet = ascii(u8, 4, 19);
+    if (jet === 'Standard Jet DB' || jet === 'Standard ACE DB') return 'access';
+    if (/\.dbf$/i.test(name) || ([0x02, 0x03, 0x30, 0x31, 0x83, 0x8b, 0xf5].includes(u8[0]) && u8[1] < 200 && u8[2] >= 1 && u8[2] <= 12 && u8[3] >= 1 && u8[3] <= 31 && (u8[8] | (u8[9] << 8)) > 32)) return 'dbf';
+    if (u8[0] === 0x50 && u8[1] === 0x4b) return 'zip';
+    if (/\.(mdf|ldf|bak)$/i.test(name)) return 'sqlserver';
+    if (/\.sdf$/i.test(name)) return 'sqlce';
+    if (/\.(fdb|gdb)$/i.test(name)) return 'firebird';
+    return null;
+  }
+  const UNREADABLE = {
+    sqlserver: 'Ce fichier est une base SQL Server : elle ne peut pas être lue directement. Dans votre logiciel, utilisez l’export des articles en Excel ou en CSV.',
+    sqlce: 'Ce fichier est une base SQL Server Compact : elle ne peut pas être lue directement. Dans votre logiciel, utilisez l’export des articles en Excel ou en CSV.',
+    firebird: 'Ce fichier est une base Firebird : elle ne peut pas être lue directement. Dans votre logiciel, utilisez l’export des articles en Excel ou en CSV.',
+  };
+  const loadScript = (src) => new Promise((ok, ko) => {
+    if (document.querySelector(`script[src="${src}"]`)) return ok();
+    const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => ko(new Error('Chargement du lecteur impossible.')); document.head.append(sc);
+  });
+  const cell = (v) => (v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'object' ? '' : typeof v === 'bigint' ? String(v) : v);
+  const MAX_ROWS = 200000;
+
+  async function openSqlite(u8) {
+    await loadScript('/vendor/sqljs/sql-wasm.js');
+    const SQL = await window.initSqlJs({ locateFile: (f) => '/vendor/sqljs/' + f });
+    const db = new SQL.Database(u8);
+    const names = (db.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")[0]?.values || []).map((r) => r[0]);
+    const q = (n) => `"${String(n).replace(/"/g, '""')}"`;
+    return {
+      label: 'SQLite',
+      tables: names.map((n) => ({ name: n, headers: (db.exec(`SELECT * FROM ${q(n)} LIMIT 0`)[0]?.columns) || db.exec(`PRAGMA table_info(${q(n)})`)[0]?.values.map((r) => r[1]) || [], count: db.exec(`SELECT COUNT(*) FROM ${q(n)}`)[0].values[0][0] })),
+      rows: (n) => { const r = db.exec(`SELECT * FROM ${q(n)} LIMIT ${MAX_ROWS}`)[0]; return r ? r.values.map((row) => row.map(cell)) : []; },
+    };
+  }
+  async function openAccess(u8) {
+    await loadScript('/vendor/mdb/mdb-reader.min.js');
+    let reader;
+    try { reader = new window.MDBReader(window.MDBBuffer.from(u8)); }
+    catch (e) { throw new Error(/password|encrypt/i.test(e.message) ? 'Cette base Access est protégée par un mot de passe : exportez les articles depuis le logiciel.' : 'Base Access illisible.'); }
+    const names = reader.getTableNames();
+    return {
+      label: 'Access',
+      tables: names.map((n) => { const t = reader.getTable(n); return { name: n, headers: t.getColumnNames(), count: t.rowCount }; }),
+      rows: (n) => { const t = reader.getTable(n); const cols = t.getColumnNames(); return t.getData({ rowLimit: MAX_ROWS }).map((o) => cols.map((c) => cell(o[c]))); },
+    };
+  }
+  function openDbf(u8, name) {
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    const count = dv.getUint32(4, true), headLen = dv.getUint16(8, true), recLen = dv.getUint16(10, true);
+    const fields = []; let off = 1;
+    for (let p = 32; p + 32 <= headLen && u8[p] !== 0x0d; p += 32) {
+      const fname = ascii(u8, p, p + 11).replace(/\0.*$/, '').trim(); const type = String.fromCharCode(u8[p + 11]); const len = u8[p + 16];
+      fields.push({ name: fname, type, off, len }); off += len;
+    }
+    const td = new TextDecoder(u8[29] === 0x02 || u8[29] === 0x01 || u8[29] === 0x64 ? 'ibm850' : 'windows-1252');
+    const rows = [];
+    for (let i = 0; i < Math.min(count, MAX_ROWS); i++) {
+      const base = headLen + i * recLen; if (base + recLen > u8.length) break;
+      if (u8[base] === 0x2a) continue; // enregistrement supprimé
+      rows.push(fields.map((f) => { const raw = td.decode(u8.subarray(base + f.off, base + f.off + f.len)).trim(); return f.type === 'L' ? (/^[TtYy]/.test(raw) ? 'TRUE' : 'FALSE') : raw; }));
+    }
+    const tname = name.replace(/^.*[\\/]/, '').replace(/\.dbf$/i, '');
+    return { label: 'dBase', tables: [{ name: tname, headers: fields.map((f) => f.name), count: rows.length }], rows: () => rows };
+  }
+
+  // La table des produits : celle dont les colonnes ressemblent le plus à un catalogue.
+  const BAD_TABLE = /(facture|ligne|vente|achat|mouvement|client|fournisseur|document|piece|commande|reglement|paiement|journal|log|histori|inventaire|user|utilisateur|param|config|tiers|contact|ticket|caisse)/;
+  const GOOD_TABLE = /(produit|article|item|product|catalogue|stock_?item|marchandise)/;
+  function scoreTable(t) {
+    const B = t.headers.map(baseName), n = norm(t.name);
+    const has = (f) => B.some((b) => FIELDS[f].some((x) => same(b, x)));
+    let sc = (has('name') ? 4 : 0) + (has('price') ? 3 : 0) + (has('ref') ? 1 : 0) + (has('barcode') ? 2 : 0) + (has('stock') ? 1 : 0) + (has('category') ? 1 : 0) + (has('purchase') ? 1 : 0);
+    if (GOOD_TABLE.test(n)) sc += 4;
+    if (BAD_TABLE.test(n)) sc -= 5;
+    if (!t.count) sc -= 3;
+    return sc;
+  }
+  const LABEL_COLS = ['nom', 'name', 'libelle', 'designation', 'intitule', 'label', 'titre', 'title', 'description'];
+  const idCol = (headers) => headers.findIndex((h) => /^(id|code|cle|key|num|numero|pk|rowid)$/.test(norm(h).replace(/[^a-z]/g, '')));
+  const labelCol = (headers) => headers.findIndex((h) => LABEL_COLS.includes(norm(h).replace(/_/g, ' ')));
+  const stemOf = (h) => norm(h).replace(/[^a-z]/g, '').replace(/^(id|code|fk|ref|num)/, '').replace(/(id|code|fk|ref|num)$/, '').replace(/s$/, '');
+  const LOOKUP_STEMS = { famille: 'Famille', categorie: 'Catégorie', category: 'Catégorie', sousfamille: 'Sous-famille', marque: 'Marque', brand: 'Marque', unite: 'Unité', unit: 'Unité', tva: 'TVA', taxe: 'TVA', tax: 'TVA', rayon: 'Rayon' };
+
+  // Feuille « produits » : identifiants remplacés par leurs libellés, stock d'une table à part ajouté par dépôt.
+  async function buildSheet(db, tableName) {
+    const T = db.tables.find((t) => t.name === tableName);
+    const headers = [...T.headers]; const rows = db.rows(tableName).map((r) => [...r]);
+    const cache = {}; const rowsOf = (n) => (cache[n] ||= db.rows(n));
+    const tableByStem = (stem) => db.tables.find((t) => t.name !== tableName && norm(t.name).replace(/[^a-z]/g, '').replace(/s$/, '').replace(/^(t|tbl|table)(?=[a-z]{4})/, '') === stem);
+    headers.forEach((h, ci) => {
+      const stem = stemOf(h);
+      if (!LOOKUP_STEMS[stem] || norm(h).replace(/[^a-z]/g, '') === stem && !/^\d+$/.test(String(rows.find((r) => r[ci] !== '')?.[ci] ?? ''))) return;
+      const lt = tableByStem(stem); if (!lt) return;
+      const lid = idCol(lt.headers) >= 0 ? idCol(lt.headers) : 0, llab = labelCol(lt.headers);
+      if (llab < 0) return;
+      const map = new Map(rowsOf(lt.name).map((r) => [String(r[lid]), r[llab]]));
+      let hits = 0; rows.forEach((r) => { const v = map.get(String(r[ci])); if (v !== undefined) { r[ci] = v; hits++; } });
+      if (hits) headers[ci] = LOOKUP_STEMS[stem];
+    });
+    // Stock dans une table à part (produit, dépôt, quantité) : une colonne « Quantité <dépôt> » par dépôt.
+    const pk = idCol(T.headers) >= 0 ? idCol(T.headers) : 0;
+    for (const st of db.tables) {
+      if (st.name === tableName || !/(stock|quantite|qte|inventory|depot)/.test(norm(st.name))) continue;
+      const H = st.headers.map((h) => norm(h).replace(/[^a-z]/g, ''));
+      const pcol = H.findIndex((h) => /(produit|article|product|item)/.test(h));
+      const qcol = H.findIndex((h) => /^(quantite|qte|qty|quantity|stock|stockreel|qtestock|enstock)$/.test(h));
+      if (pcol < 0 || qcol < 0) continue;
+      const dcol = H.findIndex((h) => /(depot|magasin|emplacement|location|store|boutique|entrepot)/.test(h));
+      let depotName = (v) => (v === '' ? 'stock' : String(v));
+      if (dcol >= 0) {
+        const dt = db.tables.find((t) => /(depot|magasin|emplacement|location|store|boutique|entrepot)/.test(norm(t.name)) && t.name !== st.name);
+        if (dt && labelCol(dt.headers) >= 0) { const m = new Map(rowsOf(dt.name).map((r) => [String(r[idCol(dt.headers) >= 0 ? idCol(dt.headers) : 0]), r[labelCol(dt.headers)]])); depotName = (v) => m.get(String(v)) ?? String(v); }
+      }
+      const sums = new Map(); const depots = new Set();
+      for (const r of rowsOf(st.name)) { const d = dcol >= 0 ? depotName(r[dcol]) : 'stock'; depots.add(d); const k = `${r[pcol]}|${d}`; sums.set(k, (sums.get(k) || 0) + (Number(r[qcol]) || 0)); }
+      if (!sums.size) continue;
+      for (const d of depots) { headers.push(d === 'stock' ? 'Quantité' : `Quantité ${d}`); rows.forEach((r) => r.push(sums.get(`${r[pk]}|${d}`) ?? '')); }
+      break;
+    }
+    return { headers: headers.map((h) => String(h)), rows: rows.filter((r) => r.some((c) => String(c).trim())) };
+  }
+
+  async function openDatabase(u8, name) {
+    let kind = kindOf(u8, name);
+    if (kind === 'zip') {
+      // Archive (sauvegarde, dossier zippé) : la plus grande base lisible qu'elle contient.
+      const files = await unzip(u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength), (n) => !/\/$/.test(n) && !/^(__MACOSX|\.)/.test(n), true);
+      const cands = Object.entries(files).map(([n, b]) => ({ n, b, k: kindOf(b, n) })).filter((x) => ['sqlite', 'access', 'dbf'].includes(x.k)).sort((a, b) => b.b.length - a.b.length);
+      if (!cands.length) {
+        const other = Object.entries(files).map(([n, b]) => kindOf(b, n)).find((k) => UNREADABLE[k]);
+        throw new Error(other ? UNREADABLE[other] : 'Aucune base de données lisible dans cette archive. Utilisez l’export des articles en Excel ou en CSV.');
+      }
+      if (cands[0].k === 'dbf') { // plusieurs .dbf : une table par fichier
+        const dbs = cands.filter((c) => c.k === 'dbf').map((c) => openDbf(c.b, c.n));
+        return { label: 'dBase', tables: dbs.map((d) => d.tables[0]), rows: (n) => dbs.find((d) => d.tables[0].name === n).rows() };
+      }
+      u8 = cands[0].b; name = cands[0].n; kind = cands[0].k;
+    }
+    if (UNREADABLE[kind]) throw new Error(UNREADABLE[kind]);
+    const db = kind === 'sqlite' ? await openSqlite(u8) : kind === 'access' ? await openAccess(u8) : kind === 'dbf' ? openDbf(u8, name) : null;
+    if (!db) return null;
+    db.tables.forEach((t) => { t.score = scoreTable(t); });
+    db.tables.sort((a, b) => b.score - a.score || b.count - a.count);
+    db.sheet = (n) => buildSheet(db, n);
+    return db;
+  }
+
   async function readFile(file) {
     const buf = await file.arrayBuffer();
-    const head = new Uint8Array(buf.slice(0, 4));
+    const u8 = new Uint8Array(buf);
+    const head = u8.subarray(0, 4);
+    const kind = kindOf(u8, file.name);
+    if (kind && kind !== 'zip') {
+      const db = await openDatabase(u8, file.name);
+      return { db, ...(await db.sheet(db.tables[0].name)) };
+    }
     let rows;
-    if (head[0] === 0x50 && head[1] === 0x4b) rows = await parseXlsx(buf);
+    if (kind === 'zip') {
+      const isXlsx = Object.keys(await unzip(buf, (n) => n === 'xl/workbook.xml')).length > 0;
+      if (!isXlsx) { const db = await openDatabase(u8, file.name); return { db, ...(await db.sheet(db.tables[0].name)) }; }
+      rows = await parseXlsx(buf);
+    }
     else if (head[0] === 0xd0 && head[1] === 0xcf) throw new Error('Ancien format Excel (.xls) : ouvrez-le dans Excel et enregistrez-le en .xlsx ou en CSV.');
-    else rows = parseCsv(decode(new Uint8Array(buf)));
+    else rows = parseCsv(decode(u8));
     const start = rows.findIndex((r) => r.filter((c) => String(c).trim()).length >= 2);
     if (start < 0) throw new Error('Aucun tableau trouvé dans ce fichier.');
     const headers = rows[start].map((h) => String(h).trim());
@@ -114,13 +276,13 @@
     variant: ['variation name', 'option1 value', 'option 1 value', 'variante', 'declinaison'],
     variant2: ['option2 value', 'option 2 value'],
     parent: ['handle', 'parent', 'reference handle'],
-    ref: ['sku', 'variant sku', 'reference', 'ref', 'code', 'code article', 'reference interne', 'internal reference', 'ref article', 'reference article'],
-    barcode: ['barcode', 'code barre', 'code-barre', 'code-barres', 'code barres', 'code a barres', 'codes a barres', 'code a barre', 'gtin', 'ean', 'ean13', 'ean 13', 'variant barcode', 'gtin, upc, ean, or isbn', 'upc', 'code ean'],
+    ref: ['sku', 'variant sku', 'reference', 'ref', 'code', 'code article', 'reference interne', 'internal reference', 'ref article', 'reference article', 'code produit', 'ref produit', 'reference produit', 'code art', 'cod art'],
+    barcode: ['barcode', 'bar code', 'codebarre', 'cb', 'code barre', 'code-barre', 'code-barres', 'code barres', 'code a barres', 'codes a barres', 'code a barre', 'gtin', 'ean', 'ean13', 'ean 13', 'variant barcode', 'gtin, upc, ean, or isbn', 'upc', 'code ean'],
     category: ['category', 'categorie', 'categories', 'famille', 'famille article', 'product category', 'categorie de produit', 'rayon', 'type'],
-    price: ['prix de vente ttc', 'prix ttc', 'pv ttc', 'prix vente ttc', 'price', 'default price', 'regular price', 'variant price', 'sales price', 'prix de vente', 'prix', 'prix vente', 'prix de vente ht', 'pv ht', 'prix ht', 'prix unitaire', 'sale price'],
-    purchase: ['cost', 'cost per item', 'default unit cost', 'purchase cost', 'cost price', "prix d'achat", "prix d'achat ht", 'prix achat', 'prix de revient', 'cout', 'cout unitaire', 'pa ht', 'cout moyen'],
-    stock: ['in stock', 'stock', 'quantity', 'quantite', 'qty', 'variant inventory qty', 'current quantity', 'quantity on hand', 'quantite en stock', 'stock reel', 'stock disponible', 'on hand', 'quantite disponible', 'qte', 'qte en stock'],
-    stock_min: ['low stock', 'stock alert count', 'low stock amount', 'stock minimum', 'stock mini', 'stock min', 'seuil', "seuil d'alerte", "stock d'alerte", 'point de commande', "quantite d'alerte", 'quantite alerte', 'qte alerte', "qte d'alerte"],
+    price: ['prix de vente ttc', 'prix ttc', 'pv ttc', 'prix vente ttc', 'price', 'default price', 'regular price', 'variant price', 'sales price', 'prix de vente', 'prix', 'prix vente', 'prix de vente ht', 'pv ht', 'prix ht', 'prix unitaire', 'sale price', 'prix vente ht', 'pu ht', 'prix unitaire ht', 'pvht', 'pv', 'pu', 'prix vente ttc'],
+    purchase: ['cost', 'cost per item', 'default unit cost', 'purchase cost', 'cost price', "prix d'achat", "prix d'achat ht", 'prix achat', 'prix de revient', 'cout', 'cout unitaire', 'pa ht', 'cout moyen', 'pa', 'prix achat ht', 'cout achat', 'pump', 'pmp', 'cump'],
+    stock: ['in stock', 'stock', 'quantity', 'quantite', 'qty', 'variant inventory qty', 'current quantity', 'quantity on hand', 'quantite en stock', 'stock reel', 'stock disponible', 'on hand', 'quantite disponible', 'qte', 'qte en stock', 'qte stock', 'quantite stock', 'stock actuel', 'qte reel', 'qte reelle'],
+    stock_min: ['low stock', 'stock alert count', 'low stock amount', 'stock minimum', 'stock mini', 'stock min', 'seuil', "seuil d'alerte", "stock d'alerte", 'point de commande', "quantite d'alerte", 'quantite alerte', 'qte alerte', "qte d'alerte", 'stock alerte', 'qte min', 'seuil alerte', 'stock securite', 'qte mini'],
     tva: ['tva', 'taux tva', 'taux de tva', 'tax rate', 'vat', 'taux', 'tva %'],
     unit: ['unit', 'unite', 'unite de vente', 'unit and precision', 'uom', 'unite de mesure', 'sold by weight'],
     description: ['description', 'body (html)', 'short description', 'description courte', 'description commerciale'],
@@ -128,15 +290,20 @@
     type: ['type'],
     archived: ['archived', 'archive'],
   };
-  const baseName = (h) => norm(h).replace(/\s*\[.*\]\s*$/, '').replace(/\s*\(.*\)\s*$/, '').trim();
+  // « PrixVenteHT », « prix_vente_ht », « Prix de vente HT » : même intitulé.
+  const baseName = (h) => norm(String(h ?? '').replace(/([a-z\u00e0-\u00ff])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2').replace(/[_.]+/g, ' ')).replace(/\s*\[.*\]\s*$/, '').replace(/\s*\(.*\)\s*$/, '').trim();
 
   function detect(headers) {
     const set = new Set(headers.map(baseName));
+    for (const h of [...set]) set.add(h.replace(/\s+/g, ' '));
     return SOURCES.find((s) => s.test(set)) || { key: 'autre', label: 'tableau Excel', prices: 'ttc' };
   }
+  // Intitulé reconnu : identique, identique sans espaces (« PRIXVENTE »), ou tronqué à 10 caractères (dBase).
+  const compact = (x) => x.replace(/[\s'-]/g, '');
+  const same = (b, k) => b === k || compact(b) === compact(k) || (b.length === 10 && compact(k).startsWith(compact(b)));
   function autoMap(headers, source) {
     const H = headers.map(norm), B = headers.map(baseName);
-    const pick = (list, avoid = []) => { for (const k of list) { const i = B.findIndex((b, j) => b === k && !avoid.includes(j)); if (i >= 0) return i; } return -1; };
+    const pick = (list, avoid = []) => { for (const k of list) { const i = B.findIndex((b, j) => same(b, k) && !avoid.includes(j)); if (i >= 0) return i; } return -1; };
     const m = {};
     for (const f of ['name', 'variant', 'variant2', 'parent', 'ref', 'barcode', 'purchase', 'stock_min', 'tva', 'unit', 'description', 'track', 'archived']) m[f] = pick(FIELDS[f]);
     // Catégorie : « Type » seulement s'il n'y a rien de mieux (chez WooCommerce, Type = simple/variable).
@@ -151,7 +318,7 @@
     const ph = m.price >= 0 ? H[m.price] : '';
     m.price_mode = /\bht\b|hors tax/.test(ph) ? 'ht' : /\bttc\b/.test(ph) ? 'ttc' : source.prices;
     // Stock : toutes les colonnes de quantité, y compris celles d'un magasin (« In stock [Centre] »).
-    m.stocks = B.map((b, i) => ((FIELDS.stock.includes(b) || /^(current quantity|in stock|quantite) .+/.test(H[i])) && !/new quantity/.test(H[i]) ? i : -1)).filter((i) => i >= 0);
+    m.stocks = B.map((b, i) => ((FIELDS.stock.some((k) => same(b, k)) || /^(current quantity|in stock|quantite) .+/.test(H[i])) && !/new quantity/.test(H[i]) ? i : -1)).filter((i) => i >= 0);
     if (m.stock_min < 0) m.stock_min = H.findIndex((h) => /^(stock alert count|low stock)\b/.test(h));
     return m;
   }
@@ -228,5 +395,5 @@
     'Café moulu 250 g;CAF-250;3017620422003;Épicerie;4,80;2,90;24;6;5,5;paquet;Arabica, mouture fine',
     'Perceuse sans fil 18 V;PER-18V;;Outillage;149,00;92,00;5;2;20;pièce;'].join('\r\n');
 
-  window.ComptoirImport = { readFile, detect, autoMap, toProducts, number, TEMPLATE, FIELDS, norm };
+  window.ComptoirImport = { readFile, detect, autoMap, toProducts, number, TEMPLATE, FIELDS, norm, kindOf };
 })();

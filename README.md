@@ -100,6 +100,20 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 - **stock par magasin** : chaque colonne « In stock [Magasin] » ou « Current Quantity Magasin » est rapprochée de la boutique Comptoir du même nom.
 - **aperçu** avant import (à créer, à mettre à jour, erreurs), puis envoi par lots de 200 lignes avec une barre de progression.
 
+**Import direct d'une base de données**, quand le logiciel n'a pas d'export. La base est lue **dans le navigateur** et n'est jamais envoyée : seuls les produits partent vers le serveur.
+- **formats** :
+  - **SQLite** (.db, .sqlite), lu par sql.js 1.13.0 (`public/vendor/sqljs/`) ;
+  - **Access** (.mdb, .accdb), lu par mdb-reader 3.2.0, assemblé pour le navigateur (`public/vendor/mdb/`) ;
+  - **dBase** (.dbf), lecteur intégré ;
+  - **archive .zip** (sauvegarde ou dossier) : la plus grande base lisible qu'elle contient est ouverte.
+
+  Les lecteurs ne sont chargés que lorsqu'une base est déposée.
+- **table des produits choisie automatiquement**, d'après ses colonnes et son nom, en écartant les factures, clients et mouvements. Le commerçant peut en choisir une autre.
+- **identifiants remplacés par leurs libellés** : famille, catégorie, marque, unité ou TVA rangées dans une autre table.
+- **stock rangé dans une table à part** (produit, dépôt, quantité) : une colonne « Quantité <dépôt> » par dépôt, rapprochée des boutiques Comptoir.
+- **noms de colonnes de base de données compris** : « PrixVenteHT », « code_barre », « QteStock », « PV », « PA », « PMP », et les noms tronqués à 10 caractères de dBase (« DESIGNATIO »).
+- **formats illisibles dans un navigateur**, avec un message qui oriente vers l'export du logiciel : SQL Server (.mdf), SQL Server Compact (.sdf), Firebird (.fdb).
+
 **Côté serveur** (`src/importer.js`, `POST /api/store/import/products`) :
 - **contrôles** : droit « produits », droit « stock » pour les quantités, limite de produits de la formule, 500 lignes au plus par envoi, valeurs vérifiées, boutiques autorisées seulement.
 - **rapprochement** avec les produits existants par code-barres, puis référence, puis nom : mise à jour ou ignoré, au choix. Les doublons du fichier sont fusionnés.

@@ -72,6 +72,7 @@ export const GUIDES = [
         <li><strong>Odoo</strong> : Inventaire, Produits, vue liste, cochez les produits, Action, Exporter.</li>
         <li><strong>Stock Express</strong> et <strong>Stock Standard</strong> (Klick) : depuis la liste des produits, export des produits vers CSV. Les produits à plusieurs codes-barres gardent le premier ; une colonne de quantité par dépôt peut être associée à chaque boutique.</li>
         <li><strong>EBP</strong> et <strong>Sage</strong> : depuis la liste des articles, export vers Excel ou en CSV.</li>
+        <li><strong>Pas d’export dans votre logiciel ?</strong> Déposez directement sa <strong>base de données</strong> : SQLite (.db, .sqlite), Access (.mdb, .accdb), dBase (.dbf) ou une sauvegarde .zip qui en contient une. Fermez le logiciel avant de copier le fichier. La base est lue sur votre appareil : seuls les produits sont envoyés à Comptoir, jamais vos clients ni vos factures. Les bases SQL Server, SQL Server Compact et Firebird ne peuvent pas être lues ainsi : utilisez alors l’export du logiciel.</li>
         <li><strong>Un autre logiciel ou un tableau Excel</strong> : tout tableau avec une ligne de titres convient. Vous pouvez aussi remplir le <strong>modèle Comptoir</strong>, téléchargeable depuis la page d’import.</li></ul>`],
       ['Prix, variantes et stock', `<ul>
         <li><strong>Prix HT ou TTC</strong> : Comptoir le devine d’après le titre de la colonne et le logiciel d’origine ; vérifiez le choix avant d’importer.</li>

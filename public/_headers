@@ -20,3 +20,7 @@
   Service-Worker-Allowed: /app/
 /manifest.webmanifest
   Cache-Control: public, max-age=3600
+
+# Lecteurs de bases de données (chargés seulement pour l'import)
+/vendor/*
+  Cache-Control: public, max-age=604800

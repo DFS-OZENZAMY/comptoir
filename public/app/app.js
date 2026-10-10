@@ -1809,6 +1809,7 @@
     ['ebp', 'EBP', 'Depuis la liste des <strong>Articles</strong>, utilisez l’export de la liste au format <strong>Excel</strong> ou l’<strong>export CSV</strong> des articles.'],
     ['stockexpress', 'Stock Express', 'Dans Stock Express (ou Stock Standard), ouvrez la liste des <strong>Produits</strong> et utilisez l’<strong>export des produits vers CSV</strong>. Si vos produits sont répartis dans plusieurs dépôts, gardez une colonne de quantité par dépôt : vous pourrez associer chacune à une boutique Comptoir.'],
     ['sage', 'Sage', 'Depuis la liste des <strong>Articles</strong>, exportez la liste vers <strong>Excel</strong>, ou utilisez un export au format paramétrable (CSV).'],
+    ['base', 'Fichier de base de données', 'Si votre logiciel n’a pas d’export, déposez directement sa <strong>base de données</strong> : <strong>SQLite</strong> (.db, .sqlite), <strong>Access</strong> (.mdb, .accdb), <strong>dBase</strong> (.dbf) ou une <strong>sauvegarde .zip</strong> qui en contient une. Fermez d’abord le logiciel, puis copiez le fichier. La base est lue sur votre appareil : seuls les produits sont envoyés à Comptoir.'],
     ['autre', 'Excel ou autre', 'Tout logiciel qui exporte un tableau convient : <strong>CSV</strong> ou <strong>Excel (.xlsx)</strong>. Vous pouvez aussi remplir notre modèle.'],
   ];
   const imp = { tool: null, file: null, sheet: null, source: null, map: null, stockMap: {}, onExisting: 'update', setStock: true, delExamples: true };
@@ -1832,26 +1833,20 @@
           <div class="imp-tools">${TOOLS.map(([k, l]) => `<button type="button" class="chip" data-tool="${k}" aria-pressed="${imp.tool === k}">${l}</button>`).join('')}</div>
           <p class="imp-how" id="impHow">${imp.tool ? TOOLS.find((t) => t[0] === imp.tool)[2] : 'Choisissez votre logiciel pour voir comment exporter vos produits.'}</p></section>
         <section class="panel imp-step"><div class="panel-head"><h2>2. Votre fichier</h2><span class="muted">CSV ou Excel (.xlsx)</span></div>
-          <label class="imp-drop" id="impDrop"><input type="file" id="impFile" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-            <strong>Déposez le fichier ici</strong><span>ou touchez pour le choisir</span></label>
+          <label class="imp-drop" id="impDrop"><input type="file" id="impFile" accept=".csv,.txt,.xlsx,.db,.sqlite,.sqlite3,.s3db,.db3,.mdb,.accdb,.dbf,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+            <strong>Déposez le fichier ici</strong><span>Export CSV ou Excel, ou base de données (SQLite, Access, dBase, sauvegarde .zip)</span></label>
           <p class="form-error" id="impErr"></p></section>`;
       $$('[data-tool]').forEach((b) => b.addEventListener('click', () => { imp.tool = b.dataset.tool; $$('[data-tool]').forEach((x) => x.setAttribute('aria-pressed', x === b)); $('#impHow').innerHTML = TOOLS.find((t) => t[0] === imp.tool)[2]; }));
       const take = async (file) => {
         if (!file) return;
         $('#impErr').textContent = ''; $('#impDrop').classList.add('busy');
         try {
-          if (file.size > 15 * 1024 * 1024) throw new Error('Fichier trop lourd (15 Mo au plus).');
+          if (file.size > 300 * 1024 * 1024) throw new Error('Fichier trop lourd (300 Mo au plus).');
+          $('#impDrop strong').textContent = 'Lecture du fichier…';
           imp.sheet = await CI.readFile(file); imp.file = file.name;
-          if (!imp.sheet.rows.length) throw new Error('Le fichier ne contient aucune ligne de produit.');
-          imp.source = CI.detect(imp.sheet.headers);
-          imp.map = CI.autoMap(imp.sheet.headers, imp.source);
-          // Stock : une colonne par boutique, rapprochée par le nom du magasin quand c'est possible.
-          const locs = state.me.locations || [];
-          imp.stockMap = {};
-          locs.forEach((l, i) => {
-            const byName = imp.map.stocks.find((c) => CI.norm(imp.sheet.headers[c]).includes(CI.norm(l.name)));
-            imp.stockMap[l.id] = byName ?? (locs.length === 1 || l.id === (state.scope === 'all' ? locs[0].id : state.scope) ? imp.map.stocks[i] ?? imp.map.stocks[0] ?? -1 : imp.map.stocks[i] ?? -1);
-          });
+          imp.db = imp.sheet.db || null; imp.table = imp.db ? imp.db.tables[0].name : null;
+          if (!imp.sheet.rows.length) throw new Error(imp.db ? 'Aucune table de produits remplie n’a été trouvée dans cette base.' : 'Le fichier ne contient aucune ligne de produit.');
+          prepareImport();
           route();
         } catch (e) { imp.sheet = null; $('#impErr').textContent = e.message; }
         $('#impDrop')?.classList.remove('busy');
@@ -1864,6 +1859,19 @@
       return;
     }
     renderImportReview();
+  }
+  // Logiciel d'origine, correspondance des colonnes et colonnes de stock par boutique.
+  function prepareImport() {
+    const CI = window.ComptoirImport;
+    imp.source = CI.detect(imp.sheet.headers);
+    if (imp.db) imp.source = { key: 'base', label: `base ${imp.db.label}`, prices: imp.source.key === 'autre' ? 'ttc' : imp.source.prices };
+    imp.map = CI.autoMap(imp.sheet.headers, imp.source);
+    const locs = state.me.locations || [];
+    imp.stockMap = {};
+    locs.forEach((l, i) => {
+      const byName = imp.map.stocks.find((c) => CI.norm(imp.sheet.headers[c]).includes(CI.norm(l.name)));
+      imp.stockMap[l.id] = byName ?? (locs.length === 1 || l.id === (state.scope === 'all' ? locs[0].id : state.scope) ? imp.map.stocks[i] ?? imp.map.stocks[0] ?? -1 : imp.map.stocks[i] ?? -1);
+    });
   }
   function impProducts() {
     const stockMap = imp.setStock && can('stock.manage') ? imp.stockMap : {};
@@ -1888,7 +1896,10 @@
     const stockOk = can('stock.manage');
     const label = { new: '<span class="badge s-ok">nouveau</span>', upd: '<span class="badge s-info">mise à jour</span>', err: '<span class="badge s-bad">erreur</span>' };
     $('#view').innerHTML = `
-      <section class="imp-file"><div><strong>${esc(imp.file)}</strong><span>Reconnu : <b>${esc(imp.source.label)}</b> · ${imp.sheet.rows.length} ligne${imp.sheet.rows.length > 1 ? 's' : ''}</span></div><button class="btn btn-sm" id="impReset">Changer de fichier</button></section>
+      <section class="imp-file"><div><strong>${esc(imp.file)}</strong><span>Reconnu : <b>${esc(imp.source.label)}</b> · ${imp.sheet.rows.length} ligne${imp.sheet.rows.length > 1 ? 's' : ''}${imp.db ? ` · table « ${esc(imp.table)} »` : ''}</span></div><button class="btn btn-sm" id="impReset">Changer de fichier</button></section>
+      ${imp.db ? `<section class="panel"><div class="panel-head"><h2>Table des produits</h2><span class="muted">base ${esc(imp.db.label)}, ${imp.db.tables.length} table${imp.db.tables.length > 1 ? 's' : ''}</span></div>
+        <div class="imp-map"><label><span>Table lue</span><select id="impTable">${imp.db.tables.map((t) => `<option value="${esc(t.name)}" ${t.name === imp.table ? 'selected' : ''}>${esc(t.name)} (${t.count} ligne${t.count > 1 ? 's' : ''})</option>`).join('')}</select></label>
+        <p class="muted" style="grid-column:span 2;margin:0;align-self:end">Comptoir a choisi la table qui ressemble le plus à un catalogue de produits. Les familles, marques et unités rangées dans d’autres tables sont reprises par leur nom, et le stock par dépôt est ajouté.</p></div></section>` : ''}
       <section class="panel"><div class="panel-head"><h2>Correspondance des colonnes</h2><span class="muted">vérifiez, corrigez si besoin</span></div>
         <div class="imp-map">${IMP_FIELDS.map(([f, l, req]) => `<label><span>${l}${req ? ' <em>*</em>' : ''}</span>${colSelect(f, m[f])}</label>`).join('')}
           <div class="imp-mode"><span>Les prix du fichier sont</span><label class="check"><input type="radio" name="impMode" value="ttc" ${m.price_mode === 'ttc' ? 'checked' : ''}> TTC (taxes comprises)</label><label class="check"><input type="radio" name="impMode" value="ht" ${m.price_mode === 'ht' ? 'checked' : ''}> HT (hors taxes)</label></div>
@@ -1909,7 +1920,10 @@
         ${rows.length > 40 ? `<p class="muted imp-more">… et ${rows.length - 40} autres lignes.</p>` : ''}
       </section>
       <div class="imp-go"><p class="form-error" id="impErr"></p><button class="btn btn-primary btn-lg" id="impGo" ${created + updated ? '' : 'disabled'}>Importer ${created + updated} produit${created + updated > 1 ? 's' : ''}</button></div>`;
-    $('#impReset').addEventListener('click', () => { imp.sheet = null; route(); });
+    $('#impReset').addEventListener('click', () => { imp.sheet = null; imp.db = null; route(); });
+    $('#impTable')?.addEventListener('change', async (e) => {
+      try { imp.table = e.target.value; imp.sheet = { db: imp.db, ...(await imp.db.sheet(imp.table)) }; prepareImport(); renderImportReview(); } catch (ex) { fail(ex); }
+    });
     $$('[data-mapf]').forEach((s) => s.addEventListener('change', () => { m[s.dataset.mapf] = Number(s.value); renderImportReview(); }));
     $$('input[name="impMode"]').forEach((r) => r.addEventListener('change', () => { m.price_mode = r.value; renderImportReview(); }));
     $$('[data-stockloc]').forEach((s) => s.addEventListener('change', () => { imp.stockMap[s.dataset.stockloc] = Number(s.value); renderImportReview(); }));
@@ -1933,7 +1947,7 @@
       }
     } catch (e) { res.errors.push({ line: null, message: e.message }); }
     await refresh('products', 'categories').catch(() => {});
-    imp.sheet = null;
+    imp.sheet = null; imp.db = null;
     $('#view').innerHTML = `<section class="panel imp-done">
         <h2>${res.errors.length ? 'Import terminé, avec des remarques' : 'Import terminé'}</h2>
         <div class="imp-sum big"><span class="badge s-ok">${res.created} produit${res.created > 1 ? 's' : ''} créé${res.created > 1 ? 's' : ''}</span><span class="badge s-info">${res.updated} mis à jour</span>${res.categories_created ? `<span class="badge s-neutral">${res.categories_created} catégorie${res.categories_created > 1 ? 's' : ''} créée${res.categories_created > 1 ? 's' : ''}</span>` : ''}${res.skipped ? `<span class="badge s-neutral">${res.skipped} ignoré${res.skipped > 1 ? 's' : ''}</span>` : ''}</div>
