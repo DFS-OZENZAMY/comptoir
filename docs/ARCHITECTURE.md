@@ -42,7 +42,8 @@ L'application reçoit `app.fetch(request, env, ctx)` et `runDailyTasks(env)`. Ch
 | `env.ASSETS` | `fetch(request)` → fichier de `public/`, avec les règles d'adresses et `_headers` | Assets | `adapters/node/assets.js` |
 | `env.STORAGE` ou variables `STORAGE_DRIVER` | Photos : `put / get / delete` (`platform/storage.js`) | base, R2 ou S3 | disque, base ou S3 |
 | `ctx.waitUntil(promesse)` | Travail après la réponse (statistiques, journal) | natif | `adapters/node/handler.js` |
-| Tâche du matin | Appelle `runDailyTasks(env)` une fois par jour | déclencheur cron | minuterie (`CRON_HOUR_UTC`) |
+| Tâche du matin | Appelle `runDailyTasks(env)` une fois par jour (statistiques, nettoyage, e-mails, sauvegarde) | déclencheur cron | minuterie (`CRON_HOUR_UTC`) |
+| `env.BACKUP_STORAGE` ou variables `BACKUP_DRIVER` | Destination des sauvegardes (`put / get / delete / list`) | R2 ou S3 | disque ou S3 |
 | Variables | `PLATFORM_ADMIN_EMAILS`, `APP_URL`, `LEGAL_*`, `RESEND_API_KEY`… | Variables du Worker | variables d'environnement / `.env` |
 
 L'ordre de traitement est le même partout : les adresses listées dans `run_worker_first` (`wrangler.jsonc`, **source unique**) vont à l'application ; les autres sont d'abord cherchées dans `public/`, puis données à l'application si aucun fichier ne correspond.
@@ -84,6 +85,7 @@ Les erreurs métier sont des `HttpError(statut, message)` : le message, en fran�
 | `src/features/connectors.js` | Connexion directe à Loyverse, Square, Shopify, WooCommerce, Odoo ; import des photos |
 | `src/features/seo.js` | Pages publiques rendues côté serveur : accueil, métiers, vitrines, pages légales, plan du site |
 | `src/features/help.js` | Centre d'aide |
+| `src/features/backup.js` | Sauvegardes : export SQL, chiffrement, vérification, rotation, copie des photos (voir [BACKUP.md](BACKUP.md)) |
 | `src/platform/html.js` | Réécriture HTML portable (interface identique au HTMLRewriter de Cloudflare) |
 | `src/platform/geo.js` | Pays du visiteur, quel que soit l'hébergeur |
 | `src/platform/storage.js` | Stockage des photos : base, R2, S3 (signature AWS v4 en JavaScript standard), mémoire |

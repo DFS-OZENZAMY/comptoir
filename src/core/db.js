@@ -70,6 +70,10 @@ const SCHEMA = [
     id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, customer_id INTEGER NOT NULL, document_id INTEGER,
     points REAL NOT NULL, reason TEXT DEFAULT '', created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON loyalty_movements(store_id, customer_id, id)`,
+  // Sauvegardes de la plateforme : historique et photos déjà copiées vers la destination de sauvegarde.
+  `CREATE TABLE IF NOT EXISTS backups (id TEXT PRIMARY KEY, created_at TEXT, finished_at TEXT, status TEXT, trigger TEXT,
+    bytes INTEGER DEFAULT 0, rows INTEGER DEFAULT 0, parts INTEGER DEFAULT 0, encrypted INTEGER DEFAULT 0, verified_at TEXT, error TEXT)`,
+  `CREATE TABLE IF NOT EXISTS backup_files (key TEXT PRIMARY KEY, copied_at TEXT)`,
   `CREATE INDEX IF NOT EXISTS idx_locations_store ON locations(store_id)`,
   `CREATE INDEX IF NOT EXISTS idx_location_stock_store ON location_stock(store_id, product_id)`,
   `CREATE INDEX IF NOT EXISTS idx_roles_store ON roles(store_id)`,
@@ -116,9 +120,10 @@ const MIGRATIONS = [
   ]],
 ];
 
-let ready = false;
+// Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).
+const ready = new WeakSet();
 export async function init(db) {
-  if (ready) return;
+  if (ready.has(db)) return;
   await db.batch(SCHEMA.map((s) => db.prepare(s)));
   await db.prepare(`CREATE TABLE IF NOT EXISTS platform_meta (key TEXT PRIMARY KEY, value TEXT)`).run();
   const row = await db.prepare("SELECT value FROM platform_meta WHERE key = 'schema_version'").first();
@@ -131,7 +136,7 @@ export async function init(db) {
     version = v;
   }
   await db.prepare("INSERT OR REPLACE INTO platform_meta (key, value) VALUES ('schema_version', ?)").bind(String(version)).run();
-  ready = true;
+  ready.add(db);
 }
 
 // Compteurs d'usage par jour (console de la plateforme).

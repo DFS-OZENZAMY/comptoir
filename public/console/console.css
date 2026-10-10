@@ -243,3 +243,10 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
   body.console .main { padding-bottom: 32px; }
   .kpis-console { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Sauvegardes */
+.status-banner .btn { margin-left: auto; flex: none; }
+.bk-help { padding: 0 18px 18px; }
+.bk-help p { margin: 0 0 10px; color: var(--muted); }
+.bk-help pre { margin: 0; padding: 14px 16px; border-radius: var(--radius); background: var(--steel, #17181C); color: #E8E9EC; font-family: var(--mono, ui-monospace, monospace); font-size: .82rem; overflow-x: auto; line-height: 1.6; }
+.badge.ok { background: #E1F1E7; color: #1E6B43; } .badge.warn { background: #FBF0D9; color: #8A5E0A; }

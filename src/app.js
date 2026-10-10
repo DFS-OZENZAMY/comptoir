@@ -8,7 +8,8 @@ import { HttpError, json, num, readBody } from './core/lib.js';
 import { init, bump, recordRequest, logError, setMeta } from './core/db.js';
 import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './core/catalog.js';
 import { signup, login, logout, getContext, me, changePassword, touchStore } from './features/auth.js';
-import { storeRoutes, runDailyDigests } from './features/store.js';
+import { storeRoutes, runDailyDigests, sendEmail } from './features/store.js';
+import { dailyBackup } from './features/backup.js';
 import { resolveAccess } from './features/access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './features/console.js';
 import { renderHelpIndex, renderHelpGuide } from './features/help.js';
@@ -176,6 +177,16 @@ export async function runDailyTasks(env) {
       try { await takeSnapshot(env.DB); done.push('instantané'); } catch (e) { done.push('instantané en échec : ' + e.message); }
       try { await cleanup(env.DB); done.push('nettoyage'); } catch (e) { done.push('nettoyage en échec : ' + e.message); }
       try { await runDailyDigests(env); done.push('e-mails'); } catch (e) { done.push('e-mails en échec : ' + e.message); }
+      try {
+        const b = await dailyBackup(env);
+        done.push(b.skipped ? `sauvegarde ${b.skipped}` : `sauvegarde ${b.id} (${Math.round(b.bytes / 1024)} ko, vérifiée)`);
+      } catch (e) {
+        done.push('sauvegarde en échec : ' + e.message);
+        // Alerte immédiate des administrateurs de la plateforme.
+        for (const to of String(env.PLATFORM_ADMIN_EMAILS || '').split(',').map((x) => x.trim()).filter(Boolean)) {
+          await sendEmail(env, to, 'Comptoir : la sauvegarde de cette nuit a échoué', `<p>La sauvegarde automatique a échoué : <strong>${String(e.message).replace(/</g, '&lt;')}</strong>.</p><p>Consultez la console, rubrique Sauvegardes.</p>`).catch(() => {});
+        }
+      }
       await setMeta(env.DB, 'last_cron', JSON.stringify({ at: new Date().toISOString(), result: done }));
       return { done };
 }

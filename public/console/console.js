@@ -49,7 +49,7 @@
     if (method === 'GET') { inflight.set(path, run); run.finally(() => inflight.delete(path)).catch(() => {}); }
     return run;
   }
-  const PREFETCH = { 'vue-d-ensemble': ['/console/overview'], 'a-traiter': ['/console/todo'], commerces: ['/console/stores'], activite: ['/console/activity'], revenus: ['/console/revenue'], systeme: ['/console/system'], journal: ['/console/events?'], utilisateurs: ['/console/users'] };
+  const PREFETCH = { 'vue-d-ensemble': ['/console/overview'], 'a-traiter': ['/console/todo'], commerces: ['/console/stores'], activite: ['/console/activity'], revenus: ['/console/revenue'], systeme: ['/console/system'], sauvegardes: ['/console/backups'], journal: ['/console/events?'], utilisateurs: ['/console/users'] };
   const prefetch = (key) => { for (const p of PREFETCH[key] || []) { const c = cache.get(p); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(p)) api(p).catch(() => {}); } };
   const onIntent = (e) => { const a = e.target.closest && e.target.closest('a[href^="#/"]'); if (a) prefetch(a.getAttribute('href').slice(2).split('?')[0]); };
   document.addEventListener('mouseover', onIntent, { passive: true });
@@ -380,6 +380,51 @@
     const [cls, label] = sysStatus(s);
     const d = $('#sysDot'); d.className = `status-dot ${cls}`; d.title = label;
   }
+  /* ================= Sauvegardes ================= */
+  async function viewBackups() {
+    const { status: st, backups } = await api('/console/backups');
+    const c = st.config;
+    const when = (iso) => (iso ? new Date(iso).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+    const ok = !st.alert;
+    const verified = new Map(st.history.filter((h) => h.verified_at).map((h) => [h.id, h.verified_at]));
+    $('#view').innerHTML = `
+      <section class="status-banner ${ok ? 'ok' : 'bad'}"><span class="status-dot ${ok ? 'ok' : 'bad'}"></span><div><strong>${ok ? 'Sauvegardes à jour' : 'Sauvegardes à surveiller'}</strong>
+        <span>${ok ? `Dernière sauvegarde réussie le ${when(st.last_ok.finished_at || st.last_ok.created_at)}, vérifiée.` : esc(st.alert)}</span></div>
+        ${c.configured ? '<button class="btn btn-primary" id="bkNow" type="button">Sauvegarder maintenant</button>' : ''}</section>
+      <section class="kpis kpis-console">
+        <div class="kpi"><span class="kpi-label">Dernière réussite</span><span class="kpi-value">${st.age_hours === null ? '—' : st.age_hours < 1 ? 'à l’instant' : `il y a ${Math.round(st.age_hours)} h`}</span><span class="kpi-sub">${st.last_ok ? `${nf0.format(st.last_ok.rows)} lignes, ${bytes(st.last_ok.bytes)}` : 'aucune'}</span></div>
+        <div class="kpi"><span class="kpi-label">Destination</span><span class="kpi-value">${c.configured ? esc({ fs: 'Disque local', s3: 'S3', r2: 'R2', memory: 'Mémoire' }[c.driver] || c.driver) : 'Aucune'}</span><span class="kpi-sub ${c.local ? 'stock-low' : ''}">${!c.configured ? 'voir docs/BACKUP.md' : c.local ? 'même serveur : ajoutez une copie externe' : 'hors du serveur de données'}</span></div>
+        <div class="kpi"><span class="kpi-label">Chiffrement</span><span class="kpi-value ${c.encrypted ? '' : 'stock-out'}">${c.encrypted ? 'AES-256' : 'Non'}</span><span class="kpi-sub">${c.encrypted ? 'clé détenue par vous seul' : 'BACKUP_ENCRYPTION_KEY manquant'}</span></div>
+        <div class="kpi"><span class="kpi-label">Rotation</span><span class="kpi-value">${backups.length}</span><span class="kpi-sub">${c.keep.daily} jours, ${c.keep.weekly} semaines, ${c.keep.monthly} mois</span></div>
+        <div class="kpi"><span class="kpi-label">Photos à copier</span><span class="kpi-value">${nf0.format(st.files_pending)}</span><span class="kpi-sub">${c.files ? 'copiées chaque nuit' : 'copie désactivée'}</span></div>
+      </section>
+      <section class="panel"><div class="panel-head"><h2>Sauvegardes disponibles</h2><span class="muted">chiffrées, compressées, vérifiées</span></div>
+        ${backups.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Origine</th><th class="num">Lignes</th><th class="num">Taille</th><th>Protection</th><th>Vérifiée</th><th></th></tr></thead><tbody>
+          ${backups.map((b) => `<tr><td>${when(b.created_at)}</td><td>${esc(b.trigger === 'auto' ? 'Automatique' : b.trigger === 'manuel' ? 'Manuelle' : b.trigger === 'import' ? 'Export D1' : b.trigger)}</td>
+            <td class="num">${nf0.format(b.rows)}</td><td class="num">${bytes(b.bytes)}</td><td>${b.encryption ? '<span class="badge ok">chiffrée</span>' : '<span class="badge warn">en clair</span>'}</td>
+            <td class="muted" data-verified="${esc(b.id)}">${verified.has(b.id) ? when(verified.get(b.id)) : '—'}</td>
+            <td class="num nowrap"><button class="btn btn-sm" data-verify="${esc(b.id)}" type="button">Vérifier</button> <a class="btn btn-sm" href="/api/console/backups/${encodeURIComponent(b.id)}/download">Télécharger</a></td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="empty-state">Aucune sauvegarde pour l’instant.</p>'}</section>
+      ${st.history.some((h) => h.status === 'échec') ? `<section class="panel"><div class="panel-head"><h2>Échecs récents</h2></div><div class="table-wrap"><table><tbody>
+        ${st.history.filter((h) => h.status === 'échec').slice(0, 10).map((h) => `<tr><td>${when(h.created_at)}</td><td class="stock-out">${esc(h.error || '')}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
+      <section class="panel"><div class="panel-head"><h2>Restaurer</h2><span class="muted">depuis un poste disposant de la clé de chiffrement</span></div>
+        <div class="bk-help"><p>Les commandes ci-dessous lisent la destination de sauvegarde, vérifient les empreintes et déchiffrent avec <code>BACKUP_ENCRYPTION_KEY</code>. La procédure complète est dans <code>docs/BACKUP.md</code>.</p>
+        <pre>npm run backup -- verify latest --deep            # restauration d'essai complète
+npm run backup -- restore latest --to file:./data/restauration.db
+npm run backup -- export latest --out comptoir.sql
+npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Cloudflare D1</pre></div></section>`;
+    const now = $('#bkNow');
+    now?.addEventListener('click', async () => {
+      now.disabled = true; now.textContent = 'Sauvegarde en cours…';
+      try { const r = await api('/console/backups', { method: 'POST', body: {} }); toast(`Sauvegarde réussie et vérifiée (${bytes(r.backup.bytes)})`); refreshCurrent(); } catch (ex) { fail(ex); now.disabled = false; now.textContent = 'Sauvegarder maintenant'; }
+    });
+    $$('[data-verify]').forEach((b) => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await api(`/console/backups/${encodeURIComponent(b.dataset.verify)}/verify`, { method: 'POST', body: {} }); toast('Sauvegarde intègre : empreintes et déchiffrement vérifiés'); $(`[data-verified="${b.dataset.verify}"]`).textContent = 'à l’instant'; } catch (ex) { fail(ex); }
+      b.disabled = false;
+    }));
+  }
+
   async function viewSystem() {
     const s = await api('/console/system');
     const [cls, label] = sysStatus({ requests_24h: s.last24.requests, errors_24h: s.last24.errors });
@@ -597,7 +642,7 @@
   }
   const VIEWS = {
     'vue-d-ensemble': ["Vue d'ensemble", viewOverview, true], 'a-traiter': ['À traiter', viewTodo, true], commerces: ['Commerces', viewStores, false],
-    activite: ['Activité des commerces', viewActivity, false], revenus: ['Revenus', viewRevenue, false], systeme: ['Système', viewSystem, true],
+    activite: ['Activité des commerces', viewActivity, false], revenus: ['Revenus', viewRevenue, false], systeme: ['Système', viewSystem, true], sauvegardes: ['Sauvegardes', viewBackups, true],
     journal: ['Journal', () => viewEvents(false), false], utilisateurs: ['Utilisateurs', viewUsers, false],
   };
   let lastRefresh = null;

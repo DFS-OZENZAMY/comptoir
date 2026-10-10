@@ -7,7 +7,7 @@ export default [
   { ignores: ['node_modules/', 'public/vendor/', 'data/', '.wrangler/'] },
   js.configs.recommended,
   {
-    files: ['src/**/*.js', 'tests/**/*.js', 'eslint.config.js'],
+    files: ['src/**/*.js', 'tests/**/*.js', 'scripts/**/*.js', 'eslint.config.js'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...globals.node, ...globals.serviceworker } },
   },
   {

@@ -34,5 +34,11 @@ export async function createEnv(vars = process.env, overrides = {}) {
   else if (driver === 'memory') env.STORAGE = memoryStorage();
   // « db » et « s3 » : gérés par src/platform/storage.js à partir des variables.
   env.STORAGE_DRIVER = driver;
+  // Sauvegardes : dossier local par défaut ; en production, une destination externe (BACKUP_DRIVER=s3).
+  const bdriver = (vars.BACKUP_DRIVER || 'fs').toLowerCase();
+  if (overrides.BACKUP_STORAGE) env.BACKUP_STORAGE = overrides.BACKUP_STORAGE;
+  else if (bdriver === 'fs') env.BACKUP_STORAGE = fsStorage(vars.BACKUP_DIR || join(ROOT, 'data', 'backups'));
+  else if (bdriver === 'memory') env.BACKUP_STORAGE = memoryStorage();
+  env.BACKUP_DRIVER = bdriver;
   return env;
 }

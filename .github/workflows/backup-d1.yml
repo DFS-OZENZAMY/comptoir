@@ -1,0 +1,52 @@
+# Sauvegarde nocturne de la base Cloudflare D1, depuis GitHub (fonctionne aussi en formule Workers gratuite).
+# Export officiel (wrangler d1 export) → chiffrement → destination de sauvegarde → restauration d'essai complète.
+# S'active seulement si les secrets sont renseignés (Settings → Secrets and variables → Actions) :
+#   CLOUDFLARE_API_TOKEN (droit « D1 : lecture »), CLOUDFLARE_ACCOUNT_ID, BACKUP_ENCRYPTION_KEY,
+#   BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY, et selon le prestataire BACKUP_S3_ENDPOINT, BACKUP_S3_REGION.
+name: Sauvegarde D1
+on:
+  schedule:
+    - cron: '30 2 * * *'   # chaque nuit à 2 h 30 UTC
+  workflow_dispatch:        # et à la demande, depuis l'onglet Actions
+
+jobs:
+  sauvegarde:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BACKUP_DRIVER: s3
+      BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+      BACKUP_S3_REGION: ${{ secrets.BACKUP_S3_REGION }}
+      BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+      BACKUP_S3_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+      BACKUP_ENCRYPTION_KEY: ${{ secrets.BACKUP_ENCRYPTION_KEY }}
+      DATABASE_URL: ':memory:'
+    steps:
+      - name: Configuration présente ?
+        id: cfg
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$BACKUP_S3_BUCKET" ] && [ -n "$BACKUP_ENCRYPTION_KEY" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else echo "Secrets absents : sauvegarde D1 non configurée (voir docs/BACKUP.md)."; fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ok == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.cfg.outputs.ok == 'true'
+        with: { node-version: 22, cache: npm }
+      - if: steps.cfg.outputs.ok == 'true'
+        run: npm ci --no-audit --no-fund
+      - name: Export de la base D1
+        if: steps.cfg.outputs.ok == 'true'
+        run: npx wrangler d1 export comptoir-data --remote --output=d1-auto.sql
+      - name: Chiffrement et envoi
+        if: steps.cfg.outputs.ok == 'true'
+        run: npm run backup -- import-dump d1-auto.sql
+      - name: Restauration d'essai complète
+        if: steps.cfg.outputs.ok == 'true'
+        run: npm run backup -- verify latest --deep
+      - name: Rotation
+        if: steps.cfg.outputs.ok == 'true'
+        run: npm run backup -- retention
+      - name: Effacement de l'export en clair
+        if: always()
+        run: rm -f d1-auto.sql

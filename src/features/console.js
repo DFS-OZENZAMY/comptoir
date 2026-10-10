@@ -1,5 +1,6 @@
 // Console du propriétaire de la plateforme : pilotage, monitoring, commerces, revenus, système.
 import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from '../core/lib.js';
+import { backupStatus, backupConfig, listBackups, createBackup, verifyBackup, readManifest, readBackup } from './backup.js';
 import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from '../core/catalog.js';
 import { logEvent } from '../core/db.js';
 
@@ -129,6 +130,8 @@ async function todo(db, env) {
   const cron = await db.prepare("SELECT value FROM platform_meta WHERE key = 'last_cron'").first();
   const lastCron = cron ? JSON.parse(cron.value) : null;
   if (lastCron && new Date(lastCron.at) < new Date(Date.now() - 30 * 3600000)) items.push({ kind: 'cron', priority: 1, title: "La tâche du matin ne s'est pas exécutée", detail: `Dernière exécution : ${lastCron.at.slice(0, 16).replace('T', ' ')}`, link: '#/systeme' });
+  const bk = await backupStatus(env).catch(() => null);
+  if (bk?.alert) items.push({ kind: 'backup', priority: bk.config.configured ? 1 : 2, title: bk.config.configured ? 'Sauvegardes à surveiller' : 'Sauvegardes non configurées', detail: bk.alert, link: '#/sauvegardes' });
   if (!env.RESEND_API_KEY) items.push({ kind: 'config', priority: 4, title: "Envoi d'e-mails non configuré", detail: 'Les commerçants ne reçoivent pas leurs alertes du matin', link: '#/systeme' });
   return items.sort((a, b) => a.priority - b.priority);
 }
@@ -369,6 +372,10 @@ async function system(db, env) {
       { name: "Envoi d'e-mails (Resend)", ok: !!env.RESEND_API_KEY, detail: env.RESEND_API_KEY ? 'Clé présente' : 'RESEND_API_KEY manquant : pas d’alertes du matin' },
       { name: "Expéditeur des e-mails", ok: !!env.MAIL_FROM, detail: env.MAIL_FROM || 'Adresse de test Resend utilisée' },
       { name: 'Adresse publique', ok: !!env.APP_URL, detail: env.APP_URL || 'APP_URL manquant : liens des e-mails sans adresse' },
+      ...(() => { const b = backupConfig(env); return [
+        { name: 'Sauvegardes', ok: b.configured && !b.local, detail: !b.configured ? 'Aucune destination : voir docs/BACKUP.md' : b.local ? 'Sur le disque du serveur : ajoutez une destination externe (S3, R2)' : `Destination ${b.driver.toUpperCase()}` },
+        { name: 'Chiffrement des sauvegardes', ok: b.encrypted, detail: b.encrypted ? 'AES-256-GCM' : 'BACKUP_ENCRYPTION_KEY manquant : sauvegardes non chiffrées' },
+      ]; })(),
     ],
   };
 }
@@ -436,5 +443,22 @@ export async function consoleRoutes(ctx, parts) {
     return json({ ok: true });
   }
   if (res === 'plans' && m === 'GET') return json(PLANS);
+  // Sauvegardes
+  if (res === 'backups' && !id && m === 'GET') return json({ status: await backupStatus(env), backups: await listBackups(env) });
+  if (res === 'backups' && !id && m === 'POST') {
+    const b = await createBackup(env, { trigger: 'manuel' });
+    const v = await verifyBackup(env, b.id);
+    await logEvent(db, null, ctx.user.id, 'backup', `Sauvegarde manuelle ${b.id}`);
+    return json({ backup: b, verified: v.ok }, 201);
+  }
+  if (res === 'backups' && id && action === 'verify' && m === 'POST') return json(await verifyBackup(env, id));
+  if (res === 'backups' && id && action === 'download' && m === 'GET') {
+    // Export SQL déchiffré et compressé, pour un administrateur : téléchargement tracé.
+    const manifest = await readManifest(env, id);
+    await logEvent(db, null, ctx.user.id, 'backup', `Téléchargement de la sauvegarde ${id}`);
+    const it = readBackup(env, id, manifest);
+    const stream = new ReadableStream({ async pull(ctrl) { const { value, done } = await it.next(); if (done) ctrl.close(); else ctrl.enqueue(new TextEncoder().encode(value)); } });
+    return new Response(stream.pipeThrough(new CompressionStream('gzip')), { headers: { 'content-type': 'application/gzip', 'content-disposition': `attachment; filename="comptoir-${id}.sql.gz"`, 'cache-control': 'no-store' } });
+  }
   throw new HttpError(404, 'Route inconnue.');
 }

@@ -11,9 +11,10 @@ const PERM_LABEL = Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.label]));
 /* Mise en place d'un commerce : boutique principale, rôles par défaut */
 /* ------------------------------------------------------------------ */
 
-const setupDone = new Set();
+const setupDone = new WeakMap(); // base → commerces déjà mis en place
 export async function ensureStoreSetup(db, store) {
-  if (setupDone.has(store.id)) return;
+  if (!setupDone.has(db)) setupDone.set(db, new Set());
+  if (setupDone.get(db).has(store.id)) return;
   const flag = await db.prepare("SELECT 1 FROM settings WHERE store_id = ? AND key = '_setup_v2'").bind(store.id).first();
   if (!flag) {
     const sid = store.id;
@@ -33,7 +34,7 @@ export async function ensureStoreSetup(db, store) {
     const g = await db.prepare("SELECT id FROM roles WHERE store_id = ? AND name = 'Gérant'").bind(sid).first();
     if (g) await db.prepare("UPDATE memberships SET role_id = ? WHERE store_id = ? AND role != 'owner' AND role_id IS NULL").bind(g.id, sid).run();
   }
-  setupDone.add(store.id);
+  setupDone.get(db).add(store.id);
 }
 
 export async function resolveAccess(db, ctx, request) {

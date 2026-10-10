@@ -8,7 +8,7 @@ Comptoir se déploie de la même façon partout : un programme Node.js (ou un Wo
 | Plusieurs serveurs, cloud | libSQL / Turso (`libsql://`) | S3 compatible (`s3`) | autant que nécessaire |
 | Cloudflare | D1 | base, ou R2 | géré par Cloudflare |
 
-Toutes les variables sont décrites dans [`.env.example`](../.env.example). La production doit être servie en **HTTPS** : le cookie de session est marqué `Secure`.
+Toutes les variables sont décrites dans [`.env.example`](../.env.example). Avant d'accueillir des commerçants, configurez les sauvegardes : [BACKUP.md](BACKUP.md). La production doit être servie en **HTTPS** : le cookie de session est marqué `Secure`.
 
 ## Cloudflare Workers
 

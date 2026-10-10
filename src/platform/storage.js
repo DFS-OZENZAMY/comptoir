@@ -56,6 +56,21 @@ export function s3Storage({ endpoint, region = 'auto', bucket, accessKeyId, secr
       return { bytes: new Uint8Array(await r.arrayBuffer()), type: r.headers.get('content-type') || 'application/octet-stream' };
     },
     async delete(key) { const r = await send('DELETE', key); if (!r.ok && r.status !== 404) throw new Error(`Stockage S3 : suppression refusée (${r.status}).`); },
+    // Liste des clés commençant par « prefix » (ListObjectsV2, toutes les pages).
+    async list(prefix = '') {
+      const keys = []; let token = null;
+      do {
+        const u = new URL(style ? `${base}/${bucket}` : urlOf('').replace(/\/$/, ''));
+        u.searchParams.set('list-type', '2'); u.searchParams.set('prefix', prefix); if (token) u.searchParams.set('continuation-token', token);
+        const headers = await signV4({ method: 'GET', url: u.toString(), payloadHash: await sha256(''), accessKeyId, secretAccessKey, region });
+        const r = await fetch(u.toString(), { headers });
+        if (!r.ok) throw new Error(`Stockage S3 : liste refusée (${r.status}).`);
+        const xml = await r.text();
+        for (const m of xml.matchAll(/<Key>([^<]*)<\/Key>/g)) keys.push(m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'"));
+        token = /<IsTruncated>true<\/IsTruncated>/.test(xml) ? (xml.match(/<NextContinuationToken>([^<]*)</) || [])[1] : null;
+      } while (token);
+      return keys;
+    },
   };
 }
 
@@ -65,12 +80,14 @@ export function r2Storage(bucket) {
     async put(key, bytes, type) { await bucket.put(key, bytes, { httpMetadata: { contentType: type } }); },
     async get(key) { const o = await bucket.get(key); return o ? { bytes: new Uint8Array(await o.arrayBuffer()), type: o.httpMetadata?.contentType || 'application/octet-stream' } : null; },
     async delete(key) { await bucket.delete(key); },
+    async list(prefix = '') { const keys = []; let cursor; do { const r = await bucket.list({ prefix, cursor }); keys.push(...r.objects.map((o) => o.key)); cursor = r.truncated ? r.cursor : undefined; } while (cursor); return keys; },
   };
 }
 
 export function memoryStorage() {
   const m = new Map();
-  return { driver: 'memory', async put(k, b, t) { m.set(k, { bytes: new Uint8Array(b), type: t }); }, async get(k) { return m.get(k) || null; }, async delete(k) { m.delete(k); }, size: () => m.size };
+  return { driver: 'memory', async put(k, b, t) { m.set(k, { bytes: new Uint8Array(b), type: t }); }, async get(k) { return m.get(k) || null; }, async delete(k) { m.delete(k); },
+    async list(prefix = '') { return [...m.keys()].filter((k) => k.startsWith(prefix)).sort(); }, size: () => m.size };
 }
 
 // Le stockage externe configuré, ou null : les fichiers restent alors dans la base.

@@ -29,6 +29,7 @@ Avec Docker : `docker compose up -d`. Sur Cloudflare : `npm run deploy:cloudflar
 | `npm run lint` | Vérification du code (ESLint) |
 | `npm run check` | Les deux : à lancer avant chaque envoi |
 | `npm run deploy:cloudflare` | Déploiement sur Cloudflare Workers |
+| `npm run backup -- …` | Sauvegardes : créer, lister, vérifier, restaurer (voir docs/BACKUP.md) |
 
 ## Organisation du code
 
@@ -44,6 +45,7 @@ src/
     node/           Entrée Node.js : serveur HTTP, bases (SQLite, libSQL), fichiers du site, stockage disque
 public/             Interfaces, sans étape de compilation : site, espace commerçant (app/),
                     vitrine (store/), console (console/), lecteurs de bases (vendor/)
+scripts/            Outils en ligne de commande (sauvegardes)
 tests/              Tests automatisés et fichiers d'exemple pour l'import
 docs/               Architecture, déploiement, montée en charge, contribution, fonctionnalités
 design/             Maquettes et jetons de design (Figma)
@@ -55,6 +57,7 @@ design/             Maquettes et jetons de design (Figma)
 - [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) : travailler dans le projet (conventions, recettes, tests).
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) : mettre en ligne sur chaque type d'hébergement.
 - [docs/SCALING.md](docs/SCALING.md) : monter en charge, étape par étape.
+- [docs/BACKUP.md](docs/BACKUP.md) : sauvegardes, surveillance et procédures de reprise.
 - [docs/FEATURES.md](docs/FEATURES.md) : le catalogue détaillé des fonctionnalités.
 - [design/README.md](design/README.md) : le système de design.
 
@@ -65,6 +68,7 @@ design/             Maquettes et jetons de design (Figma)
 - Isolation des commerces : chaque requête sur des données d'un commerce est filtrée par `store_id` (testé automatiquement).
 - Permissions vérifiées côté serveur, route par route (16 permissions, rôles personnalisables).
 - Clés d'accès aux anciens outils jamais enregistrées ; adresses internes refusées.
+- Sauvegardes quotidiennes chiffrées (AES-256-GCM), vérifiées, avec rotation sur un an, chez un prestataire distinct (voir docs/BACKUP.md).
 
 ## Avant de commercialiser
 

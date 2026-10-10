@@ -10,7 +10,8 @@
     "deploy:cloudflare": "wrangler deploy",
     "test": "node --test \"tests/*.test.js\"",
     "lint": "eslint .",
-    "check": "npm run lint && npm test"
+    "check": "npm run lint && npm test",
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.26.0",
