@@ -1807,6 +1807,7 @@
     ['woocommerce', 'WooCommerce', 'WordPress, <strong>Produits</strong>, <strong>Exporter</strong>, puis <strong>Générer le CSV</strong>.'],
     ['odoo', 'Odoo', '<strong>Inventaire</strong>, <strong>Produits</strong>, vue liste : cochez tous les produits, <strong>Action</strong>, <strong>Exporter</strong> (nom, référence interne, code-barres, prix de vente, coût, catégorie, quantité en stock).'],
     ['ebp', 'EBP', 'Depuis la liste des <strong>Articles</strong>, utilisez l’export de la liste au format <strong>Excel</strong> ou l’<strong>export CSV</strong> des articles.'],
+    ['stockexpress', 'Stock Express', 'Dans Stock Express (ou Stock Standard), ouvrez la liste des <strong>Produits</strong> et utilisez l’<strong>export des produits vers CSV</strong>. Si vos produits sont répartis dans plusieurs dépôts, gardez une colonne de quantité par dépôt : vous pourrez associer chacune à une boutique Comptoir.'],
     ['sage', 'Sage', 'Depuis la liste des <strong>Articles</strong>, exportez la liste vers <strong>Excel</strong>, ou utilisez un export au format paramétrable (CSV).'],
     ['autre', 'Excel ou autre', 'Tout logiciel qui exporte un tableau convient : <strong>CSV</strong> ou <strong>Excel (.xlsx)</strong>. Vous pouvez aussi remplir notre modèle.'],
   ];

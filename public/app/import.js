@@ -105,6 +105,7 @@
     { key: 'woocommerce', label: 'WooCommerce', test: (h) => h.has('regular price') && h.has('type'), prices: 'ttc' },
     { key: 'odoo', label: 'Odoo', test: (h) => (h.has('internal reference') || h.has('reference interne')) && (h.has('sales price') || h.has('prix de vente')), prices: 'ht' },
     { key: 'comptoir', label: 'modèle Comptoir', test: (h) => h.has('nom') && h.has('prix de vente ttc'), prices: 'ttc' },
+    { key: 'stockexpress', label: 'Stock Express (Klick)', test: (h) => h.has('designation') && [...h].some((x) => /^(quantite|qte) (d'alerte|alerte)$|^marque$|^colisage$|^codes? a barres?$/.test(x)), prices: 'ht' },
     { key: 'ebp', label: 'EBP ou Sage', test: (h) => h.has('libelle') || h.has('designation'), prices: 'ht' },
   ];
   // Intitulés reconnus pour chaque information (anglais et français, sans accents).
@@ -114,12 +115,12 @@
     variant2: ['option2 value', 'option 2 value'],
     parent: ['handle', 'parent', 'reference handle'],
     ref: ['sku', 'variant sku', 'reference', 'ref', 'code', 'code article', 'reference interne', 'internal reference', 'ref article', 'reference article'],
-    barcode: ['barcode', 'code barre', 'code-barre', 'code-barres', 'code barres', 'gtin', 'ean', 'ean13', 'ean 13', 'variant barcode', 'gtin, upc, ean, or isbn', 'upc', 'code ean'],
+    barcode: ['barcode', 'code barre', 'code-barre', 'code-barres', 'code barres', 'code a barres', 'codes a barres', 'code a barre', 'gtin', 'ean', 'ean13', 'ean 13', 'variant barcode', 'gtin, upc, ean, or isbn', 'upc', 'code ean'],
     category: ['category', 'categorie', 'categories', 'famille', 'famille article', 'product category', 'categorie de produit', 'rayon', 'type'],
-    price: ['prix de vente ttc', 'prix ttc', 'pv ttc', 'price', 'default price', 'regular price', 'variant price', 'sales price', 'prix de vente', 'prix', 'prix vente', 'prix de vente ht', 'pv ht', 'prix ht', 'prix unitaire', 'sale price'],
+    price: ['prix de vente ttc', 'prix ttc', 'pv ttc', 'prix vente ttc', 'price', 'default price', 'regular price', 'variant price', 'sales price', 'prix de vente', 'prix', 'prix vente', 'prix de vente ht', 'pv ht', 'prix ht', 'prix unitaire', 'sale price'],
     purchase: ['cost', 'cost per item', 'default unit cost', 'purchase cost', 'cost price', "prix d'achat", "prix d'achat ht", 'prix achat', 'prix de revient', 'cout', 'cout unitaire', 'pa ht', 'cout moyen'],
     stock: ['in stock', 'stock', 'quantity', 'quantite', 'qty', 'variant inventory qty', 'current quantity', 'quantity on hand', 'quantite en stock', 'stock reel', 'stock disponible', 'on hand', 'quantite disponible', 'qte', 'qte en stock'],
-    stock_min: ['low stock', 'stock alert count', 'low stock amount', 'stock minimum', 'stock mini', 'stock min', 'seuil', "seuil d'alerte", "stock d'alerte", 'point de commande'],
+    stock_min: ['low stock', 'stock alert count', 'low stock amount', 'stock minimum', 'stock mini', 'stock min', 'seuil', "seuil d'alerte", "stock d'alerte", 'point de commande', "quantite d'alerte", 'quantite alerte', 'qte alerte', "qte d'alerte"],
     tva: ['tva', 'taux tva', 'taux de tva', 'tax rate', 'vat', 'taux', 'tva %'],
     unit: ['unit', 'unite', 'unite de vente', 'unit and precision', 'uom', 'unite de mesure', 'sold by weight'],
     description: ['description', 'body (html)', 'short description', 'description courte', 'description commerciale'],
@@ -199,6 +200,8 @@
       if (!ref && !barcode && priceRaw === null && (!name || (inherited && !variant))) return;
       if (/e\+?\d+$/i.test(barcode) && /^[\d.,]+e\+?\d+$/i.test(barcode)) { warn.push('code-barres abîmé par Excel (format scientifique)'); barcode = ''; }
       barcode = barcode.replace(/\.0+$/, '');
+      // Plusieurs codes-barres dans une même cellule (Stock Express, Sage…) : le premier est gardé.
+      if (/[;,|/\s]/.test(barcode)) { const codes = barcode.split(/[;,|/\s]+/).filter(Boolean); if (codes.length > 1) warn.push(`${codes.length} codes-barres, le premier est gardé`); barcode = codes[0] || ''; }
       let tva = m.tva >= 0 ? number(r[m.tva]) : null;
       if (tva !== null && tva > 0 && tva < 1) tva = Math.round(tva * 10000) / 100;
       const rate = tva ?? tvaDefault;

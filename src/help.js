@@ -57,7 +57,7 @@ export const GUIDES = [
   },
   {
     slug: 'importer-ses-produits', title: 'Importer ses produits depuis un autre logiciel', app: 'importer',
-    summary: 'Récupérer en quelques minutes le catalogue de votre ancien logiciel de caisse ou de gestion : Loyverse, Square, Shopify, WooCommerce, Odoo, EBP, Sage ou Excel.',
+    summary: 'Récupérer en quelques minutes le catalogue de votre ancien logiciel de caisse ou de gestion : Loyverse, Square, Shopify, WooCommerce, Odoo, Stock Express, EBP, Sage ou Excel.',
     sections: [
       ['Comment ça marche', `<ol><li><strong>Exportez vos produits</strong> depuis votre ancien logiciel, en CSV ou en Excel (.xlsx).</li>
         <li>Dans Comptoir, ouvrez <strong>Produits, Importer</strong> et déposez le fichier.</li>
@@ -70,6 +70,7 @@ export const GUIDES = [
         <li><strong>Shopify</strong> : Produits, Exporter, « Tous les produits », format CSV.</li>
         <li><strong>WooCommerce</strong> : Produits, Exporter, Générer le CSV.</li>
         <li><strong>Odoo</strong> : Inventaire, Produits, vue liste, cochez les produits, Action, Exporter.</li>
+        <li><strong>Stock Express</strong> et <strong>Stock Standard</strong> (Klick) : depuis la liste des produits, export des produits vers CSV. Les produits à plusieurs codes-barres gardent le premier ; une colonne de quantité par dépôt peut être associée à chaque boutique.</li>
         <li><strong>EBP</strong> et <strong>Sage</strong> : depuis la liste des articles, export vers Excel ou en CSV.</li>
         <li><strong>Un autre logiciel ou un tableau Excel</strong> : tout tableau avec une ligne de titres convient. Vous pouvez aussi remplir le <strong>modèle Comptoir</strong>, téléchargeable depuis la page d’import.</li></ul>`],
       ['Prix, variantes et stock', `<ul>

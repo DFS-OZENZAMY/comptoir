@@ -80,7 +80,7 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 ## Import des produits depuis un ancien logiciel
 
 **Produits, Importer** récupère le catalogue d'un autre outil, en CSV ou en Excel (.xlsx) :
-- **logiciels reconnus automatiquement** : Loyverse, Square, Shopify, WooCommerce, Odoo, EBP et Sage (intitulés français), et le modèle Comptoir ;
+- **logiciels reconnus automatiquement** : Loyverse, Square, Shopify, WooCommerce, Odoo, Stock Express et Stock Standard (Klick), EBP et Sage (intitulés français), et le modèle Comptoir. Pour les cellules à plusieurs codes-barres, le premier est gardé ;
 - **tout autre tableau** se fait correspondre à la main.
 
 **Côté navigateur** (`public/app/import.js`, chargé seulement sur cette page) :
