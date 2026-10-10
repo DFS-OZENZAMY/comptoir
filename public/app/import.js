@@ -22,10 +22,16 @@
     const ar = (new TextDecoder('windows-1256').decode(b).match(/[\u0621-\u064A]/g) || []).length;
     return ar > fr * 2 && ar > 3 ? 'windows-1256' : 'windows-1252';
   }
+  // Pages de code DOS (anciens dBase, Clipper, FoxPro) : absentes de la norme du web, donc décodées ici.
+  const DOS = { ibm437: 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■\u00a0', ibm850: 'ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜø£Ø×ƒáíóúñÑªº¿®¬½¼¡«»░▒▓│┤ÁÂÀ©╣║╗╝¢¥┐└┴┬├─┼ãÃ╚╔╩╦╠═╬¤ðÐÊËÈıÍÎÏ┘┌█▄¦Ì▀ÓßÔÒõÕµþÞÚÛÙýÝ¯´\u00ad±‗¾¶§÷¸°¨·¹³²■\u00a0' };
+  const textDecoder = (enc) => {
+    if (DOS[enc]) return { decode: (b) => { let s = ''; for (const x of b) s += x < 128 ? String.fromCharCode(x) : DOS[enc][x - 128]; return s; } };
+    return new TextDecoder(enc);
+  };
   const cleanText = (t) => t.replace(/^\uFEFF/, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD]/g, '');
   function decode(bytes, forced) {
     const enc = forced || sniffEncoding(bytes);
-    return { text: cleanText(new TextDecoder(enc).decode(bytes)), encoding: enc };
+    return { text: cleanText(textDecoder(enc).decode(bytes)), encoding: enc };
   }
   // Un fichier binaire inconnu ne doit jamais être lu comme du texte (sinon : caractères au hasard).
   function looksBinary(b) {
@@ -183,7 +189,7 @@
     }
     let enc = forced || DBF_CP[u8[29]];
     if (!enc) { const sample = u8.subarray(headLen, Math.min(u8.length, headLen + recLen * 200)); enc = sniffEncoding(sample); if (enc.startsWith('utf-16')) enc = 'windows-1252'; }
-    let td; try { td = new TextDecoder(enc); } catch { td = new TextDecoder('windows-1252'); enc = 'windows-1252'; }
+    let td; try { td = textDecoder(enc); } catch { td = new TextDecoder('windows-1252'); enc = 'windows-1252'; }
     const rows = [];
     for (let i = 0; i < Math.min(count, MAX_ROWS); i++) {
       const base = headLen + i * recLen; if (base + recLen > u8.length) break;
@@ -342,7 +348,7 @@
     stock_min: ['low stock', 'stock alert count', 'low stock amount', 'stock minimum', 'stock mini', 'stock min', 'seuil', "seuil d'alerte", "stock d'alerte", 'point de commande', "quantite d'alerte", 'quantite alerte', 'qte alerte', "qte d'alerte", 'stock alerte', 'qte min', 'seuil alerte', 'stock securite', 'qte mini'],
     tva: ['tva', 'taux tva', 'taux de tva', 'tax rate', 'vat', 'taux', 'tva %'],
     unit: ['unit', 'unite', 'unite de vente', 'unit and precision', 'uom', 'unite de mesure', 'sold by weight'],
-    description: ['description', 'body (html)', 'short description', 'description courte', 'description commerciale'],
+    description: ['description', 'body (html)', 'body', 'body html', 'short description', 'description courte', 'description commerciale'],
     photo: ['photo', 'image', 'image src', 'image url', 'images', 'featured image', 'variant image'],
     track: ['track stock', 'stockable', 'manage stock?', 'gerer le stock'],
     type: ['type'],
@@ -454,5 +460,5 @@
     'Café moulu 250 g;CAF-250;3017620422003;Épicerie;4,80;2,90;24;6;5,5;paquet;Arabica, mouture fine',
     'Perceuse sans fil 18 V;PER-18V;;Outillage;149,00;92,00;5;2;20;pièce;'].join('\r\n');
 
-  window.ComptoirImport = { readFile, detect, autoMap, toProducts, number, TEMPLATE, FIELDS, norm, kindOf, ENCODINGS };
+  window.ComptoirImport = { readFile, detect, autoMap, toProducts, number, TEMPLATE, FIELDS, norm, kindOf, ENCODINGS, DOS };
 })();

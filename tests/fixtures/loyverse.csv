@@ -1,0 +1,5 @@
+Handle,SKU,Name,Category,Description,Sold by weight,Option 1 name,Option 1 value,Default price,Cost,Barcode,Track stock,Available for sale [Boutique principale],Price [Boutique principale],In stock [Boutique principale],Low stock [Boutique principale],In stock [Centre-ville],Low stock [Centre-ville]
+marteau,10001,Marteau 500 g,Outillage,Manche bois,N,,,24.90,14.20,3700123400011,Y,Y,24.90,12,3,5,2
+gants,10002,Gants de travail,Protection,,N,Taille,M,9.90,4.10,3700123400028,Y,Y,9.90,20,5,8,2
+gants,10003,,,,N,,L,9.90,4.10,3700123400035,Y,Y,9.90,15,5,0,2
+clous,10004,Clous vrac,Visserie,,Y,,,12.00,6.50,,Y,Y,12.00,7.5,1,2.25,1

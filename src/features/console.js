@@ -1,7 +1,7 @@
 // Console du propriétaire de la plateforme : pilotage, monitoring, commerces, revenus, système.
-import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from './lib.js';
-import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from './catalog.js';
-import { logEvent } from './db.js';
+import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from '../core/lib.js';
+import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from '../core/catalog.js';
+import { logEvent } from '../core/db.js';
 
 const SALES = "((d.type = 'facture' AND d.status != 'annulée' AND COALESCE(d.source_type, '') != 'ticket') OR (d.type = 'ticket' AND d.status = 'payé'))";
 const ago = (days) => new Date(Date.now() - days * 86400000).toISOString().replace('T', ' ').slice(0, 19);

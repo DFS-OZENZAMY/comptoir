@@ -1,6 +1,6 @@
 // Centre d'aide : guides courts pour bien utiliser son espace Comptoir.
 // Pages publiques (/aide, /aide/<guide>), rendues côté serveur, liées depuis l'espace commerçant.
-import { escHtml as e } from './lib.js';
+import { escHtml as e } from '../core/lib.js';
 import { docHead, NAV, FOOTER, headTags, jsonLd } from './seo.js';
 
 // Chaque guide : titre, résumé, écran de l'application concerné, sections (HTML simple, écrit ici).

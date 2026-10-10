@@ -1,0 +1,4 @@
+Code;Désignation;Famille;Marque;Code à barres;Prix d'achat;Prix de vente;TVA;Quantité Dépôt principal;Quantité Dépôt Centre-ville;Quantité d'alerte;Unité
+P001;Riz parfumé 25 kg;Alimentation;Royal Umbrella;"6111111111111;6111111111128";12 500;14 800;18;40;12;5;sac
+P002;Huile végétale 5 L;Alimentation;Dinor;6112222222220;3 900;4 600;18;60;0;10;bidon
+P003;Savon de Marseille;Hygiène;;6113333333339;250;350;18;200;80;30;pièce

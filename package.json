@@ -4,10 +4,25 @@
   "private": true,
   "description": "Comptoir : plateforme de caisse, stock, facturation et vitrine en ligne pour les commerces",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "start": "node src/adapters/node/server.js",
+    "dev": "node --watch src/adapters/node/server.js",
+    "dev:cloudflare": "wrangler dev",
+    "deploy:cloudflare": "wrangler deploy",
+    "test": "node --test \"tests/*.test.js\"",
+    "lint": "eslint .",
+    "check": "npm run lint && npm test"
   },
   "devDependencies": {
+    "@eslint/js": "^9.26.0",
+    "eslint": "^9.26.0",
+    "globals": "^16.0.0",
     "wrangler": "^4.45.0"
+  },
+  "type": "module",
+  "optionalDependencies": {
+    "@libsql/client": "^0.15.15"
+  },
+  "engines": {
+    "node": ">=22.5"
   }
 }

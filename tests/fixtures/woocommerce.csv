@@ -1,0 +1,5 @@
+ID,Type,SKU,"GTIN, UPC, EAN, or ISBN",Name,Published,Description,Stock,Low stock amount,Sale price,Regular price,Categories
+11,simple,DAT-500,6119876543210,Dattes Medjool 500 g,1,Origine Maroc,30,5,,42,"Épicerie > Fruits secs, Promotions"
+12,variable,MIEL,,Miel de thym,1,,,,,,Épicerie > Miel
+13,variation,MIEL-250,6119876543227,Miel de thym - 250 g,1,,12,3,,65,Épicerie > Miel
+14,variation,MIEL-500,6119876543234,Miel de thym - 500 g,1,,6,2,,120,Épicerie > Miel

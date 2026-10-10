@@ -1,9 +1,9 @@
 // Comptes, sessions et création des espaces commerce.
 import {
   HttpError, json, str, num, r2, isEmail, slugify, sha256Hex, randomToken, hashPassword, verifyPassword, addDays, today, nowIso,
-} from './lib.js';
-import { PLATFORM, PLANS, COUNTRIES, BUSINESS_TYPES, defaultSettings } from './catalog.js';
-import { bump, logEvent } from './db.js';
+} from '../core/lib.js';
+import { PLATFORM, PLANS, COUNTRIES, BUSINESS_TYPES, defaultSettings } from '../core/catalog.js';
+import { bump, logEvent } from '../core/db.js';
 
 const COOKIE = 'cp_session';
 const SESSION_DAYS = 30;

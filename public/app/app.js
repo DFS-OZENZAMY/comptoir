@@ -7,7 +7,6 @@
   const today = () => new Date().toISOString().slice(0, 10);
 
   const state = { settings: {}, products: [], categories: [], customers: [], me: null, platform: null };
-  const isOwner = () => state.me?.role === 'owner';
   // Permissions du membre connecté (contrôlées aussi côté serveur à chaque action).
   const can = (p) => !!state.me?.permissions?.includes(p);
   const canAny = (list) => list.split(' ').some(can);
@@ -354,7 +353,6 @@
     reglages: [['parametres', 'Mon commerce'], ['boutiques', 'Boutiques'], ['equipe', 'Équipe et rôles'], ['abonnement', 'Abonnement']],
   };
   const groupOf = (key) => Object.keys(GROUPS).find((g) => GROUPS[g].some(([k]) => k === key)) || key;
-  const OWNER_VIEWS = ['parametres', 'equipe', 'abonnement'];
   function route() {
     let key = (location.hash.replace(/^#\//, '') || 'tableau-de-bord').split('?')[0];
     if (!state.me) return;
@@ -915,7 +913,7 @@
       ${d.status === 'annulé' ? '<p class="c"><b>TICKET ANNULÉ</b></p>' : ''}
       ${d.loyalty && d.status !== 'annulé' ? `<hr><div>Fidélité${d.loyalty.earned ? ` : +${qtyFmt(d.loyalty.earned)} pts` : ''}${d.loyalty.used ? `, ${qtyFmt(d.loyalty.used)} pts utilisés` : ''}<br>Solde : ${qtyFmt(d.loyalty.balance)} points</div>` : ''}
       <hr><div class="c">${esc(s.doc_footer || 'Merci de votre visite')}<br><small>${esc(s.legal_info || '')}</small></div>
-      <script>setTimeout(() => window.print(), 200);<\/script></body></html>`);
+      <script>setTimeout(() => window.print(), 200);</script></body></html>`);
   }
 
   function printJournal(j) {
@@ -932,7 +930,7 @@
       ${j.payments.map((p) => `<tr><td>${esc(p.number)}</td><td>${esc(p.client_name)}</td><td>${esc(cap(p.method))}</td><td class="r">${money(p.amount)}</td></tr>`).join('')}
       </tbody></table>
       <p style="margin-top:30px">Espèces comptées : ______________ &nbsp;&nbsp; Écart : ______________ &nbsp;&nbsp; Signature : ______________</p>
-      <script>setTimeout(() => window.print(), 200);<\/script></body></html>`);
+      <script>setTimeout(() => window.print(), 200);</script></body></html>`);
   }
 
   /* ================= Produits ================= */
@@ -1535,7 +1533,7 @@
       <table><thead><tr><th></th><th>Produit</th><th>Réf.</th><th class="num">Stock</th><th class="num">Seuil</th><th class="num">À commander</th><th class="num">Coût estimé</th></tr></thead><tbody>
       ${list.map((p) => `<tr><td><span class="box"></span></td><td>${esc(p.name)}</td><td>${esc(p.ref)}</td><td class="num">${qtyFmt(p.stock)}</td><td class="num">${qtyFmt(p.stock_min)}</td><td class="num"><strong>${qtyFmt(p.suggested)}</strong> ${esc(p.unit)}</td><td class="num">${p.purchase_price ? money(p.suggested * p.purchase_price) : '—'}</td></tr>`).join('')}
       </tbody></table><p style="margin-top:14px;text-align:right">Coût estimé HT : <strong>${money(total)}</strong></p>
-      <script>document.fonts.ready.then(() => setTimeout(() => window.print(), 150));<\/script></body></html>`;
+      <script>document.fonts.ready.then(() => setTimeout(() => window.print(), 150));</script></body></html>`;
     const w = window.open('', '_blank');
     if (!w) return toast("Autorisez l'ouverture des fenêtres pour imprimer.", true);
     w.document.open(); w.document.write(html); w.document.close();
@@ -1707,7 +1705,7 @@
       ${d.notes ? `<div class="notes">${esc(d.notes)}</div>` : ''}
       ${d.type === 'devis' ? `<div class="sign"><div>Bon pour accord, date et signature</div></div>` : ''}
       <div class="foot">${d.type === 'facture' && s.bank_info ? 'Règlement : ' + esc(s.bank_info) + '\n' : ''}${esc(s.doc_footer || '')}${s.legal_info ? '\n' + esc(s.legal_info) : ''}</div>
-      <script>document.fonts.ready.then(() => setTimeout(() => window.print(), 150));<\/script>
+      <script>document.fonts.ready.then(() => setTimeout(() => window.print(), 150));</script>
       </body></html>`;
     const w = window.open('', '_blank');
     if (!w) return toast("Autorisez l'ouverture des fenêtres pour imprimer.", true);

@@ -2,3 +2,7 @@ node_modules/
 .wrangler/
 .dev.vars
 .DS_Store
+# Données locales (base SQLite, photos) et configuration secrète
+data/
+.env
+coverage/

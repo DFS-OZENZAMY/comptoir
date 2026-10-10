@@ -1,14 +1,15 @@
 // Espace d'un commerce : produits, stock, clients, documents, caisse, alertes, équipe.
 // Règle absolue : chaque requête est filtrée par store_id (sid).
 import {
-  HttpError, json, r2, r4, num, str, today, nowIso, isDate, addDays, daysBetween, escHtml, isEmail,
+  HttpError, json, r2, r4, num, str, today, isDate, addDays, daysBetween, escHtml, isEmail,
   readBody, hashPassword, tempPassword,
-} from './lib.js';
-import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings, pricing } from './catalog.js';
+} from '../core/lib.js';
+import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings, pricing } from '../core/catalog.js';
 import { importProducts } from './importer.js';
 import { detectTool, fetchCatalogPage, importImages, PROVIDERS } from './connectors.js';
 import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, transferStock, listLocations, saveLocation, locationReport, listRoles, saveRole, deleteRole, validRoleAndLocations, updateMember } from './access.js';
-import { bump, logEvent } from './db.js';
+import { bump, logEvent } from '../core/db.js';
+import { saveProductImage, deleteProductImage, fromBase64 } from '../platform/storage.js';
 import { storeAccess } from './auth.js';
 
 /* ------------------------------------------------------------------ */
@@ -568,16 +569,14 @@ async function updateProduct(ctx, id, b) {
   return { ok: true };
 }
 
-async function setProductImage(db, sid, id, b) {
+async function setProductImage(ctx, id, b) {
+  const { db } = ctx; const sid = ctx.store.id;
   const m = String(b.data || '').match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
   if (!m) throw new HttpError(400, 'Format d’image non pris en charge (JPEG, PNG ou WebP).');
   if (m[2].length > 1_400_000) throw new HttpError(413, "L'image est trop lourde (1 Mo maximum après compression).");
   const p = await db.prepare('SELECT id FROM products WHERE id = ? AND store_id = ?').bind(num(id), sid).first();
   if (!p) throw new HttpError(404, 'Produit introuvable.');
-  await db.batch([
-    db.prepare('INSERT OR REPLACE INTO images (product_id, store_id, mime, data) VALUES (?, ?, ?, ?)').bind(p.id, sid, m[1], m[2]),
-    db.prepare('UPDATE products SET image_v = COALESCE(image_v, 0) + 1 WHERE id = ? AND store_id = ?').bind(p.id, sid),
-  ]);
+  await saveProductImage(ctx.env, db, sid, p.id, m[1], fromBase64(m[2]));
   return { ok: true };
 }
 
@@ -809,21 +808,17 @@ export async function storeRoutes(ctx, parts) {
         })));
       }
       if (!id && m === 'POST') return json(await createProduct(ctx, await body()), 201);
-      if (id && action === 'image' && m === 'PUT') return json(await setProductImage(db, sid, id, await body()));
+      if (id && action === 'image' && m === 'PUT') return json(await setProductImage(ctx, id, await body()));
       if (id && action === 'image' && m === 'DELETE') {
-        await db.batch([
-          db.prepare('DELETE FROM images WHERE product_id = ? AND store_id = ?').bind(num(id), sid),
-          db.prepare('UPDATE products SET image_v = 0 WHERE id = ? AND store_id = ?').bind(num(id), sid),
-        ]);
+        await deleteProductImage(env, db, sid, num(id));
+        await db.prepare('UPDATE products SET image_v = 0 WHERE id = ? AND store_id = ?').bind(num(id), sid).run();
         return json({ ok: true });
       }
       if (id && !action && m === 'PUT') return json(await updateProduct(ctx, id, await body()));
       if (id && !action && m === 'DELETE') {
         if (!(await db.prepare('SELECT 1 FROM products WHERE id = ? AND store_id = ?').bind(num(id), sid).first())) throw new HttpError(404, 'Produit introuvable.');
-        await db.batch([
-          db.prepare('DELETE FROM images WHERE product_id = ? AND store_id = ?').bind(num(id), sid),
-          db.prepare('DELETE FROM products WHERE id = ? AND store_id = ?').bind(num(id), sid),
-        ]);
+        await deleteProductImage(env, db, sid, num(id));
+        await db.prepare('DELETE FROM products WHERE id = ? AND store_id = ?').bind(num(id), sid).run();
         return json({ ok: true });
       }
       break;

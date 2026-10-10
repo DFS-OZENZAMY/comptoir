@@ -1,8 +1,8 @@
 // Boutiques (points de vente) et contrôle d'accès par rôle (RBAC).
 // Chaque requête d'un commerce passe par resolveAccess : permissions du membre, boutiques autorisées et boutique courante.
-import { HttpError, str, num, r2, today, addDays } from './lib.js';
-import { PLANS, PERMISSIONS, PERMISSION_KEYS, DEFAULT_ROLES } from './catalog.js';
-import { logEvent } from './db.js';
+import { HttpError, str, num, r2, today, addDays } from '../core/lib.js';
+import { PLANS, PERMISSIONS, PERMISSION_KEYS, DEFAULT_ROLES } from '../core/catalog.js';
+import { logEvent } from '../core/db.js';
 
 const parse = (v) => { try { const x = JSON.parse(v || '[]'); return Array.isArray(x) ? x : []; } catch { return []; } };
 const PERM_LABEL = Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.label]));

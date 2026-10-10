@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Doit correspondre au nom du Worker dans le tableau de bord Cloudflare.
   "name": "comptoir",
-  "main": "src/worker.js",
+  "main": "src/adapters/cloudflare.js",
   "compatibility_date": "2025-09-01",
 
   "assets": {

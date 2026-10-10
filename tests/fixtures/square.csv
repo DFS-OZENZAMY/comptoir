@@ -1,0 +1,5 @@
+Token,Item Name,Variation Name,SKU,Description,Category,GTIN,Price,Default Unit Cost,Current Quantity Boutique principale,Stock Alert Count Boutique principale,Archived
+A1,Thé vert menthe,Regular,TH-200,Gunpowder,Épicerie,6111234567890,18.50,9.20,24,6,N
+A2,Huile d’olive,1 L,HU-1L,,Épicerie,6111234567906,95.00,61.00,10,3,N
+A3,Huile d’olive,5 L,HU-5L,,Épicerie,6111234567913,420.00,280.00,4,1,N
+A4,Ancien article,Regular,OLD-1,,Divers,,5.00,,0,,Y

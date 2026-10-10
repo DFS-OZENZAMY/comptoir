@@ -1,0 +1,20 @@
+# Comptoir sur un serveur, en une commande :  docker compose up -d
+# Les données restent dans le volume « comptoir-data » entre les mises à jour.
+services:
+  comptoir:
+    build: .
+    image: comptoir:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: file:/app/data/comptoir.db
+      FILES_DIR: /app/data/files
+    volumes:
+      - comptoir-data:/app/data
+
+volumes:
+  comptoir-data:

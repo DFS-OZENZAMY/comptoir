@@ -1,7 +1,8 @@
 // Connexion directe aux logiciels en ligne (Loyverse, Square, Shopify, WooCommerce, Odoo) :
 // détection de l'outil, puis récupération du catalogue page par page, en lecture seule.
 // Les clés d'accès ne sont JAMAIS enregistrées ni journalisées : elles servent le temps d'une requête.
-import { HttpError, str } from './lib.js';
+import { HttpError, str } from '../core/lib.js';
+import { saveProductImage } from '../platform/storage.js';
 
 const UA = 'Comptoir-Import/1.0';
 const SQUARE_VERSION = '2024-10-17';
@@ -306,11 +307,7 @@ export async function importImages(ctx, b) {
       if (!res.ok || !/^image\/(jpeg|png|webp)$/.test(type)) throw new Error('format non pris en charge');
       const buf = new Uint8Array(await res.arrayBuffer());
       if (buf.length > 1_000_000) throw new Error('photo trop lourde (plus de 1 Mo)');
-      let bin = ''; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-      await db.batch([
-        db.prepare('INSERT OR REPLACE INTO images (product_id, store_id, mime, data) VALUES (?, ?, ?, ?)').bind(p.id, sid, type, btoa(bin)),
-        db.prepare('UPDATE products SET image_v = COALESCE(image_v, 0) + 1 WHERE id = ? AND store_id = ?').bind(p.id, sid),
-      ]);
+      await saveProductImage(ctx.env, db, sid, p.id, type, buf);
       report.saved++;
     } catch (e) { report.errors.push(`${it.name || it.ref} : ${e.message === 'Cette adresse n’est pas autorisée.' ? 'adresse refusée' : e.message}`); }
   }

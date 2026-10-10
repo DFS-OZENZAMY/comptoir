@@ -110,6 +110,10 @@ const MIGRATIONS = [
   [3, [
     'ALTER TABLE customers ADD COLUMN loyalty_points REAL DEFAULT 0',
   ]],
+  [4, [
+    // Photos : emplacement dans le stockage externe (R2, S3, disque) quand il y en a un.
+    'ALTER TABLE images ADD COLUMN storage_key TEXT',
+  ]],
 ];
 
 let ready = false;

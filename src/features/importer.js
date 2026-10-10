@@ -1,9 +1,9 @@
 // Import de produits depuis un ancien logiciel (Loyverse, Square, Shopify, WooCommerce, Odoo, EBP, Sage, Excel…).
 // Le navigateur lit le fichier et fait correspondre les colonnes ; le serveur reçoit des lignes déjà normalisées,
 // par lots, et les vérifie toutes : droits, limites de la formule, valeurs, boutiques.
-import { HttpError, num, str, r4 } from './lib.js';
-import { PLANS } from './catalog.js';
-import { logEvent } from './db.js';
+import { HttpError, num, str, r4 } from '../core/lib.js';
+import { PLANS } from '../core/catalog.js';
+import { logEvent } from '../core/db.js';
 import { getSettings } from './store.js';
 
 const MAX_ROWS = 500;

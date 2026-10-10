@@ -4,15 +4,16 @@
 //   /console/    console du propriétaire de la plateforme
 //   /s/<slug>    catalogue public d'un commerce
 //   /api/...     API
-import { HttpError, json, num, r2, readBody } from './lib.js';
-import { init, bump, recordRequest, logError, setMeta } from './db.js';
-import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './catalog.js';
-import { signup, login, logout, getContext, me, changePassword, touchStore } from './auth.js';
-import { storeRoutes, getSettings, imageUrl, runDailyDigests } from './store.js';
-import { resolveAccess } from './access.js';
-import { consoleRoutes, takeSnapshot, cleanup } from './console.js';
-import { renderHelpIndex, renderHelpGuide } from './help.js';
-import { renderLanding, renderMetier, renderHub, renderVitrine, renderLegal, LEGAL_PAGES, visitorCountry, sitemap, robots, html, loadCatalog } from './seo.js';
+import { HttpError, json, num, readBody } from './core/lib.js';
+import { init, bump, recordRequest, logError, setMeta } from './core/db.js';
+import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './core/catalog.js';
+import { signup, login, logout, getContext, me, changePassword, touchStore } from './features/auth.js';
+import { storeRoutes, runDailyDigests } from './features/store.js';
+import { resolveAccess } from './features/access.js';
+import { consoleRoutes, takeSnapshot, cleanup } from './features/console.js';
+import { renderHelpIndex, renderHelpGuide } from './features/help.js';
+import { readProductImage, getStorage } from './platform/storage.js';
+import { renderLanding, renderMetier, renderHub, renderVitrine, renderLegal, LEGAL_PAGES, visitorCountry, sitemap, robots, html, loadCatalog } from './features/seo.js';
 
 async function publicCatalog(db, slug) {
   const data = await loadCatalog(db, slug);
@@ -22,13 +23,10 @@ async function publicCatalog(db, slug) {
   return data;
 }
 
-async function serveImage(db, id) {
-  const img = await db.prepare('SELECT mime, data FROM images WHERE product_id = ?').bind(num(id)).first();
+async function serveImage(env, db, id) {
+  const img = await readProductImage(env, db, num(id));
   if (!img) return new Response('Image introuvable', { status: 404 });
-  const bin = atob(img.data);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return new Response(bytes, { headers: { 'content-type': img.mime, 'cache-control': 'public, max-age=31536000, immutable' } });
+  return new Response(img.bytes, { headers: { 'content-type': img.type, 'cache-control': 'public, max-age=31536000, immutable' } });
 }
 
 // Nom de la fonction appelée, sans identifiants : « store/products », « public/stores »…
@@ -50,6 +48,12 @@ async function handleApi(request, env, info) {
     await init(db);
     const [a, b, c] = parts;
 
+    // Santé de l'application : pour les hébergeurs, répartiteurs de charge et sondes Kubernetes.
+    if (a === 'health' && m === 'GET') {
+      const t0 = Date.now(); await db.prepare('SELECT 1 AS ok').first();
+      return json({ ok: true, db: 'ok', db_ms: Date.now() - t0, storage: getStorage(env)?.driver || 'db', version: env.APP_VERSION || 'dev' });
+    }
+
     if (a === 'platform' && m === 'GET') {
       return json({
         name: PLATFORM.name, tagline: PLATFORM.tagline, trial_days: PLATFORM.trialDays,
@@ -58,7 +62,7 @@ async function handleApi(request, env, info) {
         countries: Object.entries(COUNTRIES).map(([key, x]) => ({ key, ...x })),
       });
     }
-    if (a === 'images' && b && m === 'GET') return await serveImage(db, b);
+    if (a === 'images' && b && m === 'GET') return await serveImage(env, db, b);
     if (a === 'public' && b === 'stores' && c && m === 'GET') return json(await publicCatalog(db, c));
 
     if (a === 'auth') {
@@ -157,13 +161,21 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil((async () => {
+    ctx.waitUntil(runDailyTasks(env).catch((e) => console.error('Tâche du matin :', e.message)));
+  },
+};
+
+// Tâche du matin : une seule exécution par jour, même avec plusieurs serveurs (verrou en base).
+export async function runDailyTasks(env) {
       await init(env.DB);
+      const day = new Date().toISOString().slice(0, 10);
+      const lock = await env.DB.prepare('INSERT OR IGNORE INTO platform_meta (key, value) VALUES (?, ?)').bind(`cron:${day}`, new Date().toISOString()).run();
+      if (!lock.meta?.changes) return { skipped: true };
+      await env.DB.prepare("DELETE FROM platform_meta WHERE key LIKE 'cron:%' AND key < ?").bind(`cron:${new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10)}`).run();
       const done = [];
       try { await takeSnapshot(env.DB); done.push('instantané'); } catch (e) { done.push('instantané en échec : ' + e.message); }
       try { await cleanup(env.DB); done.push('nettoyage'); } catch (e) { done.push('nettoyage en échec : ' + e.message); }
       try { await runDailyDigests(env); done.push('e-mails'); } catch (e) { done.push('e-mails en échec : ' + e.message); }
       await setMeta(env.DB, 'last_cron', JSON.stringify({ at: new Date().toISOString(), result: done }));
-    })().catch((e) => console.error('Tâche du matin :', e.message)));
-  },
-};
+      return { done };
+}

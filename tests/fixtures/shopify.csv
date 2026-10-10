@@ -1,0 +1,5 @@
+Handle,Title,Body (HTML),Vendor,Type,Tags,Option1 Name,Option1 Value,Variant SKU,Variant Inventory Qty,Variant Price,Variant Barcode,Cost per item,Image Src
+tshirt-coton,T-shirt coton,<p>100 % <strong>coton</strong></p>,Maison Lina,Hauts,,Couleur,Blanc,TS-BL,14,190.00,2000000000011,80.00,https://x/1.jpg
+tshirt-coton,,,,,,,Noir,TS-NO,9,190.00,2000000000028,80.00,https://x/2.jpg
+tshirt-coton,,,,,,,,,,,,,https://x/3.jpg
+sac-cuir,Sac en cuir,,Maison Lina,Accessoires,,Title,Default Title,SAC-01,3,650.00,2000000000035,300.00,

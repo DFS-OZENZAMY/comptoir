@@ -1,9 +1,11 @@
 // Référencement naturel : pages publiques rendues côté serveur (contenu lisible par Google sans JavaScript),
 // données structurées schema.org, pages métier, plan du site et robots.txt.
-import { r2, escHtml as e } from './lib.js';
-import { init, bump } from './db.js';
-import { PLATFORM, PLANS, PAID_PLANS, COUNTRIES, waNumber, pricing } from './catalog.js';
+import { r2, escHtml as e } from '../core/lib.js';
+import { init, bump } from '../core/db.js';
+import { PLATFORM, PLANS, PAID_PLANS, COUNTRIES, waNumber, pricing } from '../core/catalog.js';
 import { getSettings, imageUrl } from './store.js';
+import { HtmlRewriter } from '../platform/html.js';
+import { requestCountry } from '../platform/geo.js';
 
 const ISO = { FR: 'EUR', BE: 'EUR', LU: 'EUR', CH: 'CHF', MA: 'MAD', DZ: 'DZD', TN: 'TND', SN: 'XOF', CI: 'XOF', CM: 'XAF', CA: 'CAD', XX: 'EUR' };
 const jsonLd = (obj) => `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, '\\u003c')}</script>`;
@@ -15,7 +17,7 @@ export function visitorCountry(request, url) {
   if (COUNTRIES[asked]) return { country: asked, set: true };
   const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)cp_pays=([A-Z]{2})/);
   if (m && COUNTRIES[m[1]]) return { country: m[1], set: false };
-  const cf = request.cf?.country;
+  const cf = requestCountry(request);
   if (cf && COUNTRIES[cf]) return { country: cf, set: false };
   return { country: cf ? 'XX' : 'FR', set: false };
 }
@@ -337,7 +339,7 @@ export async function renderLanding(env, request, url) {
   // Sélecteur de pays : les tarifs s'affichent dans la devise choisie.
   const countryHtml = `<label for="paysTarifs">Tarifs pour</label><select id="paysTarifs" name="pays">${Object.entries(COUNTRIES).filter(([k]) => k !== 'XX').map(([k, c]) => `<option value="${k}" ${k === pr.country ? 'selected' : ''}>${e(c.name)} (${e(pricing(k).symbol)})</option>`).join('')}${pr.country === 'XX' ? '<option value="XX" selected>Autre pays (€)</option>' : ''}</select><noscript><button type="submit" class="btn btn-secondary">Afficher</button></noscript>`;
   const tradesHtml = Object.entries(METIERS).map(([s, m]) => `<li><a href="/logiciel-de-caisse/${s}">${e(m.label.split(' et ')[0])}</a></li>`).join('');
-  const body = new HTMLRewriter()
+  const body = await new HtmlRewriter()
     .on('title', { element(el) { el.setInnerContent(title); } })
     .on('meta[name="description"]', { element(el) { el.setAttribute('content', description); } })
     .on('head', { element(el) { el.append(headTags({ origin, path: '/', title, description }) + ld.map(jsonLd).join(''), { html: true }); } })
@@ -408,7 +410,7 @@ export async function renderVitrine(env, request, url, slug) {
   const res = await env.ASSETS.fetch(new Request(new URL('/store/', url), request));
   const origin = url.origin, path = `/s/${slug}`;
   if (!data) {
-    const body = new HTMLRewriter()
+    const body = await new HtmlRewriter()
       .on('title', { element(el) { el.setInnerContent('Commerce introuvable | Comptoir'); } })
       .on('head', { element(el) { el.append('<meta name="robots" content="noindex"><script>window.__STORE__ = null;</script>', { html: true }); } })
       .transform(res);
@@ -442,7 +444,7 @@ export async function renderVitrine(env, request, url, slug) {
   const h1 = words.length > 1 ? `${e(words.slice(0, -1).join(' '))}<br>${e(words.at(-1))}` : e(name);
   const inline = `<script>window.__STORE__ = ${JSON.stringify(data).replace(/</g, '\\u003c')};</script>`;
   const setText = (key) => ({ element(el) { if (s[key]) el.setInnerContent(s[key]); } });
-  const body = new HTMLRewriter()
+  const body = await new HtmlRewriter()
     .on('title', { element(el) { el.setInnerContent(title); } })
     .on('meta[name="description"]', { element(el) { el.setAttribute('content', description); } })
     .on('meta[name="theme-color"]', { element(el) { if (/^#[0-9a-f]{6}$/i.test(s.accent || '')) el.setAttribute('content', s.accent); } })
