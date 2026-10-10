@@ -16,7 +16,11 @@ export const GUIDES = [
         <li><strong>Faites une première vente</strong> à la caisse, même un essai à 1 : vous verrez le ticket, le stock qui baisse et le chiffre du jour.</li>
         <li><strong>Complétez les mentions légales</strong> des factures dans Réglages, Mon commerce, Facturation.</li></ol>
         <p>L’Accueil affiche ces étapes dans « Pour bien démarrer » et les coche au fur et à mesure.</p>`],
-      ['Utiliser Comptoir sur téléphone', `<p>Comptoir fonctionne dans le navigateur. Pour l’avoir comme une application : ouvrez votre espace, puis <strong>Partager, Sur l’écran d’accueil</strong> (iPhone) ou <strong>menu ⋮, Installer l’application</strong> (Android).</p>`],
+      ['Installer Comptoir comme une application', `<p>Installé, Comptoir s’ouvre directement sur votre espace, en plein écran, depuis l’écran d’accueil du téléphone ou le bureau de l’ordinateur, sans passer par le site.</p>
+        <ul><li><strong>Android, Windows, Chromebook et Mac avec Chrome ou Edge</strong> : touchez <strong>Installer l’application</strong> dans le menu de votre espace (dans « Plus » sur téléphone), ou la carte sur l’Accueil, puis confirmez.</li>
+        <li><strong>iPhone et iPad</strong> : dans Safari, bouton <strong>Partager</strong>, puis <strong>Sur l’écran d’accueil</strong>, puis <strong>Ajouter</strong>. Vous vous connectez une fois dans l’application.</li>
+        <li><strong>Mac avec Safari</strong> : menu <strong>Fichier</strong>, puis <strong>Ajouter au Dock</strong>.</li></ul>
+        <p>Un appui long (ou un clic droit) sur l’icône ouvre directement la <strong>Caisse</strong>, les <strong>Produits</strong> ou les <strong>Rapports</strong>. L’application se met à jour toute seule.</p>`],
     ],
   },
   {
@@ -130,7 +134,8 @@ export const GUIDES = [
     faq: [
       ['Quelle imprimante de tickets utiliser ?', 'N’importe quelle imprimante thermique 80 mm reconnue par votre ordinateur ou votre tablette. Le ticket s’imprime depuis la fenêtre d’impression du navigateur : choisissez l’imprimante et désactivez les marges.'],
       ['Comment brancher une douchette code-barres ?', 'Branchez-la (USB ou Bluetooth) : elle se comporte comme un clavier. À la caisse, scannez directement, le produit s’ajoute au ticket. Le code-barres se renseigne dans la fiche produit, sous Plus d’options.'],
-      ['Puis-je utiliser Comptoir sur plusieurs appareils ?', 'Oui, en même temps : ordinateur, tablette et téléphone. Chaque membre de l’équipe se connecte avec son propre compte.'],
+      ['Comptoir fonctionne-t-il sans internet ?', 'Non : les ventes et le stock sont enregistrés en direct sur le serveur, pour qu’ils soient justes sur tous vos appareils. Sans connexion, l’application l’indique et se recharge toute seule quand internet revient.'],
+            ['Puis-je utiliser Comptoir sur plusieurs appareils ?', 'Oui, en même temps : ordinateur, tablette et téléphone. Chaque membre de l’équipe se connecte avec son propre compte.'],
       ['Que se passe-t-il à la fin de l’essai gratuit ?', 'Vos données restent consultables. Pour continuer à encaisser et modifier, choisissez une formule dans Réglages, Abonnement.'],
       ['Mes données sont-elles protégées ?', 'Chaque commerce a son espace, séparé des autres. Les connexions sont chiffrées et les mots de passe ne sont jamais conservés en clair. Voir la politique de confidentialité.'],
       ['Un produit affiche un stock négatif, pourquoi ?', 'Il a été vendu alors que le stock enregistré était à zéro. Faites un inventaire dans Produits, Stock, Inventaire pour corriger la quantité.'],

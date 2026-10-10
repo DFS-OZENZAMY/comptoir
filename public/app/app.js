@@ -223,6 +223,46 @@
     } catch (e) { fail(e); }
   }
   $('#locSwitch').addEventListener('change', (e) => switchLocation(e.target.value));
+
+  /* ---------------- Application installable (ordinateur et téléphone) ---------------- */
+  const install = { prompt: null };
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isMacSafari = () => /Macintosh/.test(navigator.userAgent) && /Safari/.test(navigator.userAgent) && !/Chrome|Chromium|Edg|Firefox/.test(navigator.userAgent) && !isIOS();
+  const canInstall = () => !standalone() && (!!install.prompt || isIOS() || isMacSafari());
+  function refreshInstall() {
+    const on = canInstall();
+    $('#installBtn').hidden = !on; $('#installBtnM').hidden = !on;
+    $('#installCard')?.toggleAttribute('hidden', !on || installDismissed());
+  }
+  const installDismissed = () => { try { return localStorage.getItem('comptoir.installation.masquee') === '1'; } catch { return false; } };
+  async function doInstall() {
+    closeMore();
+    if (install.prompt) {
+      install.prompt.prompt();
+      const r = await install.prompt.userChoice.catch(() => null);
+      install.prompt = null; refreshInstall();
+      if (r?.outcome === 'accepted') toast('Comptoir est installé');
+      return;
+    }
+    const share = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style="vertical-align:-4px"><path d="M12 3v12M8 7l4-4 4 4M5 12v7h14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const steps = isIOS()
+      ? `<ol class="install-steps"><li>Touchez le bouton <strong>Partager</strong> ${share} en bas de Safari (en haut sur iPad).</li><li>Choisissez <strong>Sur l’écran d’accueil</strong>.</li><li>Touchez <strong>Ajouter</strong>.</li></ol><p class="muted">Utilisez Safari : sur iPhone, l’installation ne se fait que depuis Safari. Vous vous connecterez une fois dans l’application, puis elle s’ouvrira directement sur votre espace.</p>`
+      : `<ol class="install-steps"><li>Dans la barre de menus de Safari, ouvrez <strong>Fichier</strong>.</li><li>Choisissez <strong>Ajouter au Dock</strong>, puis <strong>Ajouter</strong>.</li></ol><p class="muted">Comptoir s’ouvrira alors dans sa propre fenêtre, depuis le Dock.</p>`;
+    openModal('Installer Comptoir', steps + '<div class="modal-foot"><div class="right"><button class="btn btn-primary" id="installOk">C’est compris</button></div></div>');
+    $('#installOk').addEventListener('click', closeModal);
+  }
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); install.prompt = e; refreshInstall(); });
+  window.addEventListener('appinstalled', () => { install.prompt = null; refreshInstall(); toast('Comptoir est installé : retrouvez-le sur votre écran d’accueil ou votre bureau'); });
+  $('#installBtn').addEventListener('click', doInstall);
+  $('#installBtnM').addEventListener('click', doInstall);
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#installCardGo')) doInstall();
+    if (e.target.closest('#installCardHide')) { try { localStorage.setItem('comptoir.installation.masquee', '1'); } catch { /* navigation privée */ } refreshInstall(); }
+  });
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {}));
+  }
   $('#locSwitchM').addEventListener('change', (e) => { closeMore(); switchLocation(e.target.value); });
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -390,6 +430,11 @@
         ${can('documents.edit') ? '<button type="button" data-new="devis">Faire un devis</button><button type="button" data-new="facture">Faire une facture</button>' : ''}
         <button type="button" id="shareVitrine">Partager ma vitrine</button>
       </nav>
+      <section class="install-card" id="installCard" hidden>
+        <div class="install-icon" aria-hidden="true"><img src="/assets/icon-192.png" alt="" width="56" height="56"></div>
+        <div class="install-text"><strong>Installez Comptoir sur cet appareil</strong><span>Votre caisse s’ouvre en un geste, depuis l’écran d’accueil ou le bureau, sans passer par le site.</span></div>
+        <div class="install-actions"><button type="button" class="btn btn-primary" id="installCardGo">Installer</button><button type="button" class="btn" id="installCardHide">Plus tard</button></div>
+      </section>
       ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length} · <a href="/aide/bien-demarrer" target="_blank" rel="noopener">Guide complet</a></span></div>
         <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}</ol></section>` : ''}
       <div class="home-grid">
@@ -409,6 +454,7 @@
         <div class="chart">${d.months.map((m) => `<div class="bar ${m.month === thisMonth ? 'current' : ''}"><span class="bar-val">${m.value ? new Intl.NumberFormat('fr-FR').format(Math.round(m.value)) : ''}</span><div class="bar-fill" style="height:${Math.round((m.value / max) * 150)}px"></div></div>`).join('')}</div>
         <div class="chart-labels">${d.months.map((m) => `<span>${monthName(m.month)}</span>`).join('')}</div>
       </section>`;
+    refreshInstall();
     $('#shareVitrine').addEventListener('click', async () => {
       if (navigator.share) { try { await navigator.share({ title: s.shop_name, url: vitrine }); return; } catch { /* annulé */ } }
       try { await navigator.clipboard.writeText(vitrine); toast('Lien de la vitrine copié'); } catch { toast(vitrine); }

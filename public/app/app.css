@@ -718,3 +718,18 @@ a.kpi:hover { background: #FAFAFB; }
 .help-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); color: var(--muted); font-size: .85rem; font-weight: 600; text-decoration: none; }
 .help-btn::before { content: "?"; display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); color: #fff; font-size: .72rem; font-weight: 700; }
 .help-btn:hover { border-color: var(--ink); color: var(--ink); }
+
+/* Installation de l'application */
+.install-link { background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; color: #F6A589; font-weight: 600; }
+.install-link:hover { color: #fff; }
+.install-card { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; padding: 16px 18px; border-radius: var(--r-card); background: var(--steel); color: #fff; }
+.install-card[hidden] { display: none; }
+.install-icon img { display: block; border-radius: 12px; }
+.install-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.install-text span { color: #CFD1D6; font-size: .92rem; }
+.install-actions { display: flex; gap: 8px; flex: none; }
+.install-card .btn:not(.btn-primary) { background: transparent; color: #fff; border-color: #4A4F59; }
+.install-steps { display: grid; gap: 10px; padding-left: 22px; margin: 0 0 14px; line-height: 1.5; }
+@media (max-width: 900px) { .install-card { flex-wrap: wrap; } .install-actions { width: 100%; } .install-actions .btn { flex: 1; } }
+/* Mode application : marges des encoches et de la barre d'accueil */
+@media (display-mode: standalone) { .side { padding-top: calc(24px + env(safe-area-inset-top, 0px)); } }

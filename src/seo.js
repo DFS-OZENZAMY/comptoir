@@ -40,7 +40,6 @@ function headTags({ origin, path, title, description, image, type = 'website', n
   <meta name="twitter:title" content="${e(title)}">
   <meta name="twitter:description" content="${e(description)}">
   <meta name="twitter:image" content="${e(img)}">
-  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">`;
 }
 

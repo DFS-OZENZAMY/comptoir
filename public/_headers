@@ -13,3 +13,10 @@
   X-Robots-Tag: noindex
 /console/*
   X-Robots-Tag: noindex
+
+# Application installable : le service worker est toujours vérifié
+/app/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /app/
+/manifest.webmanifest
+  Cache-Control: public, max-age=3600

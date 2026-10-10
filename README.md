@@ -77,6 +77,33 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Application installable (ordinateur et téléphone)
+
+L'espace commerçant s'installe comme une application : icône sur l'écran d'accueil ou le bureau, fenêtre à part, ouverture directe sur le workspace, sans passer par le site.
+
+- **Manifeste** (`public/manifest.webmanifest`) :
+  - démarre sur `/app/`, avec une portée limitée à `/app/` ;
+  - icônes standard et adaptatives (`assets/icon-*.png`) ;
+  - **raccourcis** Caisse, Produits et Rapports (appui long ou clic droit sur l'icône) ;
+  - captures d'écran pour la fenêtre d'installation (`assets/install/`).
+- **Service worker** (`public/app/sw.js`) :
+  - les données (`/api/`) viennent **toujours du serveur**, sans copie ; hors ligne, elles renvoient un message clair ;
+  - le code de l'application vient du réseau d'abord, et se met donc à jour à chaque déploiement ;
+  - les polices et icônes sont gardées en mémoire ;
+  - sans connexion, la page `/app/offline` s'affiche et se recharge seule au retour d'internet.
+
+  Après un changement important de `sw.js`, modifiez sa constante `VERSION`.
+- **Installation dans l'espace** :
+  - un bouton « Installer l'application » dans le menu et dans « Plus » ;
+  - une carte sur l'Accueil, qui peut être masquée ;
+  - sur Chrome et Edge (Android, Windows, Mac, Chromebook), la fenêtre d'installation du navigateur ;
+  - sur iPhone, iPad et Safari pour Mac, la marche à suivre pas à pas (Partager, puis « Sur l'écran d'accueil » ; ou Fichier, puis « Ajouter au Dock »).
+
+  Rien ne s'affiche une fois l'application installée.
+- **Diagnostic** : Chrome ne signale aucun obstacle à l'installation (`Page.getInstallabilityErrors` vide).
+
+Comptoir ne fonctionne pas hors ligne : les ventes et le stock sont enregistrés en direct pour rester justes sur tous les appareils.
+
 ## Centre d'aide
 
 Des guides courts pour les commerçants, à l'adresse `/aide`, avec une recherche :

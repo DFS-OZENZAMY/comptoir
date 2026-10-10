@@ -1,16 +1,31 @@
 {
-  "name": "Comptoir",
+  "id": "/app/",
+  "name": "Comptoir : caisse et gestion",
   "short_name": "Comptoir",
   "description": "La caisse, le stock, les factures et la vitrine en ligne de votre commerce.",
   "lang": "fr",
-  "start_url": "/app/",
-  "scope": "/",
+  "dir": "ltr",
+  "start_url": "/app/?source=app",
+  "scope": "/app/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#F4F4F1",
   "theme_color": "#17181C",
+  "categories": ["business", "finance", "productivity"],
   "icons": [
-    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Caisse", "short_name": "Caisse", "description": "Encaisser une vente", "url": "/app/#/caisse", "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Produits", "short_name": "Produits", "description": "Catalogue et stock", "url": "/app/#/produits", "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Rapports", "short_name": "Rapports", "description": "Chiffres par boutique", "url": "/app/#/rapports", "icons": [{ "src": "/assets/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "screenshots": [
+    { "src": "/assets/install/caisse-ordinateur.webp", "sizes": "1280x800", "type": "image/webp", "form_factor": "wide", "label": "La caisse et le ticket en cours" },
+    { "src": "/assets/install/rapports-ordinateur.webp", "sizes": "1280x800", "type": "image/webp", "form_factor": "wide", "label": "Les rapports par boutique" },
+    { "src": "/assets/install/caisse-telephone.webp", "sizes": "540x1170", "type": "image/webp", "form_factor": "narrow", "label": "La caisse sur téléphone" },
+    { "src": "/assets/install/accueil-telephone.webp", "sizes": "540x1170", "type": "image/webp", "form_factor": "narrow", "label": "Les chiffres du jour" }
   ]
 }

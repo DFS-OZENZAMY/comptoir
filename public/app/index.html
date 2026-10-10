@@ -2,11 +2,17 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#17181C">
   <meta name="robots" content="noindex, nofollow">
   <title>Comptoir</title>
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Comptoir">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <link rel="preload" href="/assets/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/assets/fonts.css">
   <link rel="stylesheet" href="/app/app.css">
@@ -96,6 +102,7 @@
         <a href="#/reglages" data-nav="reglages" data-perm-any="settings.manage team.manage billing.manage locations.manage">Réglages</a>
       </nav>
       <div class="side-foot">
+        <button type="button" class="install-link" id="installBtn" hidden>Installer l’application</button>
         <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
         <a href="#" id="storeLink" target="_blank" rel="noopener">Voir ma vitrine</a>
         <a href="/console/" id="consoleLink" hidden>Console plateforme</a>
@@ -135,6 +142,7 @@
         <a href="#/reglages" data-perm-any="settings.manage team.manage billing.manage locations.manage">Réglages</a>
         <a href="#" id="storeLinkM" target="_blank" rel="noopener">Voir ma vitrine</a>
         <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
+        <button type="button" id="installBtnM" hidden>Installer l’application</button>
         <button type="button" data-account>Mon compte</button>
         <button type="button" data-logout>Se déconnecter</button>
       </div>
