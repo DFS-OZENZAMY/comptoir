@@ -8,10 +8,10 @@ export const PLATFORM = {
 
 // Limites : null = illimité. Prix mensuel HT dans la devise de facturation de la plateforme.
 export const PLANS = {
-  essai: { name: 'Essai gratuit', price: 0, products: 1000, users: 3, description: 'Toutes les fonctions pendant 14 jours.' },
-  essentiel: { name: 'Essentiel', price: 19, products: 300, users: 1, description: 'Caisse, stock et vitrine pour démarrer.' },
-  pro: { name: 'Pro', price: 39, products: 5000, users: 5, description: 'Devis, factures, alertes et équipe.' },
-  business: { name: 'Business', price: 79, products: null, users: 20, description: 'Sans limite de produits, équipe étendue.' },
+  essai: { name: 'Essai gratuit', price: 0, products: 1000, users: 3, locations: 3, description: 'Toutes les fonctions pendant 14 jours.' },
+  essentiel: { name: 'Essentiel', price: 19, products: 300, users: 1, locations: 1, description: 'Caisse, stock et vitrine pour démarrer.' },
+  pro: { name: 'Pro', price: 39, products: 5000, users: 5, locations: 3, description: 'Devis, factures, alertes et équipe.' },
+  business: { name: 'Business', price: 79, products: null, users: 20, locations: null, description: 'Sans limite de produits, équipe étendue.' },
 };
 export const PAID_PLANS = ['essentiel', 'pro', 'business'];
 
@@ -141,3 +141,36 @@ export function defaultSettings({ name, phone = '', email = '', country = 'FR', 
   };
 }
 export const SETTING_KEYS = Object.keys(defaultSettings({ name: '' }));
+
+// Permissions attribuables aux membres de l'équipe (contrôle d'accès par rôle).
+export const PERMISSIONS = [
+  { key: 'pos.sell', group: 'Caisse', label: 'Encaisser des ventes' },
+  { key: 'pos.discount', group: 'Caisse', label: 'Accorder des remises et modifier un prix en caisse' },
+  { key: 'pos.credit', group: 'Caisse', label: 'Vendre à crédit et mettre des commandes de côté' },
+  { key: 'pos.journal', group: 'Caisse', label: 'Voir le journal de caisse' },
+  { key: 'products.edit', group: 'Produits et stock', label: 'Créer et modifier les produits, les prix et les catégories' },
+  { key: 'stock.manage', group: 'Produits et stock', label: 'Réceptionner, ajuster et transférer le stock' },
+  { key: 'customers.manage', group: 'Clients', label: 'Créer et modifier les fiches clients' },
+  { key: 'documents.view', group: 'Ventes', label: 'Voir les devis, commandes et factures' },
+  { key: 'documents.edit', group: 'Ventes', label: 'Créer, modifier et annuler devis, commandes, factures et tickets' },
+  { key: 'payments.manage', group: 'Ventes', label: 'Enregistrer des paiements et relancer les clients' },
+  { key: 'reports.view', group: 'Pilotage', label: 'Voir le tableau de bord, les chiffres et les rapports par boutique' },
+  { key: 'alerts.view', group: 'Pilotage', label: 'Voir les alertes (impayés, ruptures, stock bas)' },
+  { key: 'settings.manage', group: 'Administration', label: 'Modifier les réglages du commerce et de la vitrine' },
+  { key: 'locations.manage', group: 'Administration', label: 'Créer et modifier les boutiques' },
+  { key: 'team.manage', group: 'Administration', label: 'Gérer l’équipe, les rôles et les accès' },
+  { key: 'billing.manage', group: 'Administration', label: 'Gérer l’abonnement' },
+];
+export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
+
+// Rôles créés pour chaque commerce ; le propriétaire a toujours toutes les permissions.
+export const DEFAULT_ROLES = [
+  { name: 'Gérant', description: 'Tient la boutique au quotidien : caisse, produits, stock, ventes et chiffres.',
+    permissions: ['pos.sell', 'pos.discount', 'pos.credit', 'pos.journal', 'products.edit', 'stock.manage', 'customers.manage', 'documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'alerts.view'] },
+  { name: 'Caissier', description: 'Encaisse les ventes et consulte son journal de caisse.',
+    permissions: ['pos.sell', 'pos.journal', 'customers.manage'] },
+  { name: 'Magasinier', description: 'Réceptionne la marchandise, tient le stock et les fiches produits.',
+    permissions: ['products.edit', 'stock.manage', 'alerts.view'] },
+  { name: 'Comptable', description: 'Suit les factures, les paiements et les chiffres, sans encaisser.',
+    permissions: ['documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'pos.journal', 'customers.manage'] },
+];

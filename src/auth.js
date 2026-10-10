@@ -160,12 +160,15 @@ export async function me(db, ctx) {
   }
   return {
     platform: { name: PLATFORM.name },
-    user: ctx.user, role: ctx.role, platform_admin: ctx.platformAdmin,
+    user: ctx.user, role: ctx.owner ? 'owner' : ctx.role ? 'member' : null, platform_admin: ctx.platformAdmin,
+    role_name: ctx.roleName || null, permissions: ctx.permissions || [],
+    locations: (ctx.locations || []).map((l) => ({ id: l.id, name: l.name, address: l.address, phone: l.phone })),
+    all_locations: !!ctx.allLocations, scope: ctx.scope ?? null,
     store: store && {
       id: store.id, slug: store.slug, name: store.name, business_type: store.business_type, country: store.country,
       plan: store.plan, plan_name: plan.name, status: store.status, trial_ends_at: store.trial_ends_at, plan_requested: store.plan_requested,
     },
-    limits: plan && { products: plan.products, users: plan.users },
+    limits: plan && { products: plan.products, users: plan.users, locations: plan.locations },
     units: store ? (BUSINESS_TYPES[store.business_type] || BUSINESS_TYPES.autre).units : [],
     usage, access: storeAccess(store),
   };

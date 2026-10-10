@@ -5,6 +5,7 @@ import {
   readBody, hashPassword, tempPassword,
 } from './lib.js';
 import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings } from './catalog.js';
+import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, transferStock, listLocations, saveLocation, locationReport, listRoles, saveRole, deleteRole, validRoleAndLocations, updateMember } from './access.js';
 import { bump, logEvent } from './db.js';
 import { storeAccess } from './auth.js';
 
@@ -104,12 +105,13 @@ async function createDocument(ctx, d) {
   const client = await clientSnapshot(db, sid, d, type === 'ticket' ? 'Client comptoir' : '');
   const t = computeTotals(lines);
   const number = await nextNumber(db, sid, type, date);
+  const location = writeLocation(ctx, d.location_id);
   const res = await db.prepare(`INSERT INTO documents (store_id, type, number, customer_id, client_name, client_email, client_phone, client_address,
-      status, date, due_date, notes, total_ht, total_tva, total_ttc, source_id, source_type, origin, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      status, date, due_date, notes, total_ht, total_tva, total_ttc, source_id, source_type, origin, created_by, location_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(sid, type, number, client.customer_id, client.client_name, client.client_email, client.client_phone, client.client_address,
       status, date, due, str(d.notes, 3000), t.total_ht, t.total_tva, t.total_ttc,
-      d.source_id || null, d.source_type || null, d.origin === 'caisse' ? 'caisse' : 'admin', ctx.user.id)
+      d.source_id || null, d.source_type || null, d.origin === 'caisse' ? 'caisse' : 'admin', ctx.user.id, location.id)
     .run();
   const id = res.meta.last_row_id;
   await insertLines(db, sid, id, lines);
@@ -173,11 +175,14 @@ async function syncStock(db, sid, id) {
   const lines = (await db.prepare(`SELECT l.product_id, l.qty FROM document_lines l JOIN products p ON p.id = l.product_id AND p.store_id = l.store_id
       WHERE l.document_id = ? AND l.store_id = ? AND p.track_stock = 1`).bind(id, sid).all()).results;
   const stmts = [];
+  let locId = doc.location_id;
+  if (!locId) locId = (await db.prepare('SELECT id FROM locations WHERE store_id = ? ORDER BY active DESC, id LIMIT 1').bind(sid).first())?.id;
   for (const l of lines) {
     const q = should ? -l.qty : l.qty;
-    stmts.push(db.prepare('UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND store_id = ?').bind(q, l.product_id, sid));
-    stmts.push(db.prepare('INSERT INTO stock_movements (store_id, product_id, qty, type, reason, document_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(sid, l.product_id, q, should ? 'sortie' : 'retour', should ? doc.number : `Annulation ${doc.number}`, id));
+    if (locId) stmts.push(...stockDelta(db, sid, locId, l.product_id, q));
+    else stmts.push(db.prepare('UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND store_id = ?').bind(q, l.product_id, sid));
+    stmts.push(db.prepare('INSERT INTO stock_movements (store_id, product_id, qty, type, reason, document_id, location_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(sid, l.product_id, q, should ? 'sortie' : 'retour', should ? doc.number : `Annulation ${doc.number}`, id, locId || null));
   }
   stmts.push(db.prepare('UPDATE documents SET stock_applied = ? WHERE id = ? AND store_id = ?').bind(should ? 1 : 0, id, sid));
   await db.batch(stmts);
@@ -258,6 +263,7 @@ async function convertDocument(ctx, id, to) {
     type: to, customer_id: doc.customer_id, client_name: doc.client_name, client_email: doc.client_email,
     client_phone: doc.client_phone, client_address: doc.client_address, notes: doc.notes,
     lines: doc.lines, source_id: doc.id, source_type: doc.type, date: doc.type === 'ticket' ? doc.date : undefined,
+    location_id: doc.location_id && ctx.locations.some((l) => l.id === doc.location_id) ? doc.location_id : undefined,
   });
   if (doc.type === 'ticket') {
     await db.prepare("UPDATE documents SET status = 'payée', amount_paid = total_ttc, paid_at = ?, due_date = NULL, notes = ? WHERE id = ? AND store_id = ?")
@@ -302,8 +308,23 @@ async function posCheckout(ctx, b) {
   const { db } = ctx; const sid = ctx.store.id;
   const mode = b.mode;
   if (!['ticket', 'credit', 'reserve'].includes(mode)) throw new HttpError(400, 'Mode de vente inconnu.');
+  ctx.need('pos.sell');
+  if (mode !== 'ticket') ctx.need('pos.credit');
+  if (num(b.discount_pct) > 0) ctx.need('pos.discount');
+  const location = writeLocation(ctx, b.location_id);
   const base = cleanLines(b.lines);
   if (!base.length) throw new HttpError(400, 'Le ticket est vide.');
+  if (!ctx.can('pos.discount')) {
+    // Sans le droit de remise, impossible de vendre un produit en dessous de son prix.
+    const ids = [...new Set(base.filter((l) => l.product_id).map((l) => l.product_id))];
+    if (ids.length) {
+      const prices = (await db.prepare(`SELECT id, price_ht FROM products WHERE store_id = ? AND id IN (${ids.map(() => '?').join(',')})`).bind(sid, ...ids).all()).results;
+      for (const l of base) {
+        const p = prices.find((x) => x.id === l.product_id);
+        if (p && l.unit_price_ht < p.price_ht - 0.005) throw new HttpError(403, `Vous n'avez pas l'autorisation de baisser le prix de « ${l.label} ».`);
+      }
+    }
+  }
   const lines = [...base, ...discountLines(base, b.discount_pct)].map((l, i) => ({ ...l, position: i }));
   const total = computeTotals(lines).total_ttc;
   const client = { customer_id: b.customer_id ? num(b.customer_id) || null : null, client_name: str(b.client_name, 160), client_phone: str(b.client_phone, 40) };
@@ -324,7 +345,7 @@ async function posCheckout(ctx, b) {
     if (!client.customer_id && !client.client_name) Object.assign(client, { customer_id: source.customer_id, client_name: source.client_name, client_phone: source.client_phone });
   }
   if (mode === 'reserve') {
-    const data = { type: 'commande', ...client, status: 'confirmée', origin: 'caisse', notes: str(b.notes, 2000), lines };
+    const data = { type: 'commande', ...client, status: 'confirmée', origin: 'caisse', notes: str(b.notes, 2000), lines, location_id: location.id };
     return source ? updateDocument(ctx, source.id, { ...data, date: source.date }) : createDocument(ctx, data);
   }
   if (source) {
@@ -334,7 +355,7 @@ async function posCheckout(ctx, b) {
   }
   const doc = await createDocument(ctx, {
     type: mode === 'ticket' ? 'ticket' : 'facture', ...client, origin: 'caisse', notes: str(b.notes, 2000), lines,
-    source_id: source ? source.id : null, source_type: source ? 'commande' : null,
+    source_id: source ? source.id : null, source_type: source ? 'commande' : null, location_id: location.id,
   });
   if (payments.length) {
     await db.batch(payments.map((p) => db.prepare('INSERT INTO payments (store_id, document_id, amount, method, date, note) VALUES (?, ?, ?, ?, ?, ?)')
@@ -348,16 +369,17 @@ async function posCheckout(ctx, b) {
   return getDocument(db, sid, doc.id);
 }
 
-async function posJournal(db, sid, date) {
+async function posJournal(db, sid, date, ctx) {
   date = isDate(date) ? date : today();
+  const w = scopeWhere(ctx, 'd.location_id'), w2 = scopeWhere(ctx);
   const payments = (await db.prepare(`SELECT p.*, d.number, d.type, d.client_name FROM payments p
-      JOIN documents d ON d.id = p.document_id AND d.store_id = p.store_id WHERE p.store_id = ? AND p.date = ? ORDER BY p.id`).bind(sid, date).all()).results;
+      JOIN documents d ON d.id = p.document_id AND d.store_id = p.store_id WHERE p.store_id = ? AND p.date = ?${w.sql} ORDER BY p.id`).bind(sid, date, ...w.args).all()).results;
   const byMethod = {};
   for (const p of payments) byMethod[p.method] = r2((byMethod[p.method] || 0) + p.amount);
-  const tickets = (await db.prepare(`SELECT id, number, client_name, total_ttc, status, created_at FROM documents
-      WHERE store_id = ? AND type = 'ticket' AND date = ? ORDER BY id DESC`).bind(sid, date).all()).results;
-  const credit = (await db.prepare(`SELECT id, number, client_name, total_ttc, amount_paid, status FROM documents
-      WHERE store_id = ? AND type = 'facture' AND origin = 'caisse' AND date = ? ORDER BY id DESC`).bind(sid, date).all()).results;
+  const tickets = (await db.prepare(`SELECT id, number, client_name, total_ttc, status, created_at, location_id FROM documents
+      WHERE store_id = ? AND type = 'ticket' AND date = ?${w2.sql} ORDER BY id DESC`).bind(sid, date, ...w2.args).all()).results;
+  const credit = (await db.prepare(`SELECT id, number, client_name, total_ttc, amount_paid, status, location_id FROM documents
+      WHERE store_id = ? AND type = 'facture' AND origin = 'caisse' AND date = ?${w2.sql} ORDER BY id DESC`).bind(sid, date, ...w2.args).all()).results;
   const valid = tickets.filter((t) => t.status === 'payé');
   const sum = r2(valid.reduce((s, t) => s + t.total_ttc, 0));
   return {
@@ -474,7 +496,9 @@ async function createProduct(ctx, b) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
     .bind(sid, f.ref, f.barcode, f.name, f.description, category_id, f.price_ht, f.purchase_price, f.tva_rate, stock, f.stock_min, f.unit, f.visible, f.track_stock).run();
   const id = r.meta.last_row_id;
-  if (stock > 0) await db.prepare("INSERT INTO stock_movements (store_id, product_id, qty, type, reason) VALUES (?, ?, ?, 'entrée', 'Stock initial')").bind(sid, id, stock).run();
+  const loc = ctx.location || ctx.locations[0];
+  if (loc) await db.prepare('INSERT OR IGNORE INTO location_stock (store_id, location_id, product_id, qty) VALUES (?, ?, ?, ?)').bind(sid, loc.id, id, stock).run();
+  if (stock > 0) await db.prepare("INSERT INTO stock_movements (store_id, product_id, qty, type, reason, location_id) VALUES (?, ?, ?, 'entrée', 'Stock initial', ?)").bind(sid, id, stock, loc ? loc.id : null).run();
   await logEvent(db, sid, ctx.user.id, 'product', f.name);
   return { id };
 }
@@ -503,7 +527,8 @@ async function setProductImage(db, sid, id, b) {
   return { ok: true };
 }
 
-async function addStockMovement(db, sid, b) {
+async function addStockMovement(ctx, b) {
+  const { db } = ctx; const sid = ctx.store.id;
   const p = await db.prepare('SELECT id, stock, track_stock FROM products WHERE id = ? AND store_id = ?').bind(num(b.product_id), sid).first();
   if (!p) throw new HttpError(404, 'Choisissez un produit.');
   if (!p.track_stock) throw new HttpError(400, "Le suivi de stock est désactivé pour ce produit.");
@@ -511,13 +536,15 @@ async function addStockMovement(db, sid, b) {
   if (!type) throw new HttpError(400, 'Type de mouvement inconnu.');
   const qty = num(b.qty, NaN);
   if (!Number.isFinite(qty) || qty < 0 || (type !== 'inventaire' && qty === 0)) throw new HttpError(400, 'Indiquez une quantité valide.');
-  const delta = type === 'entrée' ? qty : type === 'sortie' ? -qty : qty - p.stock;
+  const loc = writeLocation(ctx, b.location_id);
+  const here = (await db.prepare('SELECT qty FROM location_stock WHERE location_id = ? AND product_id = ?').bind(loc.id, p.id).first())?.qty || 0;
+  const delta = type === 'entrée' ? qty : type === 'sortie' ? -qty : qty - here;
   const reason = str(b.reason, 200) || (type === 'inventaire' ? 'Inventaire' : type === 'entrée' ? 'Réception fournisseur' : 'Sortie manuelle');
   await db.batch([
-    db.prepare('UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND store_id = ?').bind(delta, p.id, sid),
-    db.prepare('INSERT INTO stock_movements (store_id, product_id, qty, type, reason) VALUES (?, ?, ?, ?, ?)').bind(sid, p.id, delta, type, reason),
+    ...stockDelta(db, sid, loc.id, p.id, delta),
+    db.prepare('INSERT INTO stock_movements (store_id, product_id, qty, type, reason, location_id) VALUES (?, ?, ?, ?, ?, ?)').bind(sid, p.id, delta, type, reason, loc.id),
   ]);
-  return { ok: true, stock: p.stock + delta };
+  return { ok: true, stock: p.stock + delta, stock_here: here + delta };
 }
 
 function customerFields(b) {
@@ -528,28 +555,33 @@ function customerFields(b) {
 
 const SALES = (p = '') => `((${p}type = 'facture' AND ${p}status != 'annulée' AND COALESCE(${p}source_type, '') != 'ticket') OR (${p}type = 'ticket' AND ${p}status = 'payé'))`;
 
-async function dashboard(db, sid) {
+async function dashboard(db, sid, ctx) {
   const month = today().slice(0, 7);
-  const q = (sql, ...args) => db.prepare(sql).bind(sid, ...args).first();
+  const W = scopeWhere(ctx).sql, WA = scopeWhere(ctx).args;
+  const q = (sql, ...args) => db.prepare(sql.replace('/*L*/', W)).bind(sid, ...args, ...(sql.includes('/*L*/') ? WA : [])).first();
   const [ca, unpaid, overdue, orders, todaySales, quotes, stockValue] = await Promise.all([
-    q(`SELECT COALESCE(SUM(total_ttc), 0) AS v, COUNT(*) AS n FROM documents WHERE store_id = ? AND ${SALES()} AND substr(date, 1, 7) = ?`, month),
-    q(`SELECT COALESCE(SUM(total_ttc - amount_paid), 0) AS v, COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'facture' AND status = 'émise'`),
-    q(`SELECT COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'facture' AND status = 'émise' AND due_date < ?`, today()),
-    q(`SELECT COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'commande' AND status IN ('nouvelle', 'confirmée')`),
-    q(`SELECT COALESCE(SUM(total_ttc), 0) AS v, COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'ticket' AND status = 'payé' AND date = ?`, today()),
-    q(`SELECT COUNT(*) AS n, COALESCE(SUM(total_ttc), 0) AS v FROM documents WHERE store_id = ? AND type = 'devis' AND status IN ('brouillon', 'envoyé')`),
-    q(`SELECT COALESCE(SUM(stock * CASE WHEN purchase_price > 0 THEN purchase_price ELSE price_ht END), 0) AS v FROM products WHERE store_id = ? AND track_stock = 1 AND stock > 0`),
+    q(`SELECT COALESCE(SUM(total_ttc), 0) AS v, COUNT(*) AS n FROM documents WHERE store_id = ? AND ${SALES()} AND substr(date, 1, 7) = ?/*L*/`, month),
+    q(`SELECT COALESCE(SUM(total_ttc - amount_paid), 0) AS v, COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'facture' AND status = 'émise'/*L*/`),
+    q(`SELECT COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'facture' AND status = 'émise' AND due_date < ?/*L*/`, today()),
+    q(`SELECT COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'commande' AND status IN ('nouvelle', 'confirmée')/*L*/`),
+    q(`SELECT COALESCE(SUM(total_ttc), 0) AS v, COUNT(*) AS n FROM documents WHERE store_id = ? AND type = 'ticket' AND status = 'payé' AND date = ?/*L*/`, today()),
+    q(`SELECT COUNT(*) AS n, COALESCE(SUM(total_ttc), 0) AS v FROM documents WHERE store_id = ? AND type = 'devis' AND status IN ('brouillon', 'envoyé')/*L*/`),
+    ctx.scope === 'all'
+      ? q(`SELECT COALESCE(SUM(stock * CASE WHEN purchase_price > 0 THEN purchase_price ELSE price_ht END), 0) AS v FROM products WHERE store_id = ? AND track_stock = 1 AND stock > 0`)
+      : db.prepare(`SELECT COALESCE(SUM(ls.qty * CASE WHEN p.purchase_price > 0 THEN p.purchase_price ELSE p.price_ht END), 0) AS v FROM location_stock ls
+          JOIN products p ON p.id = ls.product_id AND p.store_id = ls.store_id WHERE ls.store_id = ? AND ls.location_id = ? AND p.track_stock = 1 AND ls.qty > 0`).bind(sid, ctx.scope ?? -1).first(),
   ]);
   const months = [];
   const d = new Date();
   for (let i = 5; i >= 0; i--) months.push(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - i, 1)).toISOString().slice(0, 7));
   const rev = (await db.prepare(`SELECT substr(date, 1, 7) AS m, SUM(total_ttc) AS v FROM documents
-    WHERE store_id = ? AND ${SALES()} AND date >= ? GROUP BY m`).bind(sid, months[0] + '-01').all()).results;
+    WHERE store_id = ? AND ${SALES()} AND date >= ?${W} GROUP BY m`).bind(sid, months[0] + '-01', ...WA).all()).results;
   const alerts = (await db.prepare(`SELECT id, ref, name, stock, stock_min, unit FROM products WHERE store_id = ? AND track_stock = 1 AND stock <= stock_min AND (stock_min > 0 OR stock <= 0) ORDER BY stock ASC, name LIMIT 12`).bind(sid).all()).results;
-  const recent = (await db.prepare(`SELECT id, type, number, client_name, total_ttc, amount_paid, status, date, origin FROM documents WHERE store_id = ? ORDER BY id DESC LIMIT 8`).bind(sid).all()).results;
+  const recent = (await db.prepare(`SELECT id, type, number, client_name, total_ttc, amount_paid, status, date, origin, location_id FROM documents WHERE store_id = ?${W} ORDER BY id DESC LIMIT 8`).bind(sid, ...WA).all()).results;
+  const WD = scopeWhere(ctx, 'd.location_id');
   const top = (await db.prepare(`SELECT l.label, SUM(l.qty) AS qty, SUM(l.qty * l.unit_price_ht * (1 + l.tva_rate / 100)) AS amount
     FROM document_lines l JOIN documents d ON d.id = l.document_id AND d.store_id = l.store_id
-    WHERE l.store_id = ? AND l.product_id IS NOT NULL AND ${SALES('d.')} AND d.date >= ? GROUP BY l.product_id ORDER BY amount DESC LIMIT 5`).bind(sid, addDays(today(), -30)).all()).results;
+    WHERE l.store_id = ? AND l.product_id IS NOT NULL AND ${SALES('d.')} AND d.date >= ?${WD.sql} GROUP BY l.product_id ORDER BY amount DESC LIMIT 5`).bind(sid, addDays(today(), -30), ...WD.args).all()).results;
   return {
     revenue_month: r2(ca.v), sales_month: ca.n, unpaid: r2(unpaid.v), unpaid_count: unpaid.n, overdue: overdue.n,
     open_orders: orders.n, today_sales: r2(todaySales.v), today_tickets: todaySales.n,
@@ -564,8 +596,10 @@ async function dashboard(db, sid) {
 /* ------------------------------------------------------------------ */
 
 async function listTeam(db, sid) {
-  return (await db.prepare(`SELECT u.id, u.name, u.email, u.last_login_at, m.role, m.created_at FROM memberships m
-    JOIN users u ON u.id = m.user_id WHERE m.store_id = ? ORDER BY m.role DESC, u.name`).bind(sid).all()).results;
+  const rows = (await db.prepare(`SELECT u.id, u.name, u.email, u.last_login_at, u.must_change_password, m.role, m.role_id, m.locations, m.created_at, r.name AS role_name
+    FROM memberships m JOIN users u ON u.id = m.user_id LEFT JOIN roles r ON r.id = m.role_id AND r.store_id = m.store_id
+    WHERE m.store_id = ? ORDER BY CASE m.role WHEN 'owner' THEN 0 ELSE 1 END, u.name`).bind(sid).all()).results;
+  return rows.map((r) => { let l = []; try { l = JSON.parse(r.locations || '[]'); } catch { /* vide */ } return { ...r, locations: Array.isArray(l) ? l : [] }; });
 }
 
 async function addMember(ctx, b) {
@@ -576,9 +610,10 @@ async function addMember(ctx, b) {
   const n = await db.prepare('SELECT COUNT(*) AS n FROM memberships WHERE store_id = ?').bind(sid).first();
   if (limit !== null && n.n >= limit) throw new HttpError(402, `Votre formule permet ${limit} utilisateur${limit > 1 ? 's' : ''}. Passez à la formule supérieure pour agrandir l'équipe.`);
   if (await db.prepare('SELECT 1 FROM users WHERE email = ?').bind(email).first()) throw new HttpError(409, 'Cette adresse e-mail est déjà utilisée sur la plateforme.');
+  const { role, locations } = await validRoleAndLocations(ctx, b);
   const password = tempPassword();
   const r = await db.prepare('INSERT INTO users (email, name, password_hash, must_change_password) VALUES (?, ?, ?, 1)').bind(email, name, await hashPassword(password)).run();
-  await db.prepare("INSERT INTO memberships (user_id, store_id, role) VALUES (?, ?, 'staff')").bind(r.meta.last_row_id, sid).run();
+  await db.prepare("INSERT INTO memberships (user_id, store_id, role, role_id, locations) VALUES (?, ?, 'member', ?, ?)").bind(r.meta.last_row_id, sid, role.id, locations).run();
   await logEvent(db, sid, ctx.user.id, 'team', `Ajout de ${name}`);
   return { ok: true, email, temp_password: password };
 }
@@ -600,7 +635,32 @@ function subscription(store, usage) {
 /* Routeur de l'espace commerce                                        */
 /* ------------------------------------------------------------------ */
 
-const OWNER_ONLY = new Set(['settings:PUT', 'team:POST', 'team:DELETE', 'team:reset', 'subscription:POST']);
+// Permission exigée pour chaque route (le contrôle se fait ici, côté serveur, quelle que soit l'interface).
+function guard(ctx, res, id, action, m, url) {
+  const W = m !== 'GET';
+  switch (res) {
+    case 'dashboard': return ctx.need('reports.view');
+    case 'settings': if (W) ctx.need('settings.manage'); return;
+    case 'categories': case 'products': if (W) ctx.need('products.edit'); return;
+    case 'stock': return ctx.need('stock.manage');
+    case 'customers': if (W) ctx.need('customers.manage'); return;
+    case 'documents':
+      if (!W) {
+        if (id) { if (!ctx.can('pos.sell') && !ctx.can('pos.journal')) ctx.need('documents.view'); return; }
+        if (url.searchParams.get('type') === 'commande' && ctx.can('pos.credit')) return;
+        return ctx.need('documents.view');
+      }
+      if (action === 'payments' || action === 'remind') return ctx.need('payments.manage');
+      return ctx.need('documents.edit');
+    case 'payments': return ctx.need('payments.manage');
+    case 'pos': if (id === 'journal') ctx.need('pos.journal'); return;
+    case 'alerts': if (id === 'test-email') return ctx.need('settings.manage'); if (id === 'email-status') return; return ctx.need('alerts.view');
+    case 'team': case 'roles': return ctx.need('team.manage');
+    case 'subscription': return ctx.need('billing.manage');
+    case 'locations': if (id === 'report') return ctx.need('reports.view'); if (W) ctx.need('locations.manage'); return;
+    default: return;
+  }
+}
 
 export async function storeRoutes(ctx, parts) {
   const { db, request, url, env } = ctx;
@@ -609,8 +669,8 @@ export async function storeRoutes(ctx, parts) {
   const [res, id, action] = parts;
   const body = () => readBody(request);
 
-  const key = `${res}:${action === 'reset' ? 'reset' : m}`;
-  if (OWNER_ONLY.has(key) && ctx.role !== 'owner') throw new HttpError(403, 'Réservé au propriétaire du commerce.');
+  await resolveAccess(db, ctx, request);
+  guard(ctx, res, id, action, m, url);
   const isWrite = m !== 'GET';
   if (isWrite && res !== 'subscription') {
     const access = storeAccess(ctx.store);
@@ -620,7 +680,7 @@ export async function storeRoutes(ctx, parts) {
 
   switch (res) {
     case 'dashboard':
-      if (m === 'GET') return json(await dashboard(db, sid));
+      if (m === 'GET') return json(await dashboard(db, sid, ctx));
       break;
 
     case 'badges':
@@ -633,7 +693,7 @@ export async function storeRoutes(ctx, parts) {
             (SELECT COUNT(*) FROM documents WHERE store_id = ?1 AND type = 'facture' AND status = 'émise' AND due_date BETWEEN ?2 AND ?3) AS due_soon,
             (SELECT COUNT(*) FROM products WHERE store_id = ?1 AND track_stock = 1 AND stock <= 0) AS out_of_stock,
             (SELECT COUNT(*) FROM products WHERE store_id = ?1 AND track_stock = 1 AND stock > 0 AND stock <= stock_min AND stock_min > 0) AS low_stock,
-            (SELECT COUNT(*) FROM documents WHERE store_id = ?1 AND type = 'commande' AND status IN ('nouvelle', 'confirmée')) AS orders`).bind(sid, t, soon).first();
+            (SELECT COUNT(*) FROM documents WHERE store_id = ?1 AND type = 'commande' AND status IN ('nouvelle', 'confirmée') AND (?4 = 'all' OR location_id = ?4)) AS orders`).bind(sid, t, soon, ctx.scope === 'all' ? 'all' : ctx.scope ?? -1).first();
         return json({ ...c, alerts: c.overdue + c.due_soon + c.out_of_stock + c.low_stock, urgent: c.overdue + c.out_of_stock });
       }
       break;
@@ -681,7 +741,14 @@ export async function storeRoutes(ctx, parts) {
       if (!id && m === 'GET') {
         const rows = (await db.prepare(`SELECT p.*, c.name AS category_name FROM products p
           LEFT JOIN categories c ON c.id = p.category_id AND c.store_id = p.store_id WHERE p.store_id = ? ORDER BY p.name COLLATE NOCASE`).bind(sid).all()).results;
-        return json(rows.map((p) => ({ ...p, image: imageUrl(p), availability: availability(p) })));
+        // Stock de la boutique courante (stock_here) et détail par boutique quand il y en a plusieurs.
+        const multi = ctx.locations.length > 1 || ctx.allLocationsList.filter((l) => l.active).length > 1;
+        const byLoc = multi || ctx.scope !== 'all' ? await stockByLocation(db, sid) : {};
+        return json(rows.map((p) => ({
+          ...p, image: imageUrl(p), availability: availability(p),
+          stock_here: ctx.scope === 'all' ? p.stock : (byLoc[p.id] || {})[ctx.scope] ?? 0,
+          ...(multi ? { stock_by_location: byLoc[p.id] || {} } : {}),
+        })));
       }
       if (!id && m === 'POST') return json(await createProduct(ctx, await body()), 201);
       if (id && action === 'image' && m === 'PUT') return json(await setProductImage(db, sid, id, await body()));
@@ -705,10 +772,26 @@ export async function storeRoutes(ctx, parts) {
 
     case 'stock':
       if (m === 'GET') {
+        const w = scopeWhere(ctx, 's.location_id');
         return json((await db.prepare(`SELECT s.*, p.name AS product_name, p.ref AS product_ref, p.unit AS unit FROM stock_movements s
-          LEFT JOIN products p ON p.id = s.product_id AND p.store_id = s.store_id WHERE s.store_id = ? ORDER BY s.id DESC LIMIT 300`).bind(sid).all()).results);
+          LEFT JOIN products p ON p.id = s.product_id AND p.store_id = s.store_id WHERE s.store_id = ?${w.sql} ORDER BY s.id DESC LIMIT 300`).bind(sid, ...w.args).all()).results);
       }
-      if (m === 'POST') return json(await addStockMovement(db, sid, await body()), 201);
+      if (id === 'transfer' && m === 'POST') return json(await transferStock(ctx, await body()), 201);
+      if (!id && m === 'POST') return json(await addStockMovement(ctx, await body()), 201);
+      break;
+
+    case 'locations':
+      if (!id && m === 'GET') return json(await listLocations(ctx));
+      if (id === 'report' && m === 'GET') return json(await locationReport(ctx, url.searchParams.get('period')));
+      if (!id && m === 'POST') return json(await saveLocation(ctx, null, await body()), 201);
+      if (id && m === 'PUT') return json(await saveLocation(ctx, id, await body()));
+      break;
+
+    case 'roles':
+      if (!id && m === 'GET') return json(await listRoles(ctx));
+      if (!id && m === 'POST') return json(await saveRole(ctx, null, await body()), 201);
+      if (id && m === 'PUT') return json(await saveRole(ctx, id, await body()));
+      if (id && m === 'DELETE') return json(await deleteRole(ctx, id));
       break;
 
     case 'customers':
@@ -741,9 +824,10 @@ export async function storeRoutes(ctx, parts) {
     case 'documents':
       if (!id && m === 'GET') {
         const type = url.searchParams.get('type');
+        const w = scopeWhere(ctx);
         const stmt = PREFIX[type]
-          ? db.prepare('SELECT * FROM documents WHERE store_id = ? AND type = ? ORDER BY date DESC, id DESC LIMIT 2000').bind(sid, type)
-          : db.prepare('SELECT * FROM documents WHERE store_id = ? ORDER BY date DESC, id DESC LIMIT 2000').bind(sid);
+          ? db.prepare(`SELECT * FROM documents WHERE store_id = ? AND type = ?${w.sql} ORDER BY date DESC, id DESC LIMIT 2000`).bind(sid, type, ...w.args)
+          : db.prepare(`SELECT * FROM documents WHERE store_id = ?${w.sql} ORDER BY date DESC, id DESC LIMIT 2000`).bind(sid, ...w.args);
         return json((await stmt.all()).results);
       }
       if (!id && m === 'POST') {
@@ -779,7 +863,7 @@ export async function storeRoutes(ctx, parts) {
 
     case 'pos':
       if (id === 'checkout' && m === 'POST') return json(await posCheckout(ctx, await body()), 201);
-      if (id === 'journal' && m === 'GET') return json(await posJournal(db, sid, url.searchParams.get('date')));
+      if (id === 'journal' && m === 'GET') return json(await posJournal(db, sid, url.searchParams.get('date'), ctx));
       break;
 
     case 'alerts':
@@ -797,6 +881,7 @@ export async function storeRoutes(ctx, parts) {
     case 'team':
       if (!id && m === 'GET') return json(await listTeam(db, sid));
       if (!id && m === 'POST') return json(await addMember(ctx, await body()), 201);
+      if (id && !action && m === 'PUT') return json(await updateMember(ctx, id, await body()));
       if (id && action === 'reset' && m === 'POST') {
         const mem = await memberOf(db, sid, id);
         if (mem.role === 'owner' && Number(id) !== ctx.user.id) throw new HttpError(403, 'Action impossible sur le propriétaire.');

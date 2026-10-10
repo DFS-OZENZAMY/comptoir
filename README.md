@@ -77,6 +77,44 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Plusieurs boutiques
+
+Un commerce peut avoir plusieurs points de vente : 1 boutique en Essentiel, 3 en Pro et en essai, sans limite en Business.
+
+- **Boutiques** (Réglages, Boutiques) : nom, adresse et téléphone. Une boutique peut être fermée ; son historique est conservé, mais son stock doit d'abord être transféré.
+- **Ventes rattachées** : chaque ticket, facture, commande et devis enregistre la boutique où il a été fait. Une conversion (devis → facture…) reste dans la même boutique.
+- **Stock par boutique** (`location_stock`) : les ventes, entrées, sorties et inventaires touchent la boutique concernée. Le **transfert entre boutiques** déplace le stock sans changer le total. `products.stock` reste le total du commerce, utilisé par les alertes et la vitrine.
+- **Sélecteur de boutique** dans le menu, et dans « Plus » sur téléphone. « Toutes les boutiques » est proposé à ceux qui y ont accès. Tableau de bord, ventes, journal de caisse et mouvements suivent la boutique choisie. En vue globale, la caisse demande où l'on encaisse.
+- **Rapports** (`/api/store/locations/report`), sur 7 ou 30 jours, le mois en cours, le mois précédent ou l'année :
+  - chiffre d'affaires et part de chaque boutique, avec le classement ;
+  - évolution par rapport à la période précédente ;
+  - nombre de ventes et panier moyen ;
+  - **marge brute**, calculée sur les produits qui ont un prix d'achat, avec le taux de couverture ;
+  - impayés, valeur du stock et ruptures ;
+  - 6 derniers mois et meilleures ventes de chaque boutique.
+- **Mise à jour des commerces existants** : à leur première connexion, une « Boutique principale » est créée automatiquement. Elle reçoit tout l'historique et le stock actuel.
+
+## Équipe, rôles et permissions (RBAC)
+
+- **16 permissions** (`PERMISSIONS`, dans `src/catalog.js`), en 6 groupes :
+  - caisse : encaisser, remises et changement de prix, crédit et mise de côté, journal ;
+  - produits et stock ;
+  - clients ;
+  - ventes : voir, modifier, paiements et relances ;
+  - pilotage : chiffres et rapports, alertes ;
+  - administration : réglages, boutiques, équipe, abonnement.
+- **4 rôles par défaut**, modifiables :
+  - **Gérant** : tout le quotidien, sans l'administration ;
+  - **Caissier** : caisse, journal et clients ;
+  - **Magasinier** : produits, stock et alertes ;
+  - **Comptable** : ventes, paiements, chiffres et journal.
+
+  Des **rôles personnalisés** se créent en cochant les permissions voulues. Le **propriétaire** a toujours toutes les permissions et ne peut pas être modifié.
+- **Accès par boutique** : chaque membre a un rôle et un accès à toutes les boutiques ou seulement à certaines. Un membre limité à une boutique ne voit et ne vend que dans celle-ci.
+- **Contrôle côté serveur** (`guard`, dans `src/store.js`, et `resolveAccess`, dans `src/access.js`) : chaque route vérifie sa permission, quelle que soit l'interface. Sans le droit de remise, impossible d'appliquer une remise ou de vendre en dessous du prix du produit. Un changement de rôle s'applique **immédiatement**, sans reconnexion.
+- **Interface** : menus, rubriques et boutons s'affichent selon les permissions. Un membre sans accès aux chiffres arrive directement sur la caisse.
+- **Mise à jour** : les employés existants reçoivent le rôle « Gérant », qui correspond exactement à leurs droits d'avant.
+
 ## Référencement naturel (SEO)
 
 Les pages publiques sont **rendues côté serveur** (`src/seo.js`) : Google lit leur contenu sans exécuter de JavaScript.

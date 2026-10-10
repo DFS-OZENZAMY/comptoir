@@ -9,6 +9,7 @@ import { init, bump, recordRequest, logError, setMeta } from './db.js';
 import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './catalog.js';
 import { signup, login, logout, getContext, me, changePassword, touchStore } from './auth.js';
 import { storeRoutes, getSettings, imageUrl, runDailyDigests } from './store.js';
+import { resolveAccess } from './access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './console.js';
 import { renderLanding, renderMetier, renderHub, renderVitrine, sitemap, robots, html } from './seo.js';
 
@@ -78,7 +79,10 @@ async function handleApi(request, env, info) {
     }
 
     const ctx = await getContext(db, env, request);
-    if (a === 'auth' && b === 'me' && m === 'GET') return json(ctx ? { authenticated: true, ...(await me(db, ctx)) } : { authenticated: false });
+    if (a === 'auth' && b === 'me' && m === 'GET') {
+      if (ctx?.store) await resolveAccess(db, ctx, request);
+      return json(ctx ? { authenticated: true, ...(await me(db, ctx)) } : { authenticated: false });
+    }
     if (!ctx) throw new HttpError(401, 'Session expirée : reconnectez-vous.');
     info.user_id = ctx.user.id; info.store_id = ctx.store?.id;
     if (a === 'auth' && b === 'password' && m === 'POST') return json(await changePassword(db, ctx, await readBody(request)));

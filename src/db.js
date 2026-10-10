@@ -56,6 +56,20 @@ const SCHEMA = [
     id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, document_id INTEGER NOT NULL, amount REAL NOT NULL,
     method TEXT DEFAULT '', date TEXT, note TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
 
+  // Boutiques (points de vente), stock par boutique et rôles de l'équipe
+  `CREATE TABLE IF NOT EXISTS locations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL, address TEXT DEFAULT '', phone TEXT DEFAULT '',
+    active INTEGER DEFAULT 1, position INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS location_stock (
+    store_id INTEGER NOT NULL, location_id INTEGER NOT NULL, product_id INTEGER NOT NULL, qty REAL DEFAULT 0,
+    PRIMARY KEY (location_id, product_id))`,
+  `CREATE TABLE IF NOT EXISTS roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT DEFAULT '',
+    permissions TEXT DEFAULT '[]', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE INDEX IF NOT EXISTS idx_locations_store ON locations(store_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_location_stock_store ON location_stock(store_id, product_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_roles_store ON roles(store_id)`,
+
   // Monitoring de la plateforme
   `CREATE TABLE IF NOT EXISTS api_stats (
     hour TEXT NOT NULL, route TEXT NOT NULL, requests INTEGER DEFAULT 0, client_errors INTEGER DEFAULT 0, errors INTEGER DEFAULT 0,
@@ -81,7 +95,15 @@ const SCHEMA = [
 ];
 
 // Évolutions futures du schéma : [version, [requêtes]]. Chaque version ne s'applique qu'une fois.
-const MIGRATIONS = [];
+const MIGRATIONS = [
+  [2, [
+    'ALTER TABLE memberships ADD COLUMN role_id INTEGER',
+    "ALTER TABLE memberships ADD COLUMN locations TEXT DEFAULT ''",
+    'ALTER TABLE documents ADD COLUMN location_id INTEGER',
+    'ALTER TABLE stock_movements ADD COLUMN location_id INTEGER',
+    'CREATE INDEX IF NOT EXISTS idx_documents_location ON documents(store_id, location_id, date)',
+  ]],
+];
 
 let ready = false;
 export async function init(db) {

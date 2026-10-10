@@ -8,6 +8,13 @@
 
   const state = { settings: {}, products: [], categories: [], customers: [], me: null, platform: null };
   const isOwner = () => state.me?.role === 'owner';
+  // Permissions du membre connecté (contrôlées aussi côté serveur à chaque action).
+  const can = (p) => !!state.me?.permissions?.includes(p);
+  const canAny = (list) => list.split(' ').some(can);
+  // Boutique affichée : mémorisée par commerce sur cet appareil.
+  const scopeKey = () => `comptoir.boutique.${state.me?.store?.id || ''}`;
+  const savedScope = () => { try { return localStorage.getItem(scopeKey()) || ''; } catch { return ''; } };
+  const locName = (id) => (state.me?.locations || []).find((l) => l.id === Number(id))?.name || '';
   const cur = () => state.settings.currency || '€';
   const nf = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const money = (n) => nf.format(Number(n) || 0) + ' ' + cur();
@@ -40,24 +47,26 @@
   const CACHE_TTL = 30000;
   const cache = new Map(), inflight = new Map();
   async function api(path, { method = 'GET', body, fresh = false } = {}) {
+    const key = `${state.scope ?? ''}|${path}`;
     if (method === 'GET' && !fresh) {
-      const c = cache.get(path);
+      const c = cache.get(key);
       if (c && Date.now() - c.t < CACHE_TTL) return c.data;
-      if (inflight.has(path)) return inflight.get(path);
+      if (inflight.has(key)) return inflight.get(key);
     }
     const run = (async () => {
+      const headers = { 'x-location': String(state.scope ?? savedScope()) };
+      if (body !== undefined) headers['content-type'] = 'application/json';
       const res = await fetch('/api' + path, {
-        method, credentials: 'same-origin',
-        headers: body !== undefined ? { 'content-type': 'application/json' } : {},
+        method, credentials: 'same-origin', headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
       const data = await res.json().catch(() => ({}));
       if (res.status === 401 && path.startsWith('/store')) { cache.clear(); showLogin(); throw new Error(data.error || 'Session expirée.'); }
       if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
-      if (method === 'GET') cache.set(path, { t: Date.now(), data }); else cache.clear();
+      if (method === 'GET') cache.set(key, { t: Date.now(), data }); else cache.clear();
       return data;
     })();
-    if (method === 'GET') { inflight.set(path, run); run.finally(() => inflight.delete(path)).catch(() => {}); }
+    if (method === 'GET') { inflight.set(key, run); run.finally(() => inflight.delete(key)).catch(() => {}); }
     return run;
   }
   // Préchargement : les données d'une rubrique sont demandées dès que la souris la survole.
@@ -65,10 +74,11 @@
     'tableau-de-bord': ['/store/dashboard', '/store/alerts'], alertes: ['/store/alerts', '/store/alerts/email-status'],
     ventes: ['/store/documents?type=commande'], commandes: ['/store/documents?type=commande'], devis: ['/store/documents?type=devis'],
     factures: ['/store/documents?type=facture'], stock: ['/store/stock'], parametres: ['/store/alerts/email-status'],
-    reglages: ['/store/alerts/email-status'], equipe: ['/store/team'], abonnement: ['/store/subscription'],
+    reglages: ['/store/alerts/email-status'], equipe: ['/store/team', '/store/roles'], abonnement: ['/store/subscription'],
+    rapports: ['/store/locations/report?period=30'], boutiques: ['/store/locations'],
   };
   function prefetch(key) {
-    for (const p of PREFETCH[key] || []) { const c = cache.get(p); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(p)) api(p).catch(() => {}); }
+    for (const p of PREFETCH[key] || []) { const k = `${state.scope ?? ''}|${p}`; const c = cache.get(k); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(k)) api(p).catch(() => {}); }
   }
   const onIntent = (e) => {
     const a = e.target.closest && e.target.closest('a[href^="#/"]'); if (!a) return;
@@ -161,6 +171,8 @@
     try {
       state.me = await api('/auth/me', { fresh: true });
       if (!state.me.authenticated) return showLogin();
+      state.scope = state.me.scope;
+
       if (!state.me.store) { location.href = state.me.platform_admin ? '/console/' : '/'; return; }
       await loadShared();
     } catch (e) { fail(e); }
@@ -177,15 +189,41 @@
     $('#storeLinkM').href = `/s/${st.slug}`;
     $('#storeNameM').textContent = state.settings.shop_name || st.name;
     $('#consoleLink').hidden = !me.platform_admin;
-    $$('[data-owner]').forEach((el) => { el.hidden = !isOwner(); });
+    $$('[data-perm]').forEach((el) => { el.hidden = !can(el.dataset.perm); });
+    $$('[data-perm-any]').forEach((el) => { el.hidden = !canAny(el.dataset.permAny); });
+    renderLocSwitch();
     const days = st.trial_ends_at ? Math.round((new Date(st.trial_ends_at + 'T00:00:00Z') - new Date(today() + 'T00:00:00Z')) / 86400000) : -1;
     $('#planBadge').textContent = st.plan === 'essai' ? (days > 0 ? `Essai : ${days} j restant${days > 1 ? 's' : ''}` : days === 0 ? "Dernier jour d'essai" : 'Essai terminé') : st.plan_name;
     $('#planBadge').classList.toggle('warn', st.plan === 'essai' && days <= 3);
     const banner = $('#accessBanner');
     banner.hidden = me.access.writable;
-    banner.innerHTML = me.access.writable ? '' : `${esc(me.access.reason)} ${isOwner() ? '<a href="#/abonnement">Voir les formules</a>' : ''}`;
+    banner.innerHTML = me.access.writable ? '' : `${esc(me.access.reason)} ${can('billing.manage') ? '<a href="#/abonnement">Voir les formules</a>' : ''}`;
     $('#userName').textContent = me.user.name;
   }
+  function renderLocSwitch() {
+    const locs = state.me.locations || [];
+    const multi = locs.length > 1;
+    const opts = (multi && state.me.all_locations ? '<option value="all">Toutes les boutiques</option>' : '') + locs.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+    for (const [wrap, sel] of [['#locWrap', '#locSwitch'], ['#locWrapM', '#locSwitchM']]) {
+      $(wrap).hidden = !multi;
+      $(sel).innerHTML = opts; $(sel).value = String(state.scope);
+    }
+    $('#locNameM').textContent = multi ? (state.scope === 'all' ? 'Toutes les boutiques' : locName(state.scope)) : '';
+  }
+  async function switchLocation(value) {
+    state.scope = value === 'all' ? 'all' : Number(value);
+    try { localStorage.setItem(scopeKey(), String(state.scope)); } catch { /* navigation privée */ }
+    cache.clear();
+    try {
+      state.me = await api('/auth/me', { fresh: true });
+      state.scope = state.me.scope;
+      await refresh('products');
+      renderShell(); route();
+      toast(state.scope === 'all' ? 'Toutes les boutiques' : `Boutique : ${locName(state.scope)}`);
+    } catch (e) { fail(e); }
+  }
+  $('#locSwitch').addEventListener('change', (e) => switchLocation(e.target.value));
+  $('#locSwitchM').addEventListener('change', (e) => { closeMore(); switchLocation(e.target.value); });
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = e.submitter; btn.disabled = true;
@@ -251,27 +289,35 @@
     parametres: ['Réglages', viewSettings],
     equipe: ['Réglages', viewTeam],
     abonnement: ['Réglages', viewSubscription],
+    boutiques: ['Réglages', viewLocations],
+    rapports: ['Rapports', viewReports],
   };
+  // Permission nécessaire pour afficher chaque rubrique.
+  const VIEW_PERM = {
+    'tableau-de-bord': 'reports.view', caisse: 'pos.sell', alertes: 'alerts.view', commandes: 'documents.view', devis: 'documents.view',
+    factures: 'documents.view', stock: 'stock.manage', parametres: 'settings.manage', equipe: 'team.manage', abonnement: 'billing.manage',
+    boutiques: 'locations.manage', rapports: 'reports.view',
+  };
+  const allowedView = (k) => !!VIEWS[k] && (!VIEW_PERM[k] || can(VIEW_PERM[k]));
   // Les écrans proches sont regroupés sous une seule entrée de menu, avec des onglets.
   const GROUPS = {
     ventes: [['commandes', 'Commandes'], ['devis', 'Devis'], ['factures', 'Factures']],
     produits: [['produits', 'Catalogue'], ['stock', 'Stock']],
-    reglages: [['parametres', 'Mon commerce'], ['equipe', 'Équipe'], ['abonnement', 'Abonnement']],
+    reglages: [['parametres', 'Mon commerce'], ['boutiques', 'Boutiques'], ['equipe', 'Équipe et rôles'], ['abonnement', 'Abonnement']],
   };
   const groupOf = (key) => Object.keys(GROUPS).find((g) => GROUPS[g].some(([k]) => k === key)) || key;
   const OWNER_VIEWS = ['parametres', 'equipe', 'abonnement'];
   function route() {
     let key = (location.hash.replace(/^#\//, '') || 'tableau-de-bord').split('?')[0];
     if (!state.me) return;
-    if (GROUPS[key]) key = GROUPS[key][0][0];
-    const allowed = VIEWS[key] && (isOwner() || !OWNER_VIEWS.includes(key));
-    if (!allowed) key = 'tableau-de-bord';
+    if (GROUPS[key]) key = (GROUPS[key].find(([k]) => allowedView(k)) || GROUPS[key][0])[0];
+    if (!allowedView(key)) key = ['tableau-de-bord', 'caisse', 'produits'].find(allowedView);
     const [title, fn] = VIEWS[key];
     const group = groupOf(key);
     $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === group));
     $('#viewTitle').textContent = title;
     $('#viewActions').innerHTML = '';
-    $('#subnav').innerHTML = GROUPS[group] ? GROUPS[group].map(([k, l]) => `<a href="#/${k}" class="${k === key ? 'active' : ''}">${l}</a>`).join('') : '';
+    $('#subnav').innerHTML = GROUPS[group] ? GROUPS[group].filter(([k]) => allowedView(k)).map(([k, l]) => `<a href="#/${k}" class="${k === key ? 'active' : ''}">${l}</a>`).join('') : '';
     $('#subnav').hidden = !GROUPS[group];
     closeMore();
     document.title = `${title} : ${state.settings.shop_name || ''} | Comptoir`;
@@ -304,7 +350,7 @@
       { done: state.products.some((p) => !/^EX-\d{3}$/.test(p.ref || '')), label: 'Ajouter vos propres produits', href: '#/produits' },
       { done: d.recent.some((r) => r.type === 'ticket') || d.today_tickets > 0, label: 'Faire une première vente en caisse', href: '#/caisse' },
       { done: s.legal_info !== '', label: 'Compléter les mentions légales des factures', href: '#/parametres', owner: true },
-    ].filter((x) => !x.owner || isOwner());
+    ].filter((x) => !x.owner || can('settings.manage'));
     const todo = steps.filter((x) => !x.done);
 
     // Ce qui demande une action aujourd'hui, en langage simple
@@ -331,10 +377,9 @@
         </div>
       </section>
       <nav class="quick-actions" aria-label="Actions rapides">
-        <button type="button" data-act="new-product">Ajouter un produit</button>
-        <button type="button" data-stock="entrée">Réceptionner du stock</button>
-        <button type="button" data-new="devis">Faire un devis</button>
-        <button type="button" data-new="facture">Faire une facture</button>
+        ${can('products.edit') ? '<button type="button" data-act="new-product">Ajouter un produit</button>' : ''}
+        ${can('stock.manage') ? '<button type="button" data-stock="entrée">Réceptionner du stock</button>' : ''}
+        ${can('documents.edit') ? '<button type="button" data-new="devis">Faire un devis</button><button type="button" data-new="facture">Faire une facture</button>' : ''}
         <button type="button" id="shareVitrine">Partager ma vitrine</button>
       </nav>
       ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length}</span></div>
@@ -385,8 +430,9 @@
   function posAdd(p, qty = 1) {
     const line = pos.lines.find((l) => l.product_id === p.id && !l.edited);
     if (line) line.qty = Number(line.qty) + qty;
-    else pos.lines.push({ product_id: p.id, label: p.name, ref: p.ref, unit: p.unit, qty, tva_rate: p.tva_rate, ht: p.price_ht, ttc: ttcOf(p.price_ht, p.tva_rate), stock: p.stock });
-    if (p.stock - qty < 0 && !pos.warned?.[p.id]) { pos.warned = { ...(pos.warned || {}), [p.id]: 1 }; toast(`Stock insuffisant pour ${p.name} (${qtyFmt(p.stock)} en stock)`, true); }
+    const here = p.stock_here ?? p.stock;
+    if (!line) pos.lines.push({ product_id: p.id, label: p.name, ref: p.ref, unit: p.unit, qty, tva_rate: p.tva_rate, ht: p.price_ht, ttc: ttcOf(p.price_ht, p.tva_rate), stock: here });
+    if (p.track_stock && here - qty < 0 && !pos.warned?.[p.id]) { pos.warned = { ...(pos.warned || {}), [p.id]: 1 }; toast(`Stock insuffisant pour ${p.name} (${qtyFmt(here)} en stock ici)`, true); }
     renderPosTicket();
   }
 
@@ -413,7 +459,10 @@
     setActions(`<div class="chips"><button class="chip" data-postab="vente" aria-pressed="${pos.tab === 'vente'}">Vente</button><button class="chip" data-postab="journal" aria-pressed="${pos.tab === 'journal'}">Journal de caisse</button></div>`);
     $$('[data-postab]').forEach((b) => b.addEventListener('click', () => { pos.tab = b.dataset.postab; route(); }));
     if (pos.tab === 'journal') return viewJournal();
+    const locs = state.me.locations || [];
+    if (state.scope === 'all' && locs.length > 1 && !locs.some((l) => l.id === pos.location)) pos.location = locs[0].id;
     $('#view').innerHTML = `
+      ${state.scope === 'all' && locs.length > 1 ? `<div class="pos-where"><span>Encaisser dans la boutique</span><select id="posWhere">${locs.map((l) => `<option value="${l.id}" ${l.id === pos.location ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select><span class="muted">Le stock affiché est le total de toutes les boutiques.</span></div>` : ''}
       <div class="pos">
         <section class="pos-catalog">
           <div class="pos-search">
@@ -455,6 +504,10 @@
     $('#posPay').addEventListener('click', payModal);
     $('#posMbarPay').addEventListener('click', payModal);
     $('#posMbarSee').addEventListener('click', () => $('.pos-ticket').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    $('#posWhere')?.addEventListener('change', (e) => { pos.location = Number(e.target.value); });
+    $('#posDiscount').hidden = !can('pos.discount');
+    $('#posReserve').hidden = !can('pos.credit');
+    $('#posCredit').hidden = !can('pos.credit');
     $('#posDiscount').addEventListener('click', discountModal);
     $('#posReserve').addEventListener('click', reserveModal);
     $('#posCredit').addEventListener('click', creditModal);
@@ -479,11 +532,12 @@
   function renderPosGrid() {
     const list = posFiltered().slice(0, 120);
     $('#posGrid').innerHTML = list.map((p) => {
-      const cls = p.stock <= 0 ? 'stock-out' : p.stock <= p.stock_min ? 'stock-low' : 'stock-ok';
+      const here = p.stock_here ?? p.stock;
+      const cls = !p.track_stock ? 'muted' : here <= 0 ? 'stock-out' : here <= p.stock_min ? 'stock-low' : 'stock-ok';
       return `<button class="pos-tile" type="button" data-posadd="${p.id}">
         <span class="pos-tile-name">${esc(p.name)}</span>
         <span class="pos-tile-ref">${esc(p.ref)}</span>
-        <span class="pos-tile-foot"><strong>${money(ttcOf(p.price_ht, p.tva_rate))}</strong><span class="${cls}">${qtyFmt(p.stock)}</span></span>
+        <span class="pos-tile-foot"><strong>${money(ttcOf(p.price_ht, p.tva_rate))}</strong><span class="${cls}">${p.track_stock ? qtyFmt(here) : ''}</span></span>
       </button>`;
     }).join('') || `<p class="muted">Aucun produit. Utilisez « Article libre » pour vendre un article hors catalogue.</p>`;
     $$('[data-posadd]').forEach((b) => b.addEventListener('click', () => {
@@ -510,7 +564,7 @@
     $('#posLines').innerHTML = pos.lines.length ? pos.lines.map((l, i) => `
       <div class="pos-line">
         <div class="pos-line-main"><span class="pos-line-name">${esc(l.label)}</span>
-          <label class="pos-line-price">${qtyFmt(l.qty)} × <input type="number" step="0.01" min="0" value="${l.ttc.toFixed(2)}" data-posprice="${i}" aria-label="Prix unitaire TTC"> ${esc(cur())}</label></div>
+          <label class="pos-line-price">${qtyFmt(l.qty)} × <input type="number" step="0.01" min="0" value="${l.ttc.toFixed(2)}" data-posprice="${i}" aria-label="Prix unitaire TTC" ${can('pos.discount') ? '' : 'readonly'}> ${esc(cur())}</label></div>
         <div class="stepper"><button type="button" data-posqty="${i}" data-d="-1" aria-label="Diminuer">−</button><input type="number" step="any" min="0" value="${l.qty}" data-posqtyin="${i}" aria-label="Quantité"><button type="button" data-posqty="${i}" data-d="1" aria-label="Augmenter">+</button></div>
         <span class="pos-line-total">${money(l.qty * l.ttc)}</span>
         <button type="button" class="icon-btn" data-posrm="${i}" aria-label="Retirer ${esc(l.label)}">✕</button>
@@ -580,7 +634,8 @@
 
   function posBody(mode, payments = [], notes = '') {
     const t = posPayload();
-    return { mode, lines: t.lines, discount_pct: pos.discount, payments, notes, source_id: pos.source?.id || null, customer_id: pos.customer_id || null, client_name: pos.client_name, client_phone: pos.client_phone };
+    return { mode, lines: t.lines, discount_pct: pos.discount, payments, notes, source_id: pos.source?.id || null, customer_id: pos.customer_id || null, client_name: pos.client_name, client_phone: pos.client_phone,
+      location_id: state.scope === 'all' ? pos.location || null : undefined };
   }
 
   function payModal() {
@@ -802,10 +857,17 @@
 
   /* ================= Produits ================= */
   const pv = { q: '', cat: '' };
-  function stockCell(p) {
+  function stockCell(p, total = false) {
     if (p.track_stock === 0) return '<span class="muted">non suivi</span>';
-    const cls = p.stock <= 0 ? 'stock-out' : p.stock <= p.stock_min ? 'stock-low' : 'stock-ok';
-    return `<span class="${cls}">${qtyFmt(p.stock)}</span> <span class="muted">${esc(p.unit)}</span>`;
+    const q = total ? p.stock : p.stock_here ?? p.stock;
+    const cls = q <= 0 ? 'stock-out' : q <= p.stock_min ? 'stock-low' : 'stock-ok';
+    return `<span class="${cls}">${qtyFmt(q)}</span> <span class="muted">${esc(p.unit)}</span>`;
+  }
+  // Détail du stock par boutique (fiche produit), quand le commerce en a plusieurs.
+  function stockByLocHtml(p) {
+    const locs = state.me.locations || [];
+    if (!p.stock_by_location || locs.length < 2 || !p.track_stock) return '';
+    return `<div class="loc-stock">${locs.map((l) => `<span><em>${esc(l.name)}</em><strong class="${(p.stock_by_location[l.id] || 0) <= 0 ? 'stock-out' : ''}">${qtyFmt(p.stock_by_location[l.id] || 0)}</strong></span>`).join('')}<span class="loc-stock-total"><em>Total</em><strong>${qtyFmt(p.stock)}</strong></span></div>`;
   }
   const thumb = (p) => p.image ? `<img class="thumb" src="${esc(p.image)}" alt="">` : `<span class="thumb">${esc((p.ref || p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase())}</span>`;
 
@@ -879,7 +941,7 @@
             <label class="field"><span>Prix de vente (${esc(cur())})</span><input name="price_ttc" type="number" step="0.01" min="0" inputmode="decimal" value="${ttc}" required class="big-input"><small>Prix payé par le client, TVA comprise</small></label>
             ${isNew
               ? `<label class="field"><span>Quantité en stock</span><input name="stock" type="number" step="any" min="0" inputmode="decimal" value="${p.stock}" placeholder="0" class="big-input"></label>`
-              : `<div class="field"><span>En stock</span><div class="stock-now">${stockCell(p)} <button type="button" class="link" id="adjustStock">Modifier</button></div></div>`}
+              : `<div class="field"><span>En stock${(state.me.locations || []).length > 1 && state.scope !== 'all' ? ' ici' : ''}</span><div class="stock-now">${stockCell(p)} ${can('stock.manage') ? '<button type="button" class="link" id="adjustStock">Modifier</button>' : ''}</div>${stockByLocHtml(p)}</div>`}
             <label class="field full"><span>Catégorie</span><select name="category_id"><option value="">Sans catégorie</option>${state.categories.map((c) => `<option value="${c.id}" ${String(c.id) === String(p.category_id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
           </div>
         </div>
@@ -971,10 +1033,11 @@
 
   /* ================= Stock ================= */
   async function viewStock() {
-    setActions(`<button class="btn" data-stock="sortie">Sortie</button><button class="btn" data-stock="inventaire">Inventaire</button><button class="btn btn-primary" data-stock="entrée">Entrée de stock</button>`);
+    const multi = (state.me.locations || []).length > 1;
+    setActions(`${multi ? '<button class="btn" id="transferBtn">Transfert entre boutiques</button>' : ''}<button class="btn" data-stock="sortie">Sortie</button><button class="btn" data-stock="inventaire">Inventaire</button><button class="btn btn-primary" data-stock="entrée">Entrée de stock</button>`);
     const moves = await api('/store/stock');
     const alerts = state.products.filter((p) => p.stock <= p.stock_min);
-    const typeBadge = { 'entrée': 's-ok', sortie: 's-info', inventaire: 's-neutral', retour: 's-warn' };
+    const typeBadge = { 'entrée': 's-ok', sortie: 's-info', inventaire: 's-neutral', retour: 's-warn', transfert: 's-info' };
     $('#view').innerHTML = `
       <div class="stack">
         <section class="panel">
@@ -985,11 +1048,44 @@
         </section>
         <section class="panel">
           <div class="panel-head"><h2>Mouvements récents</h2></div>
-          ${moves.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Produit</th><th>Type</th><th class="num">Quantité</th><th>Motif</th></tr></thead><tbody>
-            ${moves.map((m) => `<tr><td class="muted">${dateTimeFmt(m.created_at)}</td><td><span class="cell-main">${esc(m.product_name || 'Produit supprimé')}</span><div class="cell-sub">${esc(m.product_ref || '')}</div></td><td><span class="badge ${typeBadge[m.type] || 's-neutral'}">${esc(m.type)}</span></td><td class="num ${m.qty < 0 ? 'stock-out' : 'stock-ok'}">${m.qty > 0 ? '+' : ''}${qtyFmt(m.qty)}</td><td>${esc(m.reason)}</td></tr>`).join('')}
+          ${moves.length ? `<div class="table-wrap"><table><thead><tr><th>Date</th><th>Produit</th>${multi ? '<th>Boutique</th>' : ''}<th>Type</th><th class="num">Quantité</th><th>Motif</th></tr></thead><tbody>
+            ${moves.map((m) => `<tr><td class="muted">${dateTimeFmt(m.created_at)}</td><td><span class="cell-main">${esc(m.product_name || 'Produit supprimé')}</span><div class="cell-sub">${esc(m.product_ref || '')}</div></td>${multi ? `<td>${esc(locName(m.location_id))}</td>` : ''}<td><span class="badge ${typeBadge[m.type] || 's-neutral'}">${esc(m.type)}</span></td><td class="num ${m.qty < 0 ? 'stock-out' : 'stock-ok'}">${m.qty > 0 ? '+' : ''}${qtyFmt(m.qty)}</td><td>${esc(m.reason)}</td></tr>`).join('')}
           </tbody></table></div>` : `<div class="empty-state"><strong>Aucun mouvement enregistré.</strong>Les entrées, sorties et ventes apparaîtront ici.</div>`}
         </section>
       </div>`;
+    $('#transferBtn')?.addEventListener('click', () => transferModal());
+  }
+
+  // Transfert de stock d'une boutique à une autre
+  function transferModal(productId = '') {
+    const locs = state.me.locations || [];
+    const from = state.scope !== 'all' ? state.scope : locs[0]?.id;
+    const to = locs.find((l) => l.id !== from)?.id;
+    const body = openModal('Transfert entre boutiques', `
+      <form id="trForm" class="fields" novalidate>
+        <label class="field full"><span>Produit</span><select name="product_id" required><option value="">Choisir un produit</option>${state.products.filter((p) => p.track_stock).map((p) => `<option value="${p.id}" ${String(p.id) === String(productId) ? 'selected' : ''}>${esc(p.name)}${p.ref ? ' (' + esc(p.ref) + ')' : ''}</option>`).join('')}</select></label>
+        <label class="field"><span>Depuis</span><select name="from">${locs.map((l) => `<option value="${l.id}" ${l.id === from ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>
+        <label class="field"><span>Vers</span><select name="to">${locs.map((l) => `<option value="${l.id}" ${l.id === to ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>
+        <label class="field"><span>Quantité</span><input name="qty" type="number" step="any" min="0" inputmode="decimal" required></label>
+        <label class="field"><span>Motif <span class="muted">(facultatif)</span></span><input name="reason" placeholder="Ex. : réassort du samedi"></label>
+        <p class="field full muted" id="trHint"></p>
+        <p class="form-error full" id="trErr"></p>
+      </form>
+      <div class="modal-foot"><div class="right"><button class="btn" id="trCancel">Annuler</button><button class="btn btn-primary" id="trSave">Transférer</button></div></div>`);
+    const form = $('#trForm', body);
+    const hint = () => {
+      const p = state.products.find((x) => x.id === Number(form.product_id.value));
+      $('#trHint').textContent = p && p.stock_by_location ? `Disponible à ${locName(form.from.value)} : ${qtyFmt(p.stock_by_location[form.from.value] || 0)} ${p.unit}` : '';
+    };
+    form.addEventListener('change', hint); hint();
+    $('#trCancel', body).addEventListener('click', closeModal);
+    $('#trSave', body).addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        await api('/store/stock/transfer', { method: 'POST', body: Object.fromEntries(new FormData(form)) });
+        await refresh('products'); closeModal(); toast('Stock transféré'); route();
+      } catch (ex) { $('#trErr').textContent = ex.message; e.currentTarget.disabled = false; }
+    });
   }
 
   function stockModal(type = 'entrée', productId = '') {
@@ -997,6 +1093,7 @@
     const body = openModal(titles[type], `
       <form id="sform" class="fields" novalidate>
         <label class="field full"><span>Produit</span><select name="product_id" required><option value="">Choisir un produit</option>${state.products.map((p) => `<option value="${p.id}" ${String(p.id) === String(productId) ? 'selected' : ''}>${esc(p.name)}${p.ref ? ' (' + esc(p.ref) + ')' : ''}</option>`).join('')}</select></label>
+        ${state.scope === 'all' && (state.me.locations || []).length > 1 ? `<label class="field"><span>Boutique</span><select name="location_id">${state.me.locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></label>` : ''}
         <label class="field"><span>Type</span><select name="type">${Object.keys(titles).map((t) => `<option value="${t}" ${t === type ? 'selected' : ''}>${cap(t)}</option>`).join('')}</select></label>
         <label class="field"><span id="qtyLabel">Quantité</span><input name="qty" type="number" step="any" min="0" required></label>
         <p class="full muted" id="stockNow"></p>
@@ -1358,6 +1455,7 @@
     const body = openModal(isNew ? conf.new : `Modifier ${d.number}`, `
       <form id="dform" novalidate>
         <div class="fields">
+          ${isNew ? `${state.scope === 'all' && (state.me.locations || []).length > 1 ? `<label class="field"><span>Boutique</span><select name="location_id">${state.me.locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></label>` : ''}` : ''}
           <label class="field full"><span>Client</span>
             <select name="customer_id"><option value="">Client de passage (saisir ci-dessous)</option>${state.customers.map((c) => `<option value="${c.id}" ${String(c.id) === String(d.customer_id) ? 'selected' : ''}>${esc(c.name)}${c.company ? ' — ' + esc(c.company) : ''}</option>`).join('')}</select>
             <small><button type="button" class="link" id="quickCustomer">Créer un nouveau client</button></small>
@@ -1589,45 +1687,213 @@
   }
 
   /* ================= Équipe ================= */
-  async function viewTeam() {
-    const team = await api('/store/team');
-    const lim = state.me.limits.users;
-    setActions(`<button class="btn btn-primary" id="addMember">Ajouter un employé</button>`);
+  /* ================= Rapports : comparer les boutiques ================= */
+  const rep = { period: '30' };
+  async function viewReports() {
+    const PERIODS = [['7', '7 jours'], ['30', '30 jours'], ['month', 'Ce mois-ci'], ['prev_month', 'Mois dernier'], ['year', 'Cette année']];
+    setActions(`<div class="chips">${PERIODS.map(([k, l]) => `<button class="chip" data-period="${k}" aria-pressed="${rep.period === k}">${l}</button>`).join('')}</div>`);
+    $$('[data-period]').forEach((b) => b.addEventListener('click', () => { rep.period = b.dataset.period; route(); }));
+    const r = await api(`/store/locations/report?period=${rep.period}`);
+    const L = r.locations;
+    const best = L[0];
+    const pct = (v) => (v === null ? '<span class="muted">n/d</span>' : `<span class="${v >= 0 ? 'stock-ok' : 'stock-out'}">${v >= 0 ? '+' : ''}${String(v).replace('.', ',')} %</span>`);
+    const maxRev = Math.max(...L.map((x) => x.revenue), 1);
+    const monthLabels = (L[0]?.months || []).map((m) => new Date(m.month + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'short' }));
+    const maxMonth = Math.max(1, ...L.flatMap((x) => x.months.map((m) => m.value)));
+    const PALETTE = ['#17181C', '#E4572E', '#2D5F8A', '#2E7D4F', '#B7791F', '#7A4FB0'];
     $('#view').innerHTML = `
-      <p class="muted" style="margin-top:0">${team.length} utilisateur${team.length > 1 ? 's' : ''}${lim ? ` sur ${lim} inclus dans votre formule` : ''}. Les employés ont accès à la caisse, aux produits, au stock, aux clients et aux documents, mais pas aux paramètres, à l'équipe ni à l'abonnement.</p>
-      <div class="table-wrap"><table><thead><tr><th>Nom</th><th>E-mail</th><th>Rôle</th><th>Dernière connexion</th><th></th></tr></thead><tbody>
-        ${team.map((u) => `<tr><td class="cell-main">${esc(u.name)}</td><td>${esc(u.email)}</td><td>${u.role === 'owner' ? '<span class="badge s-info">propriétaire</span>' : '<span class="badge s-neutral">employé</span>'}</td>
-          <td class="muted">${u.last_login_at ? dateTimeFmt(u.last_login_at) : 'jamais'}</td>
-          <td class="num">${u.role === 'owner' ? '' : `<button class="btn btn-sm" data-reset="${u.id}">Nouveau mot de passe</button> <button class="btn btn-sm btn-danger" data-remove="${u.id}">Retirer</button>`}</td></tr>`).join('')}
-      </tbody></table></div>`;
+      ${L.length < 2 ? `<div class="notice">Vous avez une seule boutique. ${can('locations.manage') ? '<a href="#/boutiques">Ajoutez vos autres points de vente</a> pour comparer leurs chiffres.' : ''}</div>` : ''}
+      ${best && best.revenue > 0 && L.length > 1 ? `<section class="report-hero"><span class="muted">${esc(r.period.label)}</span><h2><strong>${esc(best.name)}</strong> réalise ${String(best.share).replace('.', ',')} % du chiffre d'affaires</h2><p>${money(best.revenue)} sur ${money(r.total)} au total, toutes boutiques confondues.</p></section>` : ''}
+      <section class="panel">
+        <div class="panel-head"><h2>Chiffre d'affaires par boutique</h2><span class="muted">${esc(r.period.label)}, TTC</span></div>
+        <div class="rank">${L.map((x, i) => `
+          <div class="rank-row">
+            <span class="rank-n">${i + 1}</span>
+            <div class="rank-main"><strong>${esc(x.name)}</strong>${x.active ? '' : ' <span class="badge s-neutral">fermée</span>'}<div class="rank-bar"><span style="width:${Math.max(x.revenue ? 2 : 0, (x.revenue / maxRev) * 100)}%;background:${PALETTE[i % PALETTE.length]}"></span></div></div>
+            <div class="rank-val"><strong>${money(x.revenue)}</strong><span>${String(x.share).replace('.', ',')} % · ${pct(x.evolution)}</span></div>
+          </div>`).join('')}</div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Comparaison détaillée</h2></div>
+        <div class="table-wrap"><table><thead><tr><th>Boutique</th><th class="num">Chiffre d'affaires</th><th class="num">Évolution</th><th class="num">Ventes</th><th class="num">Panier moyen</th><th class="num">Marge brute</th><th class="num">Impayés</th><th class="num">Valeur du stock</th></tr></thead><tbody>
+          ${L.map((x) => `<tr><td class="cell-main">${esc(x.name)}</td><td class="num"><strong>${money(x.revenue)}</strong></td><td class="num">${pct(x.evolution)}</td><td class="num">${x.sales}</td><td class="num">${money(x.average)}</td>
+            <td class="num">${x.margin_coverage ? `${money(x.margin)}<div class="cell-sub">${x.margin_rate !== null ? String(x.margin_rate).replace('.', ',') + ' %' : ''}${x.margin_coverage < 100 ? `, sur ${x.margin_coverage} % des ventes` : ''}</div>` : '<span class="muted" title="Renseignez le prix d’achat des produits">prix d’achat manquants</span>'}</td>
+            <td class="num ${x.unpaid ? 'stock-low' : ''}">${money(x.unpaid)}</td><td class="num">${money(x.stock_value)}${x.out_of_stock ? `<div class="cell-sub stock-out">${x.out_of_stock} en rupture</div>` : ''}</td></tr>`).join('')}
+        </tbody></table></div>
+        <p class="muted report-note">La marge brute compare le prix de vente HT au prix d'achat des produits. Renseignez les prix d'achat dans les fiches produits pour qu'elle couvre toutes vos ventes.</p>
+      </section>
+      <div class="dash-grid">
+        <section class="panel">
+          <div class="panel-head"><h2>6 derniers mois</h2><span class="muted">TTC</span></div>
+          <div class="month-bars">${monthLabels.map((lab, mi) => `<div class="mb-col"><div class="mb-stack">${L.map((x, i) => `<span title="${esc(x.name)} : ${money(x.months[mi].value)}" style="height:${Math.round((x.months[mi].value / maxMonth) * 150)}px;background:${PALETTE[i % PALETTE.length]}"></span>`).join('')}</div><em>${lab}</em></div>`).join('')}</div>
+          <div class="legend">${L.map((x, i) => `<span><i style="background:${PALETTE[i % PALETTE.length]}"></i>${esc(x.name)}</span>`).join('')}</div>
+        </section>
+        <section class="panel">
+          <div class="panel-head"><h2>Meilleures ventes par boutique</h2></div>
+          <div class="tops">${L.map((x) => `<div><h3>${esc(x.name)}</h3>${x.top.length ? `<ol>${x.top.map((t) => `<li><span>${esc(t.label)}</span><strong>${money(t.amount)}</strong></li>`).join('')}</ol>` : '<p class="muted">Aucune vente sur la période.</p>'}</div>`).join('')}</div>
+        </section>
+      </div>`;
+  }
+
+  /* ================= Boutiques (points de vente) ================= */
+  async function viewLocations() {
+    const d = await api('/store/locations');
+    const full = d.limit !== null && d.active_count >= d.limit;
+    setActions(`<button class="btn btn-primary" id="addLoc" ${full ? 'disabled' : ''}>Ajouter une boutique</button>`);
+    $('#view').innerHTML = `
+      <p class="muted" style="margin-top:0">${d.active_count} boutique${d.active_count > 1 ? 's' : ''} ouverte${d.active_count > 1 ? 's' : ''}${d.limit !== null ? ` sur ${d.limit} incluse${d.limit > 1 ? 's' : ''} dans votre formule` : ''}. Chaque boutique a son propre stock, ses ventes et son journal de caisse ; le stock se déplace avec les transferts.${full && can('billing.manage') ? ' <a href="#/abonnement">Passer à la formule supérieure</a> pour en ouvrir d’autres.' : ''}</p>
+      <div class="loc-cards">${d.locations.map((l) => `
+        <article class="loc-card ${l.active ? '' : 'closed'}">
+          <div><h3>${esc(l.name)}</h3>${l.active ? '' : '<span class="badge s-neutral">fermée</span>'}</div>
+          <p>${esc(l.address) || '<span class="muted">Adresse non renseignée</span>'}${l.phone ? `<br>${esc(l.phone)}` : ''}</p>
+          <p class="muted">${l.restricted_members ? `${l.restricted_members} membre${l.restricted_members > 1 ? 's' : ''} rattaché${l.restricted_members > 1 ? 's' : ''} à cette boutique` : 'Accessible à toute l’équipe autorisée'}</p>
+          <div class="loc-actions"><button class="btn btn-sm" data-editloc="${l.id}">Modifier</button>${l.active ? '' : `<button class="btn btn-sm" data-reopen="${l.id}">Rouvrir</button>`}</div>
+        </article>`).join('')}</div>`;
+    const form = (l = {}) => {
+      const body = openModal(l.id ? `Modifier ${l.name}` : 'Nouvelle boutique', `
+        <form id="locForm" class="fields" novalidate>
+          <label class="field full"><span>Nom de la boutique</span><input name="name" value="${esc(l.name || '')}" required placeholder="Ex. : Centre-ville"></label>
+          <label class="field full"><span>Adresse</span><input name="address" value="${esc(l.address || '')}"></label>
+          <label class="field"><span>Téléphone</span><input name="phone" type="tel" value="${esc(l.phone || '')}"></label>
+          ${l.id && l.active ? '<label class="check full"><input type="checkbox" name="close"> Fermer cette boutique <span class="muted">(son historique est conservé ; le stock doit être transféré avant)</span></label>' : ''}
+          <p class="form-error full" id="locErr"></p>
+        </form>
+        <div class="modal-foot"><div class="right"><button class="btn" id="locCancel">Annuler</button><button class="btn btn-primary" id="locSave">${l.id ? 'Enregistrer' : 'Créer la boutique'}</button></div></div>`);
+      $('#locCancel', body).addEventListener('click', closeModal);
+      $('#locSave', body).addEventListener('click', async (e) => {
+        const f = $('#locForm'); const data = Object.fromEntries(new FormData(f));
+        const payload = { name: data.name, address: data.address, phone: data.phone, active: l.id ? !f.close?.checked && l.active !== 0 : true };
+        e.currentTarget.disabled = true;
+        try {
+          await api(l.id ? `/store/locations/${l.id}` : '/store/locations', { method: l.id ? 'PUT' : 'POST', body: payload });
+          state.me = await api('/auth/me', { fresh: true }); state.scope = state.me.scope; renderShell();
+          closeModal(); toast(l.id ? 'Boutique mise à jour' : 'Boutique créée'); route();
+        } catch (ex) { $('#locErr').textContent = ex.message; e.currentTarget.disabled = false; }
+      });
+    };
+    $('#addLoc').addEventListener('click', () => form());
+    $$('[data-editloc]').forEach((b) => b.addEventListener('click', () => form(d.locations.find((l) => l.id === Number(b.dataset.editloc)))));
+    $$('[data-reopen]').forEach((b) => b.addEventListener('click', async () => {
+      const l = d.locations.find((x) => x.id === Number(b.dataset.reopen));
+      try { await api(`/store/locations/${l.id}`, { method: 'PUT', body: { ...l, active: true } }); state.me = await api('/auth/me', { fresh: true }); renderShell(); toast('Boutique rouverte'); route(); } catch (e) { fail(e); }
+    }));
+  }
+
+  /* ================= Équipe et rôles ================= */
+  async function viewTeam() {
+    const [team, rr] = await Promise.all([api('/store/team'), api('/store/roles')]);
+    const roles = rr.roles, PERMS = rr.permissions;
+    const lim = state.me.limits.users;
+    const locs = state.me.locations || [];
+    const allLocs = locs;
+    setActions(`<button class="btn" id="addRole">Créer un rôle</button><button class="btn btn-primary" id="addMember">Ajouter un membre</button>`);
+    const where = (u) => u.role === 'owner' || !u.locations.length ? (allLocs.length > 1 ? 'Toutes les boutiques' : '') : u.locations.map(locName).filter(Boolean).join(', ');
+    const groups = [...new Set(PERMS.map((p) => p.group))];
+    $('#view').innerHTML = `
+      <p class="muted" style="margin-top:0">${team.length} membre${team.length > 1 ? 's' : ''}${lim ? ` sur ${lim} inclus dans votre formule` : ''}. Chaque membre a un rôle (ce qu'il peut faire) et un accès à une, plusieurs ou toutes les boutiques.</p>
+      <section class="panel">
+        <div class="panel-head"><h2>Membres</h2></div>
+        <div class="table-wrap"><table><thead><tr><th>Nom</th><th>Rôle</th>${allLocs.length > 1 ? '<th>Boutiques</th>' : ''}<th>Dernière connexion</th><th></th></tr></thead><tbody>
+          ${team.map((u) => `<tr><td><span class="cell-main">${esc(u.name)}</span><div class="cell-sub">${esc(u.email)}${u.must_change_password ? ', mot de passe temporaire' : ''}</div></td>
+            <td>${u.role === 'owner' ? '<span class="badge s-info">Propriétaire</span>' : `<span class="badge s-neutral">${esc(u.role_name || 'Sans rôle')}</span>`}</td>
+            ${allLocs.length > 1 ? `<td>${esc(where(u))}</td>` : ''}
+            <td class="muted">${u.last_login_at ? dateTimeFmt(u.last_login_at) : 'jamais'}</td>
+            <td class="num nowrap">${u.role === 'owner' ? '' : `<button class="btn btn-sm" data-edit-member="${u.id}">Droits</button> <button class="btn btn-sm" data-reset="${u.id}">Mot de passe</button> <button class="btn btn-sm btn-danger" data-remove="${u.id}">Retirer</button>`}</td></tr>`).join('')}
+        </tbody></table></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head"><h2>Rôles</h2><span class="muted">Ce que chaque rôle permet de faire</span></div>
+        <div class="table-wrap"><table class="perm-matrix"><thead><tr><th>Permission</th><th class="center">Propriétaire</th>${roles.map((r) => `<th class="center"><button class="link" data-edit-role="${r.id}">${esc(r.name)}</button><div class="cell-sub">${r.members} membre${r.members > 1 ? 's' : ''}</div></th>`).join('')}</tr></thead><tbody>
+          ${groups.map((g) => `<tr class="perm-group"><td colspan="${roles.length + 2}">${esc(g)}</td></tr>${PERMS.filter((p) => p.group === g).map((p) => `<tr><td>${esc(p.label)}</td><td class="center"><span class="yes" aria-label="oui">✓</span></td>${roles.map((r) => `<td class="center">${r.permissions.includes(p.key) ? '<span class="yes" aria-label="oui">✓</span>' : '<span class="no" aria-label="non">·</span>'}</td>`).join('')}</tr>`).join('')}`).join('')}
+        </tbody></table></div>
+      </section>`;
+
     const showPassword = (email, pw) => openModal('Identifiants à transmettre', `
-      <p>Transmettez ces identifiants à votre employé. Il devra choisir son propre mot de passe à la première connexion.</p>
+      <p>Transmettez ces identifiants à votre collaborateur. Il devra choisir son propre mot de passe à la première connexion.</p>
       <div class="credentials"><div><span>Adresse</span><strong>${location.origin}/app/</strong></div><div><span>E-mail</span><strong>${esc(email)}</strong></div><div><span>Mot de passe temporaire</span><strong class="mono">${esc(pw)}</strong></div></div>
       <div class="modal-foot"><div class="right"><button class="btn btn-primary" id="credOk">C'est noté</button></div></div>`);
+    const accessFields = (u = {}) => `
+      <label class="field full"><span>Rôle</span><select name="role_id">${roles.map((r) => `<option value="${r.id}" ${r.id === u.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select><small id="roleDesc"></small></label>
+      ${allLocs.length > 1 ? `<fieldset class="field full loc-access"><legend>Boutiques</legend>
+        <label class="check"><input type="radio" name="scope" value="all" ${!u.locations?.length ? 'checked' : ''}> Toutes les boutiques</label>
+        <label class="check"><input type="radio" name="scope" value="some" ${u.locations?.length ? 'checked' : ''}> Seulement :</label>
+        <div class="loc-checks">${allLocs.map((l) => `<label class="check"><input type="checkbox" name="loc" value="${l.id}" ${u.locations?.includes(l.id) ? 'checked' : ''}> ${esc(l.name)}</label>`).join('')}</div>
+      </fieldset>` : ''}`;
+    const readAccess = (f) => {
+      const role_id = Number(f.role_id.value);
+      const some = f.scope && f.scope.value === 'some';
+      const locations = some ? $$('input[name="loc"]:checked', f).map((c) => Number(c.value)) : [];
+      if (some && !locations.length) throw new Error('Cochez au moins une boutique.');
+      return { role_id, locations };
+    };
+    const bindRoleDesc = (f) => { const upd = () => { const r = roles.find((x) => x.id === Number(f.role_id.value)); $('#roleDesc').textContent = r ? `${r.description} ${r.permissions.length} permission${r.permissions.length > 1 ? 's' : ''}.` : ''; }; f.role_id.addEventListener('change', upd); upd(); };
+
     $('#addMember').addEventListener('click', () => {
-      const body = openModal('Ajouter un employé', `
+      const body = openModal('Ajouter un membre', `
         <form id="tmForm" class="fields" novalidate>
           <label class="field"><span>Nom</span><input name="name" required></label>
           <label class="field"><span>E-mail</span><input name="email" type="email" required></label>
+          ${accessFields({ role_id: roles.find((r) => r.name === 'Caissier')?.id })}
           <p class="form-error full" id="tmErr"></p>
         </form>
         <div class="modal-foot"><div class="right"><button class="btn" id="tmCancel">Annuler</button><button class="btn btn-primary" id="tmSave">Créer l'accès</button></div></div>`);
+      const f = $('#tmForm', body); bindRoleDesc(f);
       $('#tmCancel', body).addEventListener('click', closeModal);
       $('#tmSave', body).addEventListener('click', async (e) => {
-        e.currentTarget.disabled = true;
         try {
-          const r = await api('/store/team', { method: 'POST', body: Object.fromEntries(new FormData($('#tmForm'))) });
+          const acc = readAccess(f);
+          e.currentTarget.disabled = true;
+          const r = await api('/store/team', { method: 'POST', body: { name: f.name.value, email: f.email.value, ...acc } });
           showPassword(r.email, r.temp_password); $('#credOk').addEventListener('click', () => { closeModal(); route(); });
         } catch (ex) { $('#tmErr').textContent = ex.message; e.currentTarget.disabled = false; }
       });
     });
+    $$('[data-edit-member]').forEach((b) => b.addEventListener('click', () => {
+      const u = team.find((x) => x.id === Number(b.dataset.editMember));
+      const body = openModal(`Droits de ${u.name}`, `
+        <form id="mbForm" class="fields" novalidate>${accessFields(u)}<p class="form-error full" id="mbErr"></p></form>
+        <p class="muted">Le changement s'applique immédiatement, sans que ${esc(u.name)} ait à se reconnecter.</p>
+        <div class="modal-foot"><div class="right"><button class="btn" id="mbCancel">Annuler</button><button class="btn btn-primary" id="mbSave">Enregistrer</button></div></div>`);
+      const f = $('#mbForm', body); bindRoleDesc(f);
+      $('#mbCancel', body).addEventListener('click', closeModal);
+      $('#mbSave', body).addEventListener('click', async (e) => {
+        try { const acc = readAccess(f); e.currentTarget.disabled = true; await api(`/store/team/${u.id}`, { method: 'PUT', body: acc }); closeModal(); toast('Droits mis à jour'); route(); }
+        catch (ex) { $('#mbErr').textContent = ex.message; e.currentTarget.disabled = false; }
+      });
+    }));
+    const roleForm = (r = { name: '', description: '', permissions: [] }) => {
+      const body = openModal(r.id ? `Rôle « ${r.name} »` : 'Nouveau rôle', `
+        <form id="roleForm" novalidate>
+          <div class="fields">
+            <label class="field"><span>Nom du rôle</span><input name="name" value="${esc(r.name)}" required placeholder="Ex. : Responsable de boutique"></label>
+            <label class="field"><span>Description</span><input name="description" value="${esc(r.description)}" placeholder="À quoi sert ce rôle"></label>
+          </div>
+          <div class="perm-groups">${groups.map((g) => `<fieldset><legend>${esc(g)}</legend>${PERMS.filter((p) => p.group === g).map((p) => `<label class="check"><input type="checkbox" name="perm" value="${p.key}" ${r.permissions.includes(p.key) ? 'checked' : ''}> ${esc(p.label)}</label>`).join('')}</fieldset>`).join('')}</div>
+          <p class="form-error" id="roleErr"></p>
+        </form>
+        <div class="modal-foot">${r.id ? `<button class="btn btn-danger" id="roleDel" ${r.members ? 'disabled title="Attribué à des membres"' : ''}>Supprimer</button>` : ''}<div class="right"><button class="btn" id="roleCancel">Annuler</button><button class="btn btn-primary" id="roleSave">${r.id ? 'Enregistrer' : 'Créer le rôle'}</button></div></div>`, true);
+      const f = $('#roleForm', body);
+      $('#roleCancel', body).addEventListener('click', closeModal);
+      $('#roleSave', body).addEventListener('click', async (e) => {
+        e.currentTarget.disabled = true;
+        const payload = { name: f.name.value, description: f.description.value, permissions: $$('input[name="perm"]:checked', f).map((c) => c.value) };
+        try { await api(r.id ? `/store/roles/${r.id}` : '/store/roles', { method: r.id ? 'PUT' : 'POST', body: payload }); closeModal(); toast(r.id ? 'Rôle mis à jour' : 'Rôle créé'); route(); }
+        catch (ex) { $('#roleErr').textContent = ex.message; e.currentTarget.disabled = false; }
+      });
+      $('#roleDel', body)?.addEventListener('click', async () => {
+        if (!confirmAction(`Supprimer le rôle « ${r.name} » ?`)) return;
+        try { await api(`/store/roles/${r.id}`, { method: 'DELETE' }); closeModal(); toast('Rôle supprimé'); route(); } catch (ex) { $('#roleErr').textContent = ex.message; }
+      });
+    };
+    $('#addRole').addEventListener('click', () => roleForm());
+    $$('[data-edit-role]').forEach((b) => b.addEventListener('click', () => roleForm(roles.find((r) => r.id === Number(b.dataset.editRole)))));
     $$('[data-reset]').forEach((b) => b.addEventListener('click', async () => {
-      if (!confirmAction('Générer un nouveau mot de passe temporaire pour cet employé ? Il sera déconnecté.')) return;
+      if (!confirmAction('Générer un nouveau mot de passe temporaire pour ce membre ? Il sera déconnecté.')) return;
       try { const r = await api(`/store/team/${b.dataset.reset}/reset`, { method: 'POST', body: {} }); const u = team.find((x) => x.id === Number(b.dataset.reset)); showPassword(u.email, r.temp_password); $('#credOk').addEventListener('click', closeModal); } catch (e) { fail(e); }
     }));
     $$('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
-      if (!confirmAction("Retirer cet employé ? Il n'aura plus accès à votre commerce.")) return;
-      try { await api(`/store/team/${b.dataset.remove}`, { method: 'DELETE' }); toast('Employé retiré'); route(); } catch (e) { fail(e); }
+      if (!confirmAction("Retirer ce membre ? Il n'aura plus accès à votre commerce.")) return;
+      try { await api(`/store/team/${b.dataset.remove}`, { method: 'DELETE' }); toast('Membre retiré'); route(); } catch (e) { fail(e); }
     }));
   }
 
