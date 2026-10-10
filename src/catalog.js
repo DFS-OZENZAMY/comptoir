@@ -140,7 +140,7 @@ export function defaultSettings({ name, phone = '', email = '', country = 'FR', 
     legal_info: '', bank_info: '', doc_footer: 'Merci pour votre confiance.',
     accent: t.accent, alert_email: email, alert_digest: '0', due_soon_days: '7',
     catalog_public: '1', show_prices: '1', show_stock: '1',
-    whatsapp: '', whatsapp_orders: '1',
+    whatsapp: '', whatsapp_orders: '1', previous_tool: '',
     loyalty_enabled: '0', loyalty_earn: String((LOYALTY_DEFAULTS[c.currency] || [1, 5])[0]), loyalty_threshold: '100',
     loyalty_reward: String((LOYALTY_DEFAULTS[c.currency] || [1, 5])[1]),
   };

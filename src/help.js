@@ -64,6 +64,13 @@ export const GUIDES = [
         <li>Comptoir <strong>reconnaît le logiciel</strong> et fait correspondre les colonnes : nom, référence, code-barres, catégorie, prix, prix d’achat, TVA, stock, seuil d’alerte. Vérifiez-les et corrigez si besoin.</li>
         <li>Contrôlez l’<strong>aperçu</strong> (produits à créer, à mettre à jour, erreurs), puis touchez <strong>Importer</strong>.</li></ol>
         <p>Rien n’est enregistré avant votre confirmation. Les catégories manquantes sont créées, et un produit que vous avez déjà (même code-barres, même référence ou même nom) est mis à jour au lieu d’être dupliqué.</p>`],
+      ['Connexion directe (sans export)', `<p>Pour <strong>Loyverse, Square, Shopify, WooCommerce et Odoo</strong>, Comptoir peut récupérer vos produits directement, avec leurs variantes, leur stock et leurs photos. Dans <strong>Produits, Importer</strong>, collez l’adresse de votre boutique en ligne ou la clé d’accès de votre logiciel, puis touchez <strong>Détecter mon outil</strong> : Comptoir reconnaît l’outil et vous dit où trouver la clé.</p>
+        <ul><li><strong>Loyverse</strong> : jeton d’accès créé dans le Back Office (Intégrations, Jetons d’accès).</li>
+        <li><strong>Square</strong> : jeton d’accès de production, sur developer.squareup.com.</li>
+        <li><strong>Shopify</strong> : application créée pour votre boutique avec l’autorisation read_products ; son jeton (shpat_…) ou son identifiant et son secret client.</li>
+        <li><strong>WooCommerce</strong> : clé de l’API REST avec le droit Lecture (WooCommerce, Réglages, Avancé, API REST).</li>
+        <li><strong>Odoo</strong> : clé d’API créée dans votre profil, onglet Sécurité du compte.</li></ul>
+        <p>La clé sert uniquement pendant la récupération, en lecture seule, et n’est jamais enregistrée par Comptoir. Vous pouvez la supprimer dans votre ancien outil une fois l’import terminé. Les logiciels installés sur un ordinateur (Stock Express, EBP, Sage…) n’ont pas de connexion à distance : utilisez leur export ou leur base de données.</p>`],
       ['Exporter depuis votre ancien logiciel', `<ul>
         <li><strong>Loyverse</strong> : Back Office, Articles, liste des articles, bouton Exporter.</li>
         <li><strong>Square</strong> : Tableau de bord, Articles, Bibliothèque d’articles, Actions, Exporter la bibliothèque.</li>

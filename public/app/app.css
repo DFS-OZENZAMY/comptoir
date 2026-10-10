@@ -764,3 +764,16 @@ a.kpi:hover { background: #FAFAFB; }
 .mono { font-family: var(--mono); font-size: .88rem; }
 .imp-opts .check, .imp-mode .check { display: flex; flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 400; }
 .imp-opts .check input, .imp-mode .check input { width: auto; flex: none; margin: 3px 0 0; }
+
+/* Connexion directe */
+.cn-panel { border: 1px solid color-mix(in srgb, var(--signal) 35%, var(--line)); }
+.cn-detect { display: flex; gap: 8px; padding: 6px 18px 0; flex-wrap: wrap; }
+.cn-detect input { flex: 1; min-width: 240px; padding: 12px; font: inherit; border: 1px solid var(--line); border-radius: var(--radius); }
+.cn-sub { margin: 8px 18px 0; font-size: .88rem; }
+#cnBox { padding: 0 0 4px; }
+.cn-found { margin: 14px 18px 0; padding: 10px 14px; border-radius: var(--radius); background: #E1F1E7; color: var(--ok); }
+.cn-how { margin: 14px 18px 6px; padding: 12px 14px; border-radius: var(--radius); background: var(--zinc); line-height: 1.55; }
+.cn-form .imp-map input { padding: 11px 12px; font: inherit; font-weight: 400; border: 1px solid var(--line); border-radius: var(--radius); }
+.cn-actions { display: flex; align-items: center; gap: 12px; padding: 0 18px; flex-wrap: wrap; }
+.cn-note { margin: 10px 18px 0; font-size: .82rem; }
+#cnErr { margin: 8px 18px 14px; }

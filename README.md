@@ -114,6 +114,19 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 - **noms de colonnes de base de données compris** : « PrixVenteHT », « code_barre », « QteStock », « PV », « PA », « PMP », et les noms tronqués à 10 caractères de dBase (« DESIGNATIO »).
 - **formats illisibles dans un navigateur**, avec un message qui oriente vers l'export du logiciel : SQL Server (.mdf), SQL Server Compact (.sdf), Firebird (.fdb).
 
+**Connexion directe aux outils en ligne** (`src/connectors.js`) : Loyverse, Square, Shopify, WooCommerce et Odoo.
+- **Détection de l'outil** (`POST /api/store/connect/detect`) :
+  - **par la clé collée** : `shpat_` pour Shopify, `EAAA` pour Square, `ck_` pour WooCommerce, 32 caractères hexadécimaux pour Loyverse, 40 pour Odoo ;
+  - **par l'adresse de la boutique** : la page d'accueil est lue, ce qui révèle un site Shopify (et son adresse myshopify), WooCommerce, Odoo ou Square Online.
+
+  Seules les adresses `https` publiques sont acceptées ; localhost, les adresses IP et les réseaux internes sont refusés.
+- **Récupération page par page** (`POST /api/store/connect/fetch`) : produits, variantes, codes-barres, catégories, prix, coût, TVA (Odoo), seuils, unités, stock par magasin (Loyverse, Square) et photos. Le résultat est transformé en feuille commune, qui passe par le même aperçu et le même import qu'un fichier.
+  - **Shopify** : jeton `shpat_` d'une application existante, ou identifiant et secret client d'une application du Dev Dashboard (jeton obtenu par « client credentials »). Les nouvelles applications personnalisées ne peuvent plus être créées depuis l'administration Shopify depuis le 1er janvier 2026.
+  - **Square** : montants convertis depuis l'unité minimale de la devise (centimes, sauf devises sans décimales comme le XOF).
+- **Clés d'accès** : jamais enregistrées ni journalisées. Le navigateur les renvoie à chaque page, et le curseur de pagination n'en contient aucune.
+- **Photos** (`POST /api/store/import/images`, par lots de 12) : téléchargées après l'import, en JPEG, PNG ou WebP, 1 Mo au plus. Les images Shopify sont demandées en 800 px.
+- **Logiciel déclaré à l'inscription** (« Votre logiciel actuel », réglage `previous_tool`) : la page d'import propose directement le bon outil.
+
 **Côté serveur** (`src/importer.js`, `POST /api/store/import/products`) :
 - **contrôles** : droit « produits », droit « stock » pour les quantités, limite de produits de la formule, 500 lignes au plus par envoi, valeurs vérifiées, boutiques autorisées seulement.
 - **rapprochement** avec les produits existants par code-barres, puis référence, puis nom : mise à jour ou ignoré, au choix. Les doublons du fichier sont fusionnés.

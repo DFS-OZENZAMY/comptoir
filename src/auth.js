@@ -22,7 +22,7 @@ async function uniqueSlug(db, name) {
 }
 
 // Crée un commerce complet : paramètres, catégories du modèle, produits d'exemple éventuels.
-export async function createStore(db, { name, type, country, phone, email, demo }) {
+export async function createStore(db, { name, type, country, phone, email, demo, previousTool }) {
   const t = BUSINESS_TYPES[type] ? type : 'autre';
   const c = COUNTRIES[country] ? country : 'XX';
   const slug = await uniqueSlug(db, name);
@@ -30,6 +30,7 @@ export async function createStore(db, { name, type, country, phone, email, demo 
     VALUES (?, ?, ?, ?, 'essai', 'active', ?, ?)`).bind(slug, name, t, c, addDays(today(), PLATFORM.trialDays), nowIso()).run();
   const storeId = r.meta.last_row_id;
   const settings = defaultSettings({ name, phone, email, country: c, type: t });
+  settings.previous_tool = str(previousTool, 40);
   const stmts = Object.entries(settings).map(([k, v]) =>
     db.prepare('INSERT INTO settings (store_id, key, value) VALUES (?, ?, ?)').bind(storeId, k, v));
   await db.batch(stmts);
@@ -76,7 +77,7 @@ export async function signup(db, env, b) {
     .bind(email, name, await hashPassword(password), nowIso()).run();
   const userId = ur.meta.last_row_id;
   const store = await createStore(db, {
-    name: storeName, type: b.business_type, country: b.country, phone: str(b.phone, 40), email, demo: b.demo !== false,
+    name: storeName, type: b.business_type, country: b.country, phone: str(b.phone, 40), email, demo: b.demo !== false, previousTool: b.previous_tool,
   });
   await db.prepare("INSERT INTO memberships (user_id, store_id, role) VALUES (?, ?, 'owner')").bind(userId, store.id).run();
   await logEvent(db, store.id, userId, 'signup', (BUSINESS_TYPES[b.business_type] || BUSINESS_TYPES.autre).label);

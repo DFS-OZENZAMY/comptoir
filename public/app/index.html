@@ -74,6 +74,10 @@
             <div class="auth-trade-list" id="suTypes" role="radiogroup" aria-label="Type de commerce"></div>
           </fieldset>
           <label class="field"><span>Pays</span><select name="country" id="suCountry"></select></label>
+          <label class="field"><span>Votre logiciel actuel <span class="muted">(facultatif)</span></span><select name="previous_tool">
+            <option value="">Aucun, ou un cahier</option><option value="autre">Excel ou un tableau</option><option value="loyverse">Loyverse</option><option value="square">Square</option>
+            <option value="shopify">Shopify</option><option value="woocommerce">WooCommerce</option><option value="odoo">Odoo</option><option value="stockexpress">Stock Express (Klick)</option>
+            <option value="ebp">EBP</option><option value="sage">Sage</option><option value="base">Un autre logiciel</option></select><small>Pour vous proposer de récupérer vos produits en quelques clics.</small></label>
           <label class="check auth-check"><input type="checkbox" id="suDemo" checked> Ajouter quelques produits d’exemple pour découvrir l’outil</label>
           <p class="form-error" id="signupError" role="alert"></p>
           <button class="btn btn-primary btn-block btn-lg" type="submit">Créer mon commerce</button>

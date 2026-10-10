@@ -6,6 +6,7 @@ import {
 } from './lib.js';
 import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings, pricing } from './catalog.js';
 import { importProducts } from './importer.js';
+import { detectTool, fetchCatalogPage, importImages, PROVIDERS } from './connectors.js';
 import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, transferStock, listLocations, saveLocation, locationReport, listRoles, saveRole, deleteRole, validRoleAndLocations, updateMember } from './access.js';
 import { bump, logEvent } from './db.js';
 import { storeAccess } from './auth.js';
@@ -696,6 +697,7 @@ function guard(ctx, res, id, action, m, url) {
   switch (res) {
     case 'dashboard': return ctx.need('reports.view');
     case 'import': return ctx.need('products.edit');
+    case 'connect': return ctx.need('products.edit');
     case 'settings': if (W) ctx.need('settings.manage'); return;
     case 'categories': case 'products': if (W) ctx.need('products.edit'); return;
     case 'stock': return ctx.need('stock.manage');
@@ -838,6 +840,13 @@ export async function storeRoutes(ctx, parts) {
 
     case 'import':
       if (id === 'products' && m === 'POST') return json(await importProducts(ctx, await body()));
+      if (id === 'images' && m === 'POST') return json(await importImages(ctx, await body()));
+      break;
+
+    case 'connect':
+      // Connexion directe à l'ancien outil : les clés reçues ne sont ni enregistrées ni journalisées.
+      if (id === 'detect' && m === 'POST') { const d = await detectTool((await body()).input); return json({ ...d, label: PROVIDERS[d.provider].label }); }
+      if (id === 'fetch' && m === 'POST') return json(await fetchCatalogPage(ctx, await body()));
       break;
 
     case 'locations':

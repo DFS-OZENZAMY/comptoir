@@ -1812,7 +1812,27 @@
     ['base', 'Fichier de base de données', 'Si votre logiciel n’a pas d’export, déposez directement sa <strong>base de données</strong> : <strong>SQLite</strong> (.db, .sqlite), <strong>Access</strong> (.mdb, .accdb), <strong>dBase</strong> (.dbf) ou une <strong>sauvegarde .zip</strong> qui en contient une. Fermez d’abord le logiciel, puis copiez le fichier. La base est lue sur votre appareil : seuls les produits sont envoyés à Comptoir.'],
     ['autre', 'Excel ou autre', 'Tout logiciel qui exporte un tableau convient : <strong>CSV</strong> ou <strong>Excel (.xlsx)</strong>. Vous pouvez aussi remplir notre modèle.'],
   ];
-  const imp = { tool: null, file: null, sheet: null, source: null, map: null, stockMap: {}, onExisting: 'update', setStock: true, delExamples: true };
+  const imp = { tool: null, file: null, sheet: null, source: null, map: null, stockMap: {}, onExisting: 'update', setStock: true, delExamples: true, photos: true, forced: null };
+  // Connexion directe : champs demandés et marche à suivre pour obtenir la clé (lecture seule).
+  const DIRECT = {
+    loyverse: { label: 'Loyverse', fields: [['token', 'Jeton d’accès', 'password']],
+      how: 'Dans le Back Office Loyverse, ouvrez <strong>Intégrations</strong>, puis <strong>Jetons d’accès</strong>, et créez un jeton. Collez-le ici.' },
+    square: { label: 'Square', fields: [['token', 'Jeton d’accès de production', 'password']],
+      how: 'Sur <strong>developer.squareup.com</strong>, connectez-vous avec votre compte Square, créez une application (gratuit), puis copiez le <strong>jeton d’accès de production</strong> dans l’onglet Credentials.' },
+    shopify: { label: 'Shopify', fields: [['shop', 'Adresse de la boutique (….myshopify.com)', 'text'], ['token', 'Jeton d’accès (shpat_…), si vous en avez un', 'password'], ['client_id', 'Ou identifiant client', 'text'], ['client_secret', 'et secret client', 'password']],
+      how: 'Créez une application pour votre boutique depuis l’administration Shopify (<strong>Paramètres, Applications, Développer des applications</strong>, ou le <strong>Dev Dashboard</strong>) avec l’autorisation <strong>read_products</strong>, et installez-la. Collez ensuite son jeton d’accès (shpat_…) ou son identifiant et son secret client.' },
+    woocommerce: { label: 'WooCommerce', fields: [['site', 'Adresse du site', 'text'], ['key', 'Clé client (ck_…)', 'text'], ['secret', 'Secret client (cs_…)', 'password']],
+      how: 'Dans WordPress : <strong>WooCommerce, Réglages, Avancé, API REST</strong>, puis <strong>Ajouter une clé</strong> avec le droit <strong>Lecture</strong>.' },
+    odoo: { label: 'Odoo', fields: [['site', 'Adresse d’Odoo', 'text'], ['db', 'Base de données', 'text'], ['login', 'Identifiant (e-mail)', 'text'], ['key', 'Clé d’API', 'password']],
+      how: 'Dans Odoo, ouvrez <strong>votre profil</strong>, onglet <strong>Sécurité du compte</strong>, puis <strong>Nouvelle clé d’API</strong>. Pour un Odoo en ligne (….odoo.com), la base porte en général le nom de l’adresse.' },
+  };
+  function directForm(provider, values = {}) {
+    const d = DIRECT[provider];
+    return `<div class="cn-form" data-provider="${provider}"><p class="cn-how">${d.how}</p>
+      <div class="imp-map">${d.fields.map(([k, l, t]) => `<label><span>${l}</span><input name="${k}" type="${t}" autocomplete="off" spellcheck="false" value="${esc(values[k] || '')}"></label>`).join('')}</div>
+      <div class="cn-actions"><button type="button" class="btn btn-primary" id="cnFetch">Récupérer mes produits depuis ${d.label}</button><span class="muted" id="cnProgress"></span></div>
+      <p class="muted cn-note">Lecture seule : la clé sert uniquement pendant la récupération et n’est jamais enregistrée par Comptoir. Vous pourrez la supprimer dans ${d.label} une fois l’import terminé.</p></div>`;
+  }
   const IMP_FIELDS = [
     ['name', 'Nom du produit', true], ['variant', 'Variante (taille, couleur…)'], ['ref', 'Référence'], ['barcode', 'Code-barres'], ['category', 'Catégorie'],
     ['price', 'Prix de vente', true], ['purchase', 'Prix d’achat'], ['tva', 'TVA (%)'], ['stock_min', 'Seuil d’alerte'], ['unit', 'Unité'], ['description', 'Description'],
@@ -1827,7 +1847,13 @@
     setActions(`<a class="btn" id="impTemplate" href="#" download="modele-import-comptoir.csv">Télécharger le modèle</a>`);
     $('#impTemplate').href = URL.createObjectURL(new Blob([CI.TEMPLATE], { type: 'text/csv;charset=utf-8' }));
     if (!imp.sheet) {
+      if (!imp.tool && state.settings.previous_tool && TOOLS.some((t) => t[0] === state.settings.previous_tool)) imp.tool = state.settings.previous_tool;
       $('#view').innerHTML = `
+        <section class="panel imp-step cn-panel"><div class="panel-head"><h2>Connexion directe</h2><span class="muted">sans export, pour les outils en ligne</span></div>
+          <div class="cn-detect"><input id="cnInput" type="text" autocomplete="off" spellcheck="false" placeholder="Adresse de votre boutique en ligne, ou clé d’accès de votre logiciel"><button type="button" class="btn" id="cnDetect">Détecter mon outil</button></div>
+          <p class="muted cn-sub">Loyverse, Square, Shopify, WooCommerce et Odoo : Comptoir récupère directement vos produits, variantes, stock et photos.</p>
+          <div id="cnBox">${imp.tool && DIRECT[imp.tool] ? directForm(imp.tool) : ''}</div>
+          <p class="form-error" id="cnErr"></p></section>
         <p class="muted imp-intro">Récupérez vos produits depuis votre ancien logiciel en quelques minutes : nom, références, codes-barres, catégories, prix et stock. Rien n’est enregistré avant votre confirmation.</p>
         <section class="panel imp-step"><div class="panel-head"><h2>1. Votre ancien logiciel</h2><span class="muted">pour savoir comment exporter</span></div>
           <div class="imp-tools">${TOOLS.map(([k, l]) => `<button type="button" class="chip" data-tool="${k}" aria-pressed="${imp.tool === k}">${l}</button>`).join('')}</div>
@@ -1836,14 +1862,49 @@
           <label class="imp-drop" id="impDrop"><input type="file" id="impFile" accept=".csv,.txt,.xlsx,.db,.sqlite,.sqlite3,.s3db,.db3,.mdb,.accdb,.dbf,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
             <strong>Déposez le fichier ici</strong><span>Export CSV ou Excel, ou base de données (SQLite, Access, dBase, sauvegarde .zip)</span></label>
           <p class="form-error" id="impErr"></p></section>`;
-      $$('[data-tool]').forEach((b) => b.addEventListener('click', () => { imp.tool = b.dataset.tool; $$('[data-tool]').forEach((x) => x.setAttribute('aria-pressed', x === b)); $('#impHow').innerHTML = TOOLS.find((t) => t[0] === imp.tool)[2]; }));
+      $$('[data-tool]').forEach((b) => b.addEventListener('click', () => {
+        imp.tool = b.dataset.tool; $$('[data-tool]').forEach((x) => x.setAttribute('aria-pressed', x === b)); $('#impHow').innerHTML = TOOLS.find((t) => t[0] === imp.tool)[2];
+        $('#cnBox').innerHTML = DIRECT[imp.tool] ? directForm(imp.tool) : ''; bindDirect();
+      }));
+      // Détection : la clé ou l'adresse collée révèle l'outil.
+      $('#cnDetect').addEventListener('click', async () => {
+        $('#cnErr').textContent = ''; const btn = $('#cnDetect'); btn.disabled = true;
+        try {
+          const d = await api('/store/connect/detect', { method: 'POST', body: { input: $('#cnInput').value } });
+          imp.tool = d.provider; $$('[data-tool]').forEach((x) => x.setAttribute('aria-pressed', x.dataset.tool === d.provider));
+          $('#impHow').innerHTML = TOOLS.find((t) => t[0] === d.provider)?.[2] || '';
+          $('#cnBox').innerHTML = `<p class="cn-found">Outil reconnu : <strong>${esc(d.label)}</strong>${d.from === 'key' ? ' (d’après la clé)' : ' (d’après le site)'}</p>` + directForm(d.provider, d.values); bindDirect();
+        } catch (e) { $('#cnErr').textContent = e.message; }
+        btn.disabled = false;
+      });
+      $('#cnInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#cnDetect').click(); });
+      function bindDirect() {
+        $('#cnFetch')?.addEventListener('click', async () => {
+          const box = $('.cn-form'); const provider = box.dataset.provider;
+          const credentials = Object.fromEntries($$('input', box).map((i) => [i.name, i.value.trim()]).filter(([, v]) => v));
+          $('#cnErr').textContent = ''; const btn = $('#cnFetch'); btn.disabled = true;
+          let next = null, headers = null, rows = [], page = 0, meta = null;
+          try {
+            do {
+              const r = await api('/store/connect/fetch', { method: 'POST', body: { provider, credentials, next } });
+              meta = r; headers = headers || r.headers; rows = rows.concat(r.rows); next = r.next; page++;
+              $('#cnProgress').textContent = `${rows.length} produit${rows.length > 1 ? 's' : ''} récupéré${rows.length > 1 ? 's' : ''}…`;
+            } while (next && page < 400);
+            if (!rows.length) throw new Error(`Aucun produit trouvé dans ${DIRECT[provider].label}.`);
+            imp.sheet = { headers, rows }; imp.db = null; imp.file = `${meta.label} (connexion directe)`;
+            imp.forced = { key: provider, label: `${meta.label}, connexion directe`, prices: meta.prices };
+            prepareImport(); route();
+          } catch (e) { $('#cnErr').textContent = e.message; btn.disabled = false; $('#cnProgress').textContent = ''; }
+        });
+      }
+      bindDirect();
       const take = async (file) => {
         if (!file) return;
         $('#impErr').textContent = ''; $('#impDrop').classList.add('busy');
         try {
           if (file.size > 300 * 1024 * 1024) throw new Error('Fichier trop lourd (300 Mo au plus).');
           $('#impDrop strong').textContent = 'Lecture du fichier…';
-          imp.sheet = await CI.readFile(file); imp.file = file.name;
+          imp.sheet = await CI.readFile(file); imp.file = file.name; imp.forced = null;
           imp.db = imp.sheet.db || null; imp.table = imp.db ? imp.db.tables[0].name : null;
           if (!imp.sheet.rows.length) throw new Error(imp.db ? 'Aucune table de produits remplie n’a été trouvée dans cette base.' : 'Le fichier ne contient aucune ligne de produit.');
           prepareImport();
@@ -1863,7 +1924,7 @@
   // Logiciel d'origine, correspondance des colonnes et colonnes de stock par boutique.
   function prepareImport() {
     const CI = window.ComptoirImport;
-    imp.source = CI.detect(imp.sheet.headers);
+    imp.source = imp.forced || CI.detect(imp.sheet.headers);
     if (imp.db) imp.source = { key: 'base', label: `base ${imp.db.label}`, prices: imp.source.key === 'autre' ? 'ttc' : imp.source.prices };
     imp.map = CI.autoMap(imp.sheet.headers, imp.source);
     const locs = state.me.locations || [];
@@ -1910,6 +1971,7 @@
         <label class="check"><input type="radio" name="impExist" value="update" ${imp.onExisting === 'update' ? 'checked' : ''}> Mettre à jour les produits que j’ai déjà (même code-barres, référence ou nom)</label>
         <label class="check"><input type="radio" name="impExist" value="skip" ${imp.onExisting === 'skip' ? 'checked' : ''}> Ne pas toucher aux produits que j’ai déjà</label>
         ${examples ? `<label class="check"><input type="checkbox" id="impDelEx" ${imp.delExamples ? 'checked' : ''}> Retirer les ${examples} produits d’exemple (EX-…) jamais vendus</label>` : ''}
+        ${rows.some((r) => r.photo) ? `<label class="check"><input type="checkbox" id="impPhotos" ${imp.photos ? 'checked' : ''}> Importer aussi les photos (${rows.filter((r) => r.photo).length}) : elles sont téléchargées et enregistrées dans Comptoir</label>` : ''}
       </div></section>
       <section class="panel"><div class="panel-head"><h2>Aperçu</h2><div class="imp-sum"><span class="badge s-ok">${created} à créer</span><span class="badge s-info">${updated} à mettre à jour</span>${errors.length ? `<span class="badge s-bad">${errors.length} en erreur</span>` : ''}</div></div>
         <div class="table-wrap"><table><thead><tr><th>Ligne</th><th></th><th>Produit</th><th>Référence</th><th>Code-barres</th><th>Catégorie</th><th class="num">Prix TTC</th>${stockOk && imp.setStock ? '<th class="num">Stock</th>' : ''}<th>Remarque</th></tr></thead><tbody>
@@ -1930,6 +1992,7 @@
     $('#impSetStock')?.addEventListener('change', (e) => { imp.setStock = e.target.checked; renderImportReview(); });
     $$('input[name="impExist"]').forEach((r) => r.addEventListener('change', () => { imp.onExisting = r.value; }));
     $('#impDelEx')?.addEventListener('change', (e) => { imp.delExamples = e.target.checked; });
+    $('#impPhotos')?.addEventListener('change', (e) => { imp.photos = e.target.checked; });
     $('#impGo').addEventListener('click', () => runImport(rows.filter((r) => r.st !== 'err')));
   }
   async function runImport(list) {
@@ -1938,7 +2001,7 @@
     $('#view').innerHTML = `<section class="panel imp-progress"><h2>Import en cours…</h2><div class="imp-bar"><span id="impBar"></span></div><p class="muted" id="impTxt">0 sur ${total}</p><p class="muted">Gardez cette page ouverte jusqu’à la fin.</p></section>`;
     try {
       for (let i = 0; i < total; i += size) {
-        const rows = list.slice(i, i + size).map(({ st, warn, price_ttc, ...r }) => r);
+        const rows = list.slice(i, i + size).map(({ st, warn, price_ttc, photo, ...r }) => r);
         const r = await api('/store/import/products', { method: 'POST', body: { source: imp.source.label, rows, options: { on_existing: imp.onExisting, set_stock: imp.setStock && can('stock.manage'), delete_examples: imp.delExamples && i === 0 } } });
         for (const k of ['created', 'updated', 'skipped', 'categories_created']) res[k] += r[k];
         res.errors.push(...r.errors);
@@ -1946,11 +2009,25 @@
         $('#impBar').style.width = `${Math.round((done / total) * 100)}%`; $('#impTxt').textContent = `${done} sur ${total}`;
       }
     } catch (e) { res.errors.push({ line: null, message: e.message }); }
+    // Photos : téléchargées par le serveur, par petits lots.
+    const withPhoto = imp.photos ? list.filter((r) => r.photo) : [];
+    res.photos = 0;
+    if (withPhoto.length && res.created + res.updated) {
+      $('#view .imp-progress h2').textContent = 'Récupération des photos…';
+      for (let i = 0; i < withPhoto.length; i += 10) {
+        try {
+          const r = await api('/store/import/images', { method: 'POST', body: { items: withPhoto.slice(i, i + 10).map((x) => ({ name: x.name, ref: x.ref, barcode: x.barcode, url: x.photo })) } });
+          res.photos += r.saved; if (r.errors.length) res.errors.push(...r.errors.slice(0, 3).map((m) => ({ line: null, message: `Photo : ${m}` })));
+        } catch (e) { res.errors.push({ line: null, message: `Photos : ${e.message}` }); break; }
+        const done = Math.min(withPhoto.length, i + 10);
+        $('#impBar').style.width = `${Math.round((done / withPhoto.length) * 100)}%`; $('#impTxt').textContent = `${done} photo${done > 1 ? 's' : ''} sur ${withPhoto.length}`;
+      }
+    }
     await refresh('products', 'categories').catch(() => {});
-    imp.sheet = null; imp.db = null;
+    imp.sheet = null; imp.db = null; imp.forced = null;
     $('#view').innerHTML = `<section class="panel imp-done">
         <h2>${res.errors.length ? 'Import terminé, avec des remarques' : 'Import terminé'}</h2>
-        <div class="imp-sum big"><span class="badge s-ok">${res.created} produit${res.created > 1 ? 's' : ''} créé${res.created > 1 ? 's' : ''}</span><span class="badge s-info">${res.updated} mis à jour</span>${res.categories_created ? `<span class="badge s-neutral">${res.categories_created} catégorie${res.categories_created > 1 ? 's' : ''} créée${res.categories_created > 1 ? 's' : ''}</span>` : ''}${res.skipped ? `<span class="badge s-neutral">${res.skipped} ignoré${res.skipped > 1 ? 's' : ''}</span>` : ''}</div>
+        <div class="imp-sum big"><span class="badge s-ok">${res.created} produit${res.created > 1 ? 's' : ''} créé${res.created > 1 ? 's' : ''}</span><span class="badge s-info">${res.updated} mis à jour</span>${res.categories_created ? `<span class="badge s-neutral">${res.categories_created} catégorie${res.categories_created > 1 ? 's' : ''} créée${res.categories_created > 1 ? 's' : ''}</span>` : ''}${res.skipped ? `<span class="badge s-neutral">${res.skipped} ignoré${res.skipped > 1 ? 's' : ''}</span>` : ''}${res.photos ? `<span class="badge s-ok">${res.photos} photo${res.photos > 1 ? 's' : ''}</span>` : ''}</div>
         ${res.errors.length ? `<ul class="imp-errors">${res.errors.slice(0, 50).map((x) => `<li>${x.line ? `Ligne ${x.line} : ` : ''}${esc(x.message)}</li>`).join('')}</ul>` : '<p class="muted">Vos produits sont prêts à être vendus en caisse et affichés sur votre vitrine.</p>'}
         <div class="imp-actions"><a class="btn btn-primary" href="#/produits">Voir mes produits</a><button class="btn" id="impAgain" type="button">Importer un autre fichier</button></div>
       </section>`;

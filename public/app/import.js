@@ -286,6 +286,7 @@
     tva: ['tva', 'taux tva', 'taux de tva', 'tax rate', 'vat', 'taux', 'tva %'],
     unit: ['unit', 'unite', 'unite de vente', 'unit and precision', 'uom', 'unite de mesure', 'sold by weight'],
     description: ['description', 'body (html)', 'short description', 'description courte', 'description commerciale'],
+    photo: ['photo', 'image', 'image src', 'image url', 'images', 'featured image', 'variant image'],
     track: ['track stock', 'stockable', 'manage stock?', 'gerer le stock'],
     type: ['type'],
     archived: ['archived', 'archive'],
@@ -305,7 +306,7 @@
     const H = headers.map(norm), B = headers.map(baseName);
     const pick = (list, avoid = []) => { for (const k of list) { const i = B.findIndex((b, j) => same(b, k) && !avoid.includes(j)); if (i >= 0) return i; } return -1; };
     const m = {};
-    for (const f of ['name', 'variant', 'variant2', 'parent', 'ref', 'barcode', 'purchase', 'stock_min', 'tva', 'unit', 'description', 'track', 'archived']) m[f] = pick(FIELDS[f]);
+    for (const f of ['name', 'variant', 'variant2', 'parent', 'ref', 'barcode', 'purchase', 'stock_min', 'tva', 'unit', 'description', 'track', 'archived', 'photo']) m[f] = pick(FIELDS[f]);
     // Catégorie : « Type » seulement s'il n'y a rien de mieux (chez WooCommerce, Type = simple/variable).
     m.category = pick(FIELDS.category.filter((x) => x !== 'type'));
     if (m.category < 0 && source.key === 'shopify') m.category = pick(['type']);
@@ -386,6 +387,7 @@
         purchase_price: m.purchase >= 0 ? number(r[m.purchase]) : null, tva_rate: tva, unit: unit || null,
         stock_min: m.stock_min >= 0 ? number(r[m.stock_min]) : null, description: stripHtml(g('description') || parentInfo.description).slice(0, 4000),
         track_stock: m.track >= 0 && no(g('track')) ? false : true, stocks, warn,
+        photo: /^https:\/\//.test(g('photo').split(/[,\s]/)[0]) ? g('photo').split(/[,\s]/)[0] : '',
       });
     });
     return out;
