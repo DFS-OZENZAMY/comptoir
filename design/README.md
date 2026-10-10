@@ -61,12 +61,13 @@ Ces jetons sont repris dans le code, en tête de `public/app/app.css`, `public/a
    - tuile de caisse, carte produit (standard et compacte), ligne de ticket ;
    - champ de saisie, élément de menu, barre de navigation mobile.
 2. **Site et vitrine** : les 4 écrans exportés ici.
-3. **Espace commerçant et console** : 8 écrans, tous intégrés au site.
+3. **Espace commerçant et console** : 11 écrans, tous intégrés au site.
    - Accueil commerçant, ordinateur et téléphone : chiffres du jour en cartes, tâches « À faire » avec un repère de couleur.
    - Caisse, ordinateur et téléphone : ticket en cours au bord dentelé, lignes « 2 × 9,50 DH », barre d'encaissement fixe sur téléphone.
    - Encaissement sur téléphone : feuille qui monte du bas, modes de paiement, montant reçu, grand bloc « À rendre ».
    - Fiche produit sur téléphone : photo, nom, prix TTC, quantité, catégorie, « Plus d'options ».
    - Console, ordinateur et téléphone : pastille d'état de la plateforme, éléments à traiter avec bouton « Ouvrir », chiffres, activité et entonnoir de conversion.
+   - Connexion et inscription : panneau de présentation sur ordinateur, onglets façon interrupteur, type de commerce en pastilles, pays avec devise et TVA, aide pour le mot de passe oublié ; bande sombre compacte sur téléphone.
 
 ## Correspondance avec le site
 

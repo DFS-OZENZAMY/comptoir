@@ -115,8 +115,14 @@
     if (state.platform) return;
     try {
       state.platform = await api('/platform');
-      $('#suType').innerHTML = state.platform.business_types.map((t) => `<option value="${t.key}">${esc(t.label)}</option>`).join('');
-      $('#suCountry').innerHTML = state.platform.countries.map((c) => `<option value="${c.key}">${esc(c.name)} (${esc(c.currency)})</option>`).join('');
+      // Type de commerce : pastilles à choix unique (libellé court, avant « & »)
+      const types = state.platform.business_types;
+      $('#suTypes').innerHTML = types.map((t) => `<button type="button" role="radio" class="chip" data-trade="${t.key}" aria-checked="false" aria-pressed="false">${esc(t.label.split(' & ')[0].replace(' commerce', ''))}</button>`).join('');
+      const pick = (key) => { $('#suType').value = key; $$('[data-trade]').forEach((b) => { const on = b.dataset.trade === key; b.setAttribute('aria-checked', String(on)); b.setAttribute('aria-pressed', String(on)); }); };
+      $('#suTypes').addEventListener('click', (e) => { const b = e.target.closest('[data-trade]'); if (b) pick(b.dataset.trade); });
+      pick(types[0].key);
+      const fmtTva = (v) => String(v).replace('.', ',');
+      $('#suCountry').innerHTML = state.platform.countries.map((c) => `<option value="${c.key}">${esc(c.name)} (${esc(c.currency)}, TVA ${fmtTva(c.tva)} %)</option>`).join('');
       $('#trialDays').textContent = state.platform.trial_days;
     } catch (e) { fail(e); }
   }

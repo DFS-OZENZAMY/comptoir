@@ -14,44 +14,68 @@
 </head>
 <body>
   <div class="auth" id="auth" hidden>
-    <div class="auth-side">
+    <aside class="auth-side">
       <a class="auth-brand" href="/">Comptoir</a>
-      <p class="auth-pitch">La caisse, le stock, les factures et la vitrine en ligne de votre commerce. Au même endroit.</p>
-    </div>
-    <div class="auth-main">
+      <div class="auth-mid">
+        <p class="auth-pitch">La caisse, le stock et la vitrine de votre commerce.</p>
+        <ul class="auth-points">
+          <li>Encaissez dès aujourd’hui, même sur téléphone</li>
+          <li>Le stock se met à jour à chaque vente</li>
+          <li>Une vitrine en ligne à partager à vos clients</li>
+        </ul>
+      </div>
+      <div class="auth-note">
+        <p class="auth-note-main">Essai gratuit <span id="trialDays">14</span> jours, sans carte bancaire</p>
+        <p class="auth-note-sub">Quincailleries, épiceries, boutiques de mode, téléphonie, librairies…</p>
+      </div>
+    </aside>
+    <main class="auth-main">
       <div class="auth-card">
-        <div class="chips auth-tabs">
-          <button class="chip" type="button" data-authtab="login" aria-pressed="true">Se connecter</button>
-          <button class="chip" type="button" data-authtab="signup" aria-pressed="false">Créer mon commerce</button>
+        <div class="auth-tabs" role="tablist">
+          <button type="button" role="tab" data-authtab="login" aria-pressed="true">Se connecter</button>
+          <button type="button" role="tab" data-authtab="signup" aria-pressed="false">Créer mon commerce</button>
         </div>
 
-        <form id="loginForm" novalidate>
-          <h1>Bon retour</h1>
+        <form id="loginForm" class="auth-form" novalidate>
+          <div class="auth-head">
+            <h1>Bon retour</h1>
+            <p>Connectez-vous pour ouvrir votre caisse.</p>
+          </div>
           <label class="field"><span>E-mail</span><input id="liEmail" type="email" autocomplete="email" required></label>
           <label class="field"><span>Mot de passe</span><input id="liPassword" type="password" autocomplete="current-password" required></label>
           <p class="form-error" id="loginError" role="alert"></p>
-          <button class="btn btn-primary btn-block" type="submit">Se connecter</button>
-          <p class="auth-help">Mot de passe oublié ? Le propriétaire du commerce peut vous en générer un nouveau depuis l'onglet Équipe, ou contactez le support.</p>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Se connecter</button>
+          <div class="auth-help">
+            <strong>Mot de passe oublié ?</strong>
+            <span>Le propriétaire du commerce peut vous en créer un nouveau depuis Réglages, Équipe. Sinon, contactez le support.</span>
+          </div>
         </form>
 
-        <form id="signupForm" hidden novalidate>
-          <h1>Votre commerce en ligne en 2 minutes</h1>
-          <p class="muted">Essai gratuit de <span id="trialDays">14</span> jours, sans carte bancaire.</p>
-          <div class="fields">
+        <form id="signupForm" class="auth-form" hidden novalidate>
+          <div class="auth-head">
+            <h1>Créez votre commerce</h1>
+            <p>14 jours gratuits, sans carte bancaire. Prêt en 2 minutes.</p>
+          </div>
+          <div class="auth-row">
             <label class="field"><span>Votre nom</span><input id="suName" name="name" autocomplete="name" required></label>
             <label class="field"><span>Téléphone <span class="muted">(facultatif)</span></span><input name="phone" type="tel" autocomplete="tel"></label>
-            <label class="field full"><span>E-mail</span><input name="email" type="email" autocomplete="email" required></label>
-            <label class="field full"><span>Mot de passe</span><input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
-            <label class="field full"><span>Nom du commerce</span><input name="store_name" required placeholder="Ex. : Épicerie du Marché"></label>
-            <label class="field"><span>Type de commerce</span><select name="business_type" id="suType"></select></label>
-            <label class="field"><span>Pays</span><select name="country" id="suCountry"></select></label>
-            <label class="check full"><input type="checkbox" id="suDemo" checked> Ajouter quelques produits d'exemple pour découvrir l'outil</label>
           </div>
+          <label class="field"><span>E-mail</span><input name="email" type="email" autocomplete="email" required></label>
+          <label class="field"><span>Mot de passe</span><input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum</small></label>
+          <label class="field"><span>Nom du commerce</span><input name="store_name" required placeholder="Ex. : Épicerie du Marché"></label>
+          <fieldset class="field auth-trades">
+            <legend>Type de commerce</legend>
+            <input type="hidden" name="business_type" id="suType" value="autre">
+            <div class="auth-trade-list" id="suTypes" role="radiogroup" aria-label="Type de commerce"></div>
+          </fieldset>
+          <label class="field"><span>Pays</span><select name="country" id="suCountry"></select></label>
+          <label class="check auth-check"><input type="checkbox" id="suDemo" checked> Ajouter quelques produits d’exemple pour découvrir l’outil</label>
           <p class="form-error" id="signupError" role="alert"></p>
-          <button class="btn btn-primary btn-block" type="submit">Créer mon commerce</button>
+          <button class="btn btn-primary btn-block btn-lg" type="submit">Créer mon commerce</button>
+          <p class="auth-legal">En créant votre compte, vous acceptez les conditions d’utilisation.</p>
         </form>
       </div>
-    </div>
+    </main>
   </div>
 
   <div class="app" id="app" hidden>

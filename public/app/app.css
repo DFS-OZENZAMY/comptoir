@@ -573,3 +573,55 @@ a.kpi:hover { background: #FAFAFB; }
   .home-today strong { font-size: 1rem; white-space: nowrap; }
   .pos-line-price { white-space: nowrap; }
 }
+
+
+/* ================================================================== */
+/* Connexion et inscription (maquettes Figma)                         */
+/* ================================================================== */
+.auth { grid-template-columns: minmax(360px, 39%) 1fr; background: var(--zinc); }
+.auth-side { background-color: var(--steel); background-image: none; padding: 48px 56px; display: flex; flex-direction: column; justify-content: space-between; gap: 32px; position: sticky; top: 0; height: 100vh; }
+.auth-brand { font-size: 2rem; }
+.auth-mid { display: flex; flex-direction: column; gap: 28px; }
+.auth-pitch { font-size: clamp(2.4rem, 3.6vw, 3.3rem); line-height: .98; max-width: 11em; color: #fff; font-weight: 700; }
+.auth-points { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; color: #CFD1D6; }
+.auth-points li { display: flex; align-items: center; gap: 12px; }
+.auth-points li::before { content: ""; flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--steel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m6 12 4 4 8-9' fill='none' stroke='%23E4572E' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px no-repeat; }
+.auth-note { background: var(--steel-2); border-radius: var(--r-card); padding: 16px 18px; }
+.auth-note p { margin: 0; }
+.auth-note-main { font-family: var(--mono); color: #CFD1D6; font-size: .86rem; }
+.auth-note-sub { color: #8E939C; font-size: .82rem; margin-top: 4px !important; }
+.auth-main { padding: 40px 24px; }
+.auth-card { width: min(520px, 100%); display: flex; flex-direction: column; gap: 22px; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 0; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); }
+.auth-tabs button { padding: 9px 12px; border: 0; border-radius: 6px; background: none; font: inherit; font-weight: 600; font-size: .9rem; color: var(--muted); cursor: pointer; }
+.auth-tabs button[aria-pressed="true"] { background: var(--zinc); color: var(--ink); }
+.auth-form { display: flex; flex-direction: column; gap: 16px; }
+.auth-head h1 { margin: 0; font-family: var(--display); font-size: clamp(2.2rem, 3.4vw, 3.4rem); line-height: 1; }
+.auth-head p { margin: 6px 0 0; color: var(--muted); }
+.auth-form .field > span, .auth-trades legend { font-weight: 600; font-size: .9rem; }
+.auth-form input:not([type="checkbox"]), .auth-form select { padding: 12px; font-size: 1rem; }
+.auth-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.auth-trades { border: 0; margin: 0; padding: 0; min-width: 0; }
+.auth-trades legend { padding: 0; margin-bottom: 8px; }
+.auth-trade-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.auth-trade-list .chip { font-weight: 600; }
+.auth-check { font-weight: 400; font-size: .9rem; align-items: flex-start; }
+.auth-check input { margin-top: 2px; accent-color: var(--ink); width: 18px; height: 18px; }
+.auth-help { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); font-size: .88rem; }
+.auth-help span { color: var(--muted); }
+.auth-legal { margin: -4px 0 0; text-align: center; color: var(--muted); font-size: .82rem; }
+.btn-lg { padding: 13px 18px; font-size: 1rem; }
+@media (max-width: 900px) {
+  .auth { grid-template-columns: 1fr; background: var(--paper); align-content: start; }
+  .auth-side { position: static; height: auto; padding: calc(28px + env(safe-area-inset-top, 0px)) 20px 24px; gap: 12px; flex-direction: column; align-items: flex-start; }
+  .auth-brand { font-size: 1.7rem; }
+  .auth-pitch { display: block; font-family: var(--font); font-size: .98rem; font-weight: 400; line-height: 1.45; color: #CFD1D6; max-width: none; }
+  .auth-points, .auth-note { display: none; }
+  .auth-main { display: block; padding: 20px 20px 40px; }
+  .auth-card { width: 100%; gap: 20px; }
+  .auth-tabs { background: var(--zinc); border-color: transparent; }
+  .auth-tabs button[aria-pressed="true"] { background: var(--paper); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .auth-head h1 { font-size: 2.1rem; }
+  .auth-row { grid-template-columns: 1fr; gap: 16px; }
+}
+.auth-form .form-error:empty { display: none; }
