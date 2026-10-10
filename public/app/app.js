@@ -93,6 +93,7 @@
       const n = a.overdue.length + a.out_of_stock.length;
       const ba = $('#badgeAlerts'); ba.hidden = !a.totals.count; ba.textContent = a.totals.count;
       ba.classList.toggle('urgent', n > 0);
+      const bm = $('#badgeAlertsM'); bm.hidden = !a.totals.count; bm.textContent = a.totals.count;
     } catch { /* silencieux */ }
     try {
       const orders = await api('/store/documents?type=commande');
@@ -140,6 +141,8 @@
     const me = state.me, st = me.store;
     $('#storeName').textContent = state.settings.shop_name || st.name;
     $('#storeLink').href = `/s/${st.slug}`;
+    $('#storeLinkM').href = `/s/${st.slug}`;
+    $('#storeNameM').textContent = state.settings.shop_name || st.name;
     $('#consoleLink').hidden = !me.platform_admin;
     $$('[data-owner]').forEach((el) => { el.hidden = !isOwner(); });
     const days = st.trial_ends_at ? Math.round((new Date(st.trial_ends_at + 'T00:00:00Z') - new Date(today() + 'T00:00:00Z')) / 86400000) : -1;
@@ -178,6 +181,8 @@
     state.me = null; location.hash = '#/'; showLogin('login');
   });
   $('#accountBtn').addEventListener('click', () => passwordModal(false));
+  document.querySelector('[data-account]').addEventListener('click', () => { closeMore(); passwordModal(false); });
+  document.querySelector('[data-logout]').addEventListener('click', () => $('#logout').click());
 
   function passwordModal(forced) {
     const body = openModal(forced ? 'Choisissez votre mot de passe' : 'Mon compte', `
@@ -202,88 +207,125 @@
   /* ---------------- Routeur ---------------- */
   const VIEWS = {
     caisse: ['Caisse', viewPos],
-    'tableau-de-bord': ['Tableau de bord', viewDashboard],
+    'tableau-de-bord': ['Accueil', viewDashboard],
     alertes: ['Alertes', viewAlerts],
-    commandes: ['Commandes', () => viewDocuments('commande')],
-    devis: ['Devis', () => viewDocuments('devis')],
-    factures: ['Factures', () => viewDocuments('facture')],
+    commandes: ['Ventes', () => viewDocuments('commande')],
+    devis: ['Ventes', () => viewDocuments('devis')],
+    factures: ['Ventes', () => viewDocuments('facture')],
     produits: ['Produits', viewProducts],
-    stock: ['Stock', viewStock],
+    stock: ['Produits', viewStock],
     clients: ['Clients', viewCustomers],
-    parametres: ['Paramètres', viewSettings],
-    equipe: ['Équipe', viewTeam],
-    abonnement: ['Abonnement', viewSubscription],
+    parametres: ['Réglages', viewSettings],
+    equipe: ['Réglages', viewTeam],
+    abonnement: ['Réglages', viewSubscription],
   };
+  // Les écrans proches sont regroupés sous une seule entrée de menu, avec des onglets.
+  const GROUPS = {
+    ventes: [['commandes', 'Commandes'], ['devis', 'Devis'], ['factures', 'Factures']],
+    produits: [['produits', 'Catalogue'], ['stock', 'Stock']],
+    reglages: [['parametres', 'Mon commerce'], ['equipe', 'Équipe'], ['abonnement', 'Abonnement']],
+  };
+  const groupOf = (key) => Object.keys(GROUPS).find((g) => GROUPS[g].some(([k]) => k === key)) || key;
   const OWNER_VIEWS = ['parametres', 'equipe', 'abonnement'];
   function route() {
-    const key = (location.hash.replace(/^#\//, '') || 'tableau-de-bord').split('?')[0];
+    let key = (location.hash.replace(/^#\//, '') || 'tableau-de-bord').split('?')[0];
     if (!state.me) return;
+    if (GROUPS[key]) key = GROUPS[key][0][0];
     const allowed = VIEWS[key] && (isOwner() || !OWNER_VIEWS.includes(key));
-    const [title, fn] = allowed ? VIEWS[key] : VIEWS['tableau-de-bord'];
-    $$('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === key));
+    if (!allowed) key = 'tableau-de-bord';
+    const [title, fn] = VIEWS[key];
+    const group = groupOf(key);
+    $$('[data-nav]').forEach((a) => a.classList.toggle('active', a.dataset.nav === group));
     $('#viewTitle').textContent = title;
     $('#viewActions').innerHTML = '';
+    $('#subnav').innerHTML = GROUPS[group] ? GROUPS[group].map(([k, l]) => `<a href="#/${k}" class="${k === key ? 'active' : ''}">${l}</a>`).join('') : '';
+    $('#subnav').hidden = !GROUPS[group];
+    closeMore();
     document.title = `${title} : ${state.settings.shop_name || ''} | Comptoir`;
+    window.scrollTo(0, 0);
     Promise.resolve(fn()).catch(fail);
   }
   window.addEventListener('hashchange', route);
   const setActions = (html) => { $('#viewActions').innerHTML = html; };
 
-  /* ================= Tableau de bord ================= */
+  // Menu « Plus » sur téléphone
+  function closeMore() { $('#moreSheet').hidden = true; $('#moreBtn')?.setAttribute('aria-expanded', 'false'); }
+  $('#moreBtn').addEventListener('click', () => {
+    const open = $('#moreSheet').hidden;
+    $('#moreSheet').hidden = !open; $('#moreBtn').setAttribute('aria-expanded', String(open));
+  });
+  $('#moreSheet').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeMore(); });
+
+  /* ================= Accueil ================= */
   async function viewDashboard() {
-    const d = await api('/store/dashboard');
+    const [d, a] = await Promise.all([api('/store/dashboard'), api('/store/alerts').catch(() => null)]);
     const s = state.settings;
+    const first = (state.me.user.name || '').split(' ')[0];
+    const hour = new Date().getHours();
+    const hello = hour < 5 || hour >= 18 ? 'Bonsoir' : 'Bonjour';
+    const dateLong = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const vitrine = `${location.origin}/s/${state.me.store.slug}`;
     const steps = [
       { done: !!(s.phone && s.address), label: 'Renseigner l’adresse et le téléphone', href: '#/parametres', owner: true },
       { done: state.products.some((p) => !/^EX-\d{3}$/.test(p.ref || '')), label: 'Ajouter vos propres produits', href: '#/produits' },
-      { done: d.today_tickets > 0 || d.recent.some((r) => r.type === 'ticket'), label: 'Faire une première vente en caisse', href: '#/caisse' },
+      { done: d.recent.some((r) => r.type === 'ticket') || d.today_tickets > 0, label: 'Faire une première vente en caisse', href: '#/caisse' },
       { done: s.legal_info !== '', label: 'Compléter les mentions légales des factures', href: '#/parametres', owner: true },
     ].filter((x) => !x.owner || isOwner());
     const todo = steps.filter((x) => !x.done);
+
+    // Ce qui demande une action aujourd'hui, en langage simple
+    const tasks = [];
+    if (a?.overdue.length) tasks.push({ tone: 'bad', title: `${a.overdue.length} facture${a.overdue.length > 1 ? 's' : ''} en retard de paiement`, detail: `${money(a.totals.overdue_amount)} à récupérer`, href: '#/alertes', action: 'Relancer' });
+    if (d.open_orders) tasks.push({ tone: 'warn', title: `${d.open_orders} commande${d.open_orders > 1 ? 's' : ''} à préparer`, detail: 'Mises de côté ou prises au téléphone', href: '#/commandes', action: 'Voir' });
+    if (a?.out_of_stock.length) tasks.push({ tone: 'bad', title: `${a.out_of_stock.length} produit${a.out_of_stock.length > 1 ? 's' : ''} en rupture`, detail: a.out_of_stock.slice(0, 3).map((p) => p.name).join(', '), href: '#/alertes', action: 'Recommander' });
+    if (a?.low_stock.length) tasks.push({ tone: 'warn', title: `${a.low_stock.length} produit${a.low_stock.length > 1 ? 's' : ''} bientôt épuisé${a.low_stock.length > 1 ? 's' : ''}`, detail: a.low_stock.slice(0, 3).map((p) => p.name).join(', '), href: '#/alertes', action: 'Voir' });
+    if (a?.due_soon.length) tasks.push({ tone: 'info', title: `${a.due_soon.length} facture${a.due_soon.length > 1 ? 's' : ''} à échéance cette semaine`, detail: `${money(a.totals.due_soon_amount)} attendus`, href: '#/alertes', action: 'Voir' });
+    if (d.open_quotes) tasks.push({ tone: 'info', title: `${d.open_quotes} devis en attente de réponse`, detail: `${money(d.open_quotes_value)} en jeu`, href: '#/devis', action: 'Suivre' });
+
     const max = Math.max(...d.months.map((m) => m.value), 1);
     const monthName = (m) => new Date(m + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'short' });
     const thisMonth = today().slice(0, 7);
-    setActions(`<a class="btn btn-primary" href="#/caisse">Ouvrir la caisse</a><button class="btn" data-new="devis">Nouveau devis</button>`);
+    $('#viewTitle').textContent = `${hello} ${first}`;
     $('#view').innerHTML = `
-      ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Premiers pas</h2><span class="muted">${steps.length - todo.length} sur ${steps.length}</span></div>
-        <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}
-          <li><a href="/s/${esc(state.me.store.slug)}" target="_blank" rel="noopener">Ouvrir votre vitrine en ligne</a> et partager le lien à vos clients</li></ol></section>` : ''}
-      <section class="kpis" aria-label="Indicateurs">
-        <a class="kpi" href="#/caisse"><span class="kpi-label">Caisse du jour</span><span class="kpi-value">${money(d.today_sales)}</span><span class="kpi-sub">${d.today_tickets} ticket${d.today_tickets > 1 ? 's' : ''}</span></a>
-        <a class="kpi" href="#/factures"><span class="kpi-label">Ventes du mois</span><span class="kpi-value">${money(d.revenue_month)}</span><span class="kpi-sub">tickets et factures</span></a>
-        <a class="kpi" href="${d.overdue ? '#/alertes' : '#/factures'}"><span class="kpi-label">À encaisser</span><span class="kpi-value">${money(d.unpaid)}</span><span class="kpi-sub ${d.overdue ? 'alert' : ''}">${d.overdue ? `${d.overdue} en retard de paiement` : `${d.unpaid_count} facture${d.unpaid_count > 1 ? 's' : ''} en attente`}</span></a>
-        <a class="kpi" href="#/commandes"><span class="kpi-label">Commandes en cours</span><span class="kpi-value">${d.open_orders}</span><span class="kpi-sub">à préparer ou mises de côté</span></a>
-        <a class="kpi" href="#/devis"><span class="kpi-label">Devis en attente</span><span class="kpi-value">${d.open_quotes}</span><span class="kpi-sub">${money(d.open_quotes_value)}</span></a>
-        <a class="kpi" href="#/stock"><span class="kpi-label">Valeur du stock</span><span class="kpi-value">${money(d.stock_value)}</span><span class="kpi-sub">au prix d'achat</span></a>
+      <p class="home-date">${dateLong.charAt(0).toUpperCase() + dateLong.slice(1)}</p>
+      <section class="home-hero">
+        <a class="home-sell" href="#/caisse"><span class="home-sell-label">Nouvelle vente</span><span class="home-sell-sub">Ouvrir la caisse</span></a>
+        <div class="home-today">
+          <div><span>Ventes du jour</span><strong>${money(d.today_sales)}</strong><small>${d.today_tickets} ticket${d.today_tickets > 1 ? 's' : ''}</small></div>
+          <div><span>Ce mois-ci</span><strong>${money(d.revenue_month)}</strong><small>${d.sales_month} vente${d.sales_month > 1 ? 's' : ''}</small></div>
+          <div><span>À encaisser</span><strong>${money(d.unpaid)}</strong><small>${d.unpaid_count} facture${d.unpaid_count > 1 ? 's' : ''}</small></div>
+        </div>
       </section>
-      <div class="dash-grid">
-        <div class="stack">
-          <section class="panel">
-            <div class="panel-head"><h2>Ventes des 6 derniers mois</h2><span class="muted">TTC</span></div>
-            <div class="chart">
-              ${d.months.map((m) => `<div class="bar ${m.month === thisMonth ? 'current' : ''}"><span class="bar-val">${m.value ? new Intl.NumberFormat('fr-FR').format(Math.round(m.value)) : ''}</span><div class="bar-fill" style="height:${Math.round((m.value / max) * 150)}px"></div></div>`).join('')}
-            </div>
-            <div class="chart-labels">${d.months.map((m) => `<span>${monthName(m.month)}</span>`).join('')}</div>
-          </section>
-          <section class="panel">
-            <div class="panel-head"><h2>Derniers documents</h2></div>
-            ${d.recent.length ? `<div class="table-wrap"><table><thead><tr><th>Numéro</th><th>Client</th><th class="num">Total TTC</th><th>Statut</th></tr></thead><tbody>
-              ${d.recent.map((r) => `<tr class="clickable" data-doc="${r.id}"><td><span class="cell-main doc-num">${esc(r.number)}</span>${r.origin === 'site' ? '<span class="site-flag">site</span>' : ''}<div class="cell-sub">${dateFmt(r.date)}</div></td><td>${esc(r.client_name)}</td><td class="num">${money(r.total_ttc)}</td><td>${docBadge(r)}</td></tr>`).join('')}
-            </tbody></table></div>` : `<div class="empty-state"><strong>Aucun document pour l'instant.</strong>Créez un devis ou une facture pour commencer.</div>`}
-          </section>
-        </div>
-        <div class="stack">
-        ${d.top.length ? `<section class="panel"><div class="panel-head"><h2>Meilleures ventes</h2><span class="muted">30 jours</span></div><div class="table-wrap"><table><tbody>
-          ${d.top.map((t) => `<tr><td class="cell-main">${esc(t.label)}</td><td class="num muted">${qtyFmt(t.qty)} vendu${t.qty > 1 ? 's' : ''}</td><td class="num">${money(t.amount)}</td></tr>`).join('')}
-        </tbody></table></div></section>` : ''}
+      <nav class="quick-actions" aria-label="Actions rapides">
+        <button type="button" data-act="new-product">Ajouter un produit</button>
+        <button type="button" data-stock="entrée">Réceptionner du stock</button>
+        <button type="button" data-new="devis">Faire un devis</button>
+        <button type="button" data-new="facture">Faire une facture</button>
+        <button type="button" id="shareVitrine">Partager ma vitrine</button>
+      </nav>
+      ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length}</span></div>
+        <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}</ol></section>` : ''}
+      <div class="home-grid">
         <section class="panel">
-          <div class="panel-head"><h2>Stock à réapprovisionner</h2><a href="#/alertes">Voir les alertes</a></div>
-          ${d.alerts.length ? `<div class="table-wrap"><table><thead><tr><th>Produit</th><th class="num">Stock</th><th class="num">Minimum</th></tr></thead><tbody>
-            ${d.alerts.map((p) => `<tr class="clickable" data-restock="${p.id}"><td><span class="cell-main">${esc(p.name)}</span><div class="cell-sub">${esc(p.ref)}</div></td><td class="num ${p.stock <= 0 ? 'stock-out' : 'stock-low'}">${qtyFmt(p.stock)}</td><td class="num">${qtyFmt(p.stock_min)}</td></tr>`).join('')}
-          </tbody></table></div>` : `<div class="empty-state"><strong>Tout est en stock.</strong>Aucun produit sous son seuil minimum.</div>`}
+          <div class="panel-head"><h2>À faire</h2>${tasks.length ? `<span class="muted">${tasks.length}</span>` : ''}</div>
+          ${tasks.length ? `<ul class="tasks">${tasks.map((t) => `<li class="t-${t.tone}"><a href="${t.href}"><span class="task-main"><strong>${esc(t.title)}</strong><span>${esc(t.detail)}</span></span><span class="task-go">${t.action}</span></a></li>`).join('')}</ul>`
+            : `<div class="empty-state"><strong>Rien d'urgent.</strong>Stock, paiements et commandes sont à jour.</div>`}
         </section>
-        </div>
-      </div>`;
+        <section class="panel">
+          <div class="panel-head"><h2>Meilleures ventes</h2><span class="muted">30 jours</span></div>
+          ${d.top.length ? `<ol class="top-list">${d.top.map((t) => `<li><span>${esc(t.label)}</span><span class="muted">${qtyFmt(t.qty)} vendu${t.qty > 1 ? 's' : ''}</span><strong>${money(t.amount)}</strong></li>`).join('')}</ol>`
+            : '<div class="empty-state">Vos produits les plus vendus apparaîtront ici après vos premières ventes.</div>'}
+        </section>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><h2>Ventes des 6 derniers mois</h2><span class="muted">TTC</span></div>
+        <div class="chart">${d.months.map((m) => `<div class="bar ${m.month === thisMonth ? 'current' : ''}"><span class="bar-val">${m.value ? new Intl.NumberFormat('fr-FR').format(Math.round(m.value)) : ''}</span><div class="bar-fill" style="height:${Math.round((m.value / max) * 150)}px"></div></div>`).join('')}</div>
+        <div class="chart-labels">${d.months.map((m) => `<span>${monthName(m.month)}</span>`).join('')}</div>
+      </section>`;
+    $('#shareVitrine').addEventListener('click', async () => {
+      if (navigator.share) { try { await navigator.share({ title: s.shop_name, url: vitrine }); return; } catch { /* annulé */ } }
+      try { await navigator.clipboard.writeText(vitrine); toast('Lien de la vitrine copié'); } catch { toast(vitrine); }
+    });
   }
 
   /* ================= Caisse ================= */
@@ -341,7 +383,7 @@
       <div class="pos">
         <section class="pos-catalog">
           <div class="pos-search">
-            <input id="posSearch" type="search" placeholder="Scanner un code-barres ou rechercher un produit" value="${esc(pos.q)}" autocomplete="off">
+            <input id="posSearch" type="search" placeholder="Scanner ou rechercher un produit" value="${esc(pos.q)}" autocomplete="off">
             <button class="btn" id="posFree" type="button">Article libre</button>
           </div>
           <div class="chips pos-cats" id="posCats"></div>
@@ -361,7 +403,8 @@
             </div>
           </div>
         </aside>
-      </div>`;
+      </div>
+      <div class="pos-mbar" id="posMbar" hidden><span id="posMbarInfo"></span><button class="btn" id="posMbarSee" type="button">Ticket</button><button class="btn btn-primary" id="posMbarPay" type="button">Encaisser</button></div>`;
     const search = $('#posSearch');
     search.addEventListener('input', () => { pos.q = search.value; renderPosGrid(); });
     search.addEventListener('keydown', (e) => {
@@ -376,6 +419,8 @@
     });
     $('#posFree').addEventListener('click', freeItemModal);
     $('#posPay').addEventListener('click', payModal);
+    $('#posMbarPay').addEventListener('click', payModal);
+    $('#posMbarSee').addEventListener('click', () => $('.pos-ticket').scrollIntoView({ behavior: 'smooth', block: 'start' }));
     $('#posDiscount').addEventListener('click', discountModal);
     $('#posReserve').addEventListener('click', reserveModal);
     $('#posCredit').addEventListener('click', creditModal);
@@ -459,6 +504,8 @@
       <div class="grand"><span>Total${count ? ` (${qtyFmt(count)} article${count > 1 ? 's' : ''})` : ''}</span><span>${money(t.ttc)}</span></div>`;
     const empty = !pos.lines.length;
     $('#posPay').textContent = empty ? 'Encaisser' : `Encaisser ${money(t.ttc)}`;
+    $('#posMbar').hidden = empty;
+    $('#posMbarInfo').innerHTML = `<strong>${money(t.ttc)}</strong><span>${qtyFmt(count)} article${count > 1 ? 's' : ''}</span>`;
     ['posPay', 'posDiscount', 'posReserve', 'posCredit'].forEach((id) => { $('#' + id).disabled = empty; });
     $('#posDiscount').textContent = pos.discount ? `Remise ${pos.discount} %` : 'Remise';
   }
@@ -748,16 +795,15 @@
       $('#ptable').innerHTML = `<div class="table-wrap"><div class="empty-state"><strong>Aucun produit.</strong>Ajoutez votre premier produit : il apparaîtra sur le site dès qu'il est enregistré.<br><button class="btn btn-primary" data-act="new-product">Nouveau produit</button></div></div>`;
       return;
     }
-    $('#ptable').innerHTML = `<div class="table-wrap"><table><thead><tr><th></th><th>Produit</th><th>Catégorie</th><th class="num">Prix HT</th><th class="num">Prix TTC</th><th class="num">Stock</th><th>Sur le site</th></tr></thead><tbody>
+    $('#ptable').innerHTML = `<div class="table-wrap"><table><thead><tr><th></th><th>Produit</th><th>Catégorie</th><th class="num">Prix</th><th class="num">En stock</th><th>Vitrine</th></tr></thead><tbody>
       ${list.map((p) => `<tr class="clickable" data-product="${p.id}">
         <td style="width:56px">${thumb(p)}</td>
         <td><span class="cell-main">${esc(p.name)}</span><div class="cell-sub">${esc(p.ref)}</div></td>
         <td>${esc(p.category_name || '—')}</td>
-        <td class="num">${money(p.price_ht)}</td>
-        <td class="num">${money(p.price_ht * (1 + p.tva_rate / 100))}</td>
+        <td class="num"><strong>${money(p.price_ht * (1 + p.tva_rate / 100))}</strong><div class="cell-sub">${esc(p.unit)}</div></td>
         <td class="num">${stockCell(p)}</td>
         <td>${p.visible ? '<span class="badge s-ok">visible</span>' : '<span class="badge s-neutral">masqué</span>'}</td>
-      </tr>`).join('') || `<tr><td colspan="7" class="empty-state">Aucun produit ne correspond à cette recherche.</td></tr>`}
+      </tr>`).join('') || `<tr><td colspan="6" class="empty-state">Aucun produit ne correspond à cette recherche.</td></tr>`}
     </tbody></table></div>`;
   }
 
@@ -781,35 +827,42 @@
 
   function productForm(p = null) {
     const isNew = !p;
-    p = p || { track_stock: 1, name: '', ref: '', barcode: '', description: '', category_id: '', price_ht: '', purchase_price: '', tva_rate: state.settings.tva_default || 20, stock: 0, stock_min: 0, unit: 'pièce', visible: 1 };
+    const tvaDef = Number(state.settings.tva_default) || 20;
+    p = p || { track_stock: 1, name: '', ref: '', barcode: '', description: '', category_id: '', price_ht: '', purchase_price: '', tva_rate: tvaDef, stock: '', stock_min: 0, unit: (state.me.units || [])[0] || 'pièce', visible: 1 };
+    const ttc = p.price_ht === '' ? '' : r2(p.price_ht * (1 + p.tva_rate / 100)).toFixed(2);
     let newImage = null, removeImage = false;
-    const body = openModal(isNew ? 'Nouveau produit' : 'Modifier le produit', `
-      <form id="pform" class="fields" novalidate>
-        <label class="field full"><span>Nom du produit</span><input name="name" value="${esc(p.name)}" required></label>
-        <label class="field"><span>Référence</span><input name="ref" value="${esc(p.ref)}"></label>
-        <label class="field"><span>Code-barres <span class="muted">(facultatif)</span></span><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scannez ou saisissez"></label>
-        <label class="field"><span>Catégorie</span><select name="category_id"><option value="">Sans catégorie</option>${state.categories.map((c) => `<option value="${c.id}" ${String(c.id) === String(p.category_id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
-        <label class="field full"><span>Description</span><textarea name="description" rows="3">${esc(p.description)}</textarea></label>
-        <label class="field"><span>Prix de vente HT (${esc(cur())})</span><input name="price_ht" type="number" step="0.01" min="0" value="${p.price_ht}" required><small id="ttcHint"></small></label>
-        <label class="field"><span>TVA (%)</span><input name="tva_rate" type="number" step="0.1" min="0" value="${p.tva_rate}"></label>
-        <label class="field"><span>Prix d'achat HT (${esc(cur())})</span><input name="purchase_price" type="number" step="0.01" min="0" value="${p.purchase_price}"><small id="marginHint"></small></label>
-        <label class="field"><span>Unité de vente</span><input name="unit" value="${esc(p.unit)}" list="units"><datalist id="units">${(state.me.units || []).map((u) => `<option>${esc(u)}</option>`).join('')}</datalist></label>
-        ${isNew
-          ? `<label class="field"><span>Stock initial</span><input name="stock" type="number" step="any" min="0" value="0"></label>`
-          : `<div class="field"><span>Stock actuel</span><div>${stockCell(p)} <button type="button" class="link" id="adjustStock">Ajuster</button></div></div>`}
-        <label class="field"><span>Seuil d'alerte</span><input name="stock_min" type="number" step="any" min="0" value="${p.stock_min}"><small>Alerte quand le stock descend à ce niveau.</small></label>
-        <div class="field full"><span>Photo</span>
-          <div class="img-field">
-            <div class="img-preview" id="imgPreview">${p.image ? `<img src="${esc(p.image)}" alt="">` : 'Aucune photo'}</div>
-            <div class="img-actions">
-              <label class="btn btn-sm">Choisir une photo<input type="file" accept="image/*" id="imgInput" hidden></label>
-              <button type="button" class="link" id="imgRemove" ${p.image ? '' : 'hidden'}>Retirer la photo</button>
-            </div>
+    const body = openModal(isNew ? 'Nouveau produit' : p.name, `
+      <form id="pform" novalidate>
+        <div class="pf-top">
+          <div class="pf-photo">
+            <div class="img-preview" id="imgPreview">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<span>Photo</span>'}</div>
+            <label class="btn btn-sm">${p.image ? 'Changer' : 'Ajouter une photo'}<input type="file" accept="image/*" capture="environment" id="imgInput" hidden></label>
+            <button type="button" class="link" id="imgRemove" ${p.image ? '' : 'hidden'}>Retirer</button>
+          </div>
+          <div class="fields pf-main">
+            <label class="field full"><span>Nom du produit</span><input name="name" value="${esc(p.name)}" required placeholder="Ex. : Perceuse sans fil 18 V"></label>
+            <label class="field"><span>Prix de vente (${esc(cur())})</span><input name="price_ttc" type="number" step="0.01" min="0" inputmode="decimal" value="${ttc}" required class="big-input"><small>Prix payé par le client, TVA comprise</small></label>
+            ${isNew
+              ? `<label class="field"><span>Quantité en stock</span><input name="stock" type="number" step="any" min="0" inputmode="decimal" value="${p.stock}" placeholder="0" class="big-input"></label>`
+              : `<div class="field"><span>En stock</span><div class="stock-now">${stockCell(p)} <button type="button" class="link" id="adjustStock">Modifier</button></div></div>`}
+            <label class="field full"><span>Catégorie</span><select name="category_id"><option value="">Sans catégorie</option>${state.categories.map((c) => `<option value="${c.id}" ${String(c.id) === String(p.category_id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
           </div>
         </div>
-        <label class="check full"><input type="checkbox" name="visible" ${p.visible ? 'checked' : ''}> Afficher ce produit sur la vitrine en ligne</label>
-        <label class="check full"><input type="checkbox" name="track_stock" ${p.track_stock === 0 ? '' : 'checked'}> Suivre le stock de ce produit <span class="muted">(décochez pour un service ou une prestation)</span></label>
-        <p class="form-error full" id="pError"></p>
+        <details class="pf-more" ${isNew ? '' : 'open'}>
+          <summary>Plus d'options</summary>
+          <div class="fields">
+            <label class="field"><span>Unité de vente</span><input name="unit" value="${esc(p.unit)}" list="units"><datalist id="units">${(state.me.units || []).map((u) => `<option>${esc(u)}</option>`).join('')}</datalist></label>
+            <label class="field"><span>M'alerter quand il en reste</span><input name="stock_min" type="number" step="any" min="0" value="${p.stock_min}"></label>
+            <label class="field"><span>Référence</span><input name="ref" value="${esc(p.ref)}"></label>
+            <label class="field"><span>Code-barres</span><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scannez ou saisissez"></label>
+            <label class="field"><span>Prix d'achat (${esc(cur())} HT)</span><input name="purchase_price" type="number" step="0.01" min="0" value="${p.purchase_price}"><small id="marginHint"></small></label>
+            <label class="field"><span>TVA (%)</span><input name="tva_rate" type="number" step="0.1" min="0" value="${p.tva_rate}"><small id="htHint"></small></label>
+            <label class="field full"><span>Description</span><textarea name="description" rows="3" placeholder="Visible sur votre vitrine en ligne">${esc(p.description)}</textarea></label>
+            <label class="check full"><input type="checkbox" name="visible" ${p.visible ? 'checked' : ''}> Afficher sur ma vitrine en ligne</label>
+            <label class="check full"><input type="checkbox" name="track_stock" ${p.track_stock === 0 ? '' : 'checked'}> Suivre le stock <span class="muted">(décochez pour un service)</span></label>
+          </div>
+        </details>
+        <p class="form-error" id="pError"></p>
       </form>
       <div class="modal-foot">
         ${isNew ? '' : '<button class="btn btn-danger" id="pDelete">Supprimer</button>'}
@@ -817,8 +870,8 @@
       </div>`);
     const form = $('#pform', body);
     const hints = () => {
-      const ht = Number(form.price_ht.value) || 0, tva = Number(form.tva_rate.value) || 0, pa = Number(form.purchase_price.value) || 0;
-      $('#ttcHint').textContent = ht ? `Soit ${money(ht * (1 + tva / 100))} TTC` : '';
+      const tva = Number(form.tva_rate.value) || 0, ht = (Number(form.price_ttc.value) || 0) / (1 + tva / 100), pa = Number(form.purchase_price.value) || 0;
+      $('#htHint').textContent = ht ? `Soit ${money(ht)} hors taxes` : '';
       $('#marginHint').textContent = ht && pa ? `Marge : ${money(ht - pa)} (${Math.round(((ht - pa) / ht) * 100)} %)` : '';
     };
     form.addEventListener('input', hints); hints();
@@ -829,7 +882,7 @@
         $('#imgPreview').innerHTML = `<img src="${newImage}" alt="">`; $('#imgRemove').hidden = false;
       } catch (ex) { fail(ex); }
     });
-    $('#imgRemove').addEventListener('click', () => { newImage = null; removeImage = true; $('#imgPreview').textContent = 'Aucune photo'; $('#imgRemove').hidden = true; });
+    $('#imgRemove').addEventListener('click', () => { newImage = null; removeImage = true; $('#imgPreview').innerHTML = '<span>Photo</span>'; $('#imgRemove').hidden = true; });
     $('#pCancel').addEventListener('click', closeModal);
     $('#adjustStock')?.addEventListener('click', () => stockModal('inventaire', p.id));
     $('#pDelete')?.addEventListener('click', async () => {
@@ -841,6 +894,8 @@
       const data = Object.fromEntries(new FormData(form));
       data.visible = form.visible.checked;
       data.track_stock = form.track_stock.checked;
+      data.price_ht = (Number(data.price_ttc) || 0) / (1 + (Number(data.tva_rate) || 0) / 100);
+      delete data.price_ttc;
       if (!data.name.trim()) { $('#pError').textContent = 'Le nom du produit est obligatoire.'; form.name.focus(); return; }
       btn.disabled = true;
       try {

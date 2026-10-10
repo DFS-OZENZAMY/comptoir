@@ -26,36 +26,48 @@ Hébergement : **Cloudflare Workers** (site, API, tâches planifiées) et **Clou
 | `/s/<nom-du-commerce>` | Clients des commerces | Catalogue public, prix et disponibilité, bouton d'appel |
 | `/console/` | Vous | Vue d'ensemble, liste des commerces, fiche détaillée, demandes de formule |
 
-### Espace commerce
-- **Inscription en 2 minutes.** Le commerçant choisit son type de commerce : quincaillerie, épicerie, mode, beauté, téléphonie, librairie, maison ou autre. Il choisit aussi son pays : devise et TVA sont réglées automatiquement. Les catégories, les unités de vente et les produits d'exemple sont créés pour lui.
-- **Caisse.**
-  - Saisie : code-barres, remise, articles libres.
-  - Encaissement : espèces avec monnaie à rendre, carte, chèque, virement, paiement mobile, ou plusieurs modes combinés.
-  - Commandes téléphoniques mises de côté, ventes à crédit.
-  - Ticket 80 mm et journal de caisse du jour.
-- **Gestion.**
-  - Stock suivi ou non selon le produit (les services ne sont pas suivis).
-  - Alertes de rupture et d'impayés.
-  - Devis, commandes et factures, paiements partiels, relances clients.
-- **Équipe.** Le propriétaire crée des accès employés. Un employé tient la caisse et gère produits, stock, clients et documents, mais n'accède ni aux paramètres, ni à l'équipe, ni à l'abonnement.
-- **Abonnement.** Le commerçant voit sa formule et son usage, et demande une formule payante.
+### Espace commerce (`/app/`)
+Il est conçu pour être simple au quotidien. Le menu compte six entrées, plus un grand bouton **Caisse** :
+- **Accueil** : un grand bouton « Nouvelle vente », les ventes du jour, du mois et le montant à encaisser. On y trouve aussi les raccourcis (ajouter un produit, réceptionner du stock, faire un devis ou une facture, partager la vitrine) et la liste **À faire**, écrite simplement : factures à relancer, commandes à préparer, ruptures, échéances et devis en attente. Les meilleures ventes complètent l'écran.
+- **Ventes** : commandes, devis et factures.
+- **Produits** : catalogue et stock.
+- **Clients** et **Alertes**.
+- **Réglages** : commerce et vitrine, équipe, abonnement. Cette entrée est réservée au propriétaire.
 
-### Console de la plateforme
-- **Indicateurs** : commerces inscrits, actifs sur 7 et 30 jours, essais en cours et terminés, abonnés payants, revenu mensuel (MRR) et annuel.
-- **Volume encaissé** par les commerces, **par devise** : on n'additionne jamais des euros et des dirhams.
-- **Courbes** : commerces actifs par jour, inscriptions par mois.
-- **Liste des commerces** avec un état de santé :
-  - *nouveau* : inscrit depuis moins de 7 jours ;
-  - *actif* : activité dans les 7 derniers jours ;
-  - *à risque* : dernière activité il y a 8 à 21 jours ;
-  - *inactif* : plus de 21 jours sans activité ;
-  - *essai terminé* ou *suspendu*.
+La **fiche produit** demande l'essentiel : photo, nom, prix de vente TTC (le prix que paie le client), quantité en stock et catégorie. Le reste (référence, code-barres, TVA, prix d'achat et marge, unité, seuil d'alerte) se trouve sous « Plus d'options ».
 
-  Pour chacun : jours actifs sur 30, ventes, tickets, produits, équipe et vues de la vitrine.
-- **Fiche commerce** : activité jour par jour, chiffres clés, contact, équipe, journal des événements.
+**Sur téléphone**, une barre de navigation en bas d'écran donne accès à Accueil, Ventes, Produits et Plus, avec un bouton central « Vendre ». Dans la caisse, une barre fixe affiche le total et le bouton Encaisser.
 
-  Actions possibles : changer de formule, suspendre ou réactiver, prolonger l'essai, prendre des notes internes, générer un mot de passe temporaire.
-- **Demandes de formule** : un clic pour activer la formule une fois le paiement réglé avec le commerçant.
+Inscription en 2 minutes : le commerçant choisit son type de commerce et son pays. Les catégories, les unités de vente, la devise, la TVA et des produits d'exemple sont prêts à son arrivée.
+
+### Console de la plateforme (`/console/`)
+- **Vue d'ensemble.** Elle s'ouvre sur les éléments à traiter. On y trouve :
+  - les indicateurs avec leur évolution sur 7 jours ;
+  - les commerces actifs par jour et la courbe de croissance ;
+  - l'entonnoir de conversion (inscrits, configurés, première vente, réguliers, payants) et le délai médian avant la première vente ;
+  - l'adoption de chaque fonction ;
+  - le volume encaissé par devise, comparé au mois précédent ;
+  - la santé des commerces et leur répartition par métier et par pays.
+- **À traiter.** Les demandes de formule, les essais qui se terminent ou terminés sans abonnement, les clients payants devenus inactifs, les nouveaux commerces sans première vente, les erreurs serveur, une tâche du matin manquée et la configuration incomplète.
+- **Commerces.** Pour chacun : son état de santé, une mini-courbe d'activité sur 30 jours, sa dernière activité et sa dernière vente, ses ventes, ses tickets, ses produits et les vues de sa vitrine. On peut filtrer, trier et exporter la liste en CSV.
+- **Fiche commerce** (panneau latéral) :
+  - *Aperçu* : chiffres clés, activité et ventes jour par jour, contact ;
+  - *Utilisation* : score d'adoption et fonctions utilisées ou non ;
+  - *Abonnement* : formule, suspension, prolongation d'essai, notes internes ;
+  - *Équipe* : mots de passe temporaires ;
+  - *Journal* des événements.
+- **Activité.** Une carte de chaleur, un commerce par ligne et un jour par case, sur 30 jours.
+- **Revenus.** L'évolution du revenu mensuel, la répartition par formule, le revenu moyen par abonné, la conversion des essais, les essais en cours et les abonnés payants.
+- **Système.** L'état de la plateforme, les appels et les temps de réponse heure par heure, le trafic sur 30 jours, les fonctions les plus appelées et les plus lentes, les dernières erreurs serveur, la configuration, la tâche du matin, la taille de la base et le volume de chaque table.
+- **Journal** filtrable et **Utilisateurs** : sessions, déconnexion forcée, mot de passe temporaire.
+- **Recherche rapide** d'un commerce (Ctrl K) et mise à jour automatique des chiffres toutes les minutes.
+
+Le monitoring repose sur trois tables alimentées automatiquement :
+- `api_stats` : appels, erreurs et durées, par heure et par fonction ;
+- `error_log` : les erreurs serveur ;
+- `platform_daily` : un instantané quotidien de la plateforme, qui alimente les courbes de croissance et de revenu.
+
+La tâche du matin purge l'ancien trafic (31 jours), les anciennes erreurs (90 jours) et les sessions expirées.
 
 ### Isolation des données
 Une seule base, où chaque ligne porte l'identifiant de son commerce (`store_id`). **Toutes** les requêtes de l'espace commerce filtrent sur ce champ, y compris les jointures. Les produits cités dans un ticket ou une facture sont vérifiés : un commerce ne peut ni lire, ni modifier, ni vendre, ni déstocker les produits d'un autre. C'est testé automatiquement.

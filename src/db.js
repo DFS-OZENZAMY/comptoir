@@ -56,6 +56,17 @@ const SCHEMA = [
     id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, document_id INTEGER NOT NULL, amount REAL NOT NULL,
     method TEXT DEFAULT '', date TEXT, note TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
 
+  // Monitoring de la plateforme
+  `CREATE TABLE IF NOT EXISTS api_stats (
+    hour TEXT NOT NULL, route TEXT NOT NULL, requests INTEGER DEFAULT 0, client_errors INTEGER DEFAULT 0, errors INTEGER DEFAULT 0,
+    total_ms REAL DEFAULT 0, max_ms REAL DEFAULT 0, PRIMARY KEY (hour, route))`,
+  `CREATE TABLE IF NOT EXISTS error_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, method TEXT, route TEXT, path TEXT,
+    status INTEGER, message TEXT, store_id INTEGER, user_id INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS platform_daily (
+    day TEXT PRIMARY KEY, stores INTEGER, active_7d INTEGER, active_30d INTEGER, paying INTEGER, trial INTEGER,
+    suspended INTEGER, mrr REAL, users INTEGER, products INTEGER, sales INTEGER)`,
+
   `CREATE INDEX IF NOT EXISTS idx_memberships_store ON memberships(store_id)`,
   `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_events_store ON events(store_id, id)`,
@@ -102,4 +113,23 @@ export async function bump(db, storeId, field, inc = 1) {
 export async function logEvent(db, storeId, userId, type, detail = '') {
   await db.prepare('INSERT INTO events (store_id, user_id, type, detail) VALUES (?, ?, ?, ?)')
     .bind(storeId || null, userId || null, type, String(detail).slice(0, 300)).run();
+}
+
+// Mesure de chaque appel d'API, agrégée par heure et par fonction.
+export async function recordRequest(db, route, status, ms) {
+  const hour = new Date().toISOString().slice(0, 13);
+  const client = status >= 400 && status < 500 ? 1 : 0, server = status >= 500 ? 1 : 0;
+  await db.prepare(`INSERT INTO api_stats (hour, route, requests, client_errors, errors, total_ms, max_ms) VALUES (?, ?, 1, ?, ?, ?, ?)
+    ON CONFLICT (hour, route) DO UPDATE SET requests = requests + 1, client_errors = client_errors + excluded.client_errors,
+    errors = errors + excluded.errors, total_ms = total_ms + excluded.total_ms, max_ms = MAX(max_ms, excluded.max_ms)`)
+    .bind(hour, route, client, server, ms, ms).run();
+}
+
+export async function logError(db, info) {
+  await db.prepare('INSERT INTO error_log (method, route, path, status, message, store_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(info.method, info.route, String(info.path).slice(0, 200), info.status, String(info.message).slice(0, 1000), info.store_id || null, info.user_id || null).run();
+}
+
+export async function setMeta(db, key, value) {
+  await db.prepare('INSERT OR REPLACE INTO platform_meta (key, value) VALUES (?, ?)').bind(key, String(value)).run();
 }

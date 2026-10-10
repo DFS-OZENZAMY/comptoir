@@ -60,19 +60,14 @@
         <a href="#/tableau-de-bord" id="storeName"></a>
         <span class="plan-badge" id="planBadge"></span>
       </div>
+      <a class="side-sell" href="#/caisse" data-nav="caisse">Caisse</a>
       <nav class="side-nav" aria-label="Navigation principale">
-        <a href="#/caisse" data-view="caisse">Caisse</a>
-        <a href="#/tableau-de-bord" data-view="tableau-de-bord">Tableau de bord</a>
-        <a href="#/alertes" data-view="alertes">Alertes <span class="nav-badge alert" id="badgeAlerts" hidden></span></a>
-        <a href="#/commandes" data-view="commandes">Commandes <span class="nav-badge" id="badgeOrders" hidden></span></a>
-        <a href="#/devis" data-view="devis">Devis</a>
-        <a href="#/factures" data-view="factures">Factures</a>
-        <a href="#/produits" data-view="produits">Produits</a>
-        <a href="#/stock" data-view="stock">Stock <span class="nav-badge warn" id="badgeStock" hidden></span></a>
-        <a href="#/clients" data-view="clients">Clients</a>
-        <a href="#/parametres" data-view="parametres" data-owner>Paramètres</a>
-        <a href="#/equipe" data-view="equipe" data-owner>Équipe</a>
-        <a href="#/abonnement" data-view="abonnement" data-owner>Abonnement</a>
+        <a href="#/tableau-de-bord" data-nav="tableau-de-bord">Accueil</a>
+        <a href="#/ventes" data-nav="ventes">Ventes <span class="nav-badge" id="badgeOrders" hidden></span></a>
+        <a href="#/produits" data-nav="produits">Produits <span class="nav-badge warn" id="badgeStock" hidden></span></a>
+        <a href="#/clients" data-nav="clients">Clients</a>
+        <a href="#/alertes" data-nav="alertes">Alertes <span class="nav-badge alert" id="badgeAlerts" hidden></span></a>
+        <a href="#/reglages" data-nav="reglages" data-owner>Réglages</a>
       </nav>
       <div class="side-foot">
         <a href="#" id="storeLink" target="_blank" rel="noopener">Voir ma vitrine</a>
@@ -82,14 +77,38 @@
       </div>
     </aside>
 
+    <header class="mobile-top">
+      <a href="#/tableau-de-bord" class="mobile-store" id="storeNameM"></a>
+      <a href="#/alertes" class="mobile-bell" aria-label="Alertes">Alertes <span class="nav-badge alert" id="badgeAlertsM" hidden></span></a>
+    </header>
+
     <main class="main">
       <div class="access-banner" id="accessBanner" hidden></div>
       <header class="main-head">
         <h1 id="viewTitle"></h1>
         <div class="main-actions" id="viewActions"></div>
       </header>
+      <nav class="subnav" id="subnav" aria-label="Sous-sections" hidden></nav>
       <div id="view" class="view"></div>
     </main>
+
+    <nav class="tabbar" aria-label="Navigation">
+      <a href="#/tableau-de-bord" data-nav="tableau-de-bord"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-5v-6H9v6H4z"/></svg>Accueil</a>
+      <a href="#/ventes" data-nav="ventes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6"/></svg>Ventes</a>
+      <a href="#/caisse" data-nav="caisse" class="tab-sell"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Vendre</a>
+      <a href="#/produits" data-nav="produits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8 12 4l8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/></svg>Produits</a>
+      <button type="button" id="moreBtn" aria-expanded="false" aria-controls="moreSheet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>Plus</button>
+    </nav>
+    <div class="more-sheet" id="moreSheet" hidden>
+      <div class="more-panel">
+        <a href="#/clients">Clients</a>
+        <a href="#/alertes">Alertes</a>
+        <a href="#/reglages" data-owner>Réglages</a>
+        <a href="#" id="storeLinkM" target="_blank" rel="noopener">Voir ma vitrine</a>
+        <button type="button" data-account>Mon compte</button>
+        <button type="button" data-logout>Se déconnecter</button>
+      </div>
+    </div>
   </div>
 
   <dialog class="modal" id="modal" aria-labelledby="modalTitle">

@@ -5,11 +5,11 @@
 //   /s/<slug>    catalogue public d'un commerce
 //   /api/...     API
 import { HttpError, json, num, r2, readBody } from './lib.js';
-import { init, bump } from './db.js';
+import { init, bump, recordRequest, logError, setMeta } from './db.js';
 import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './catalog.js';
 import { signup, login, logout, getContext, me, changePassword, touchStore } from './auth.js';
 import { storeRoutes, getSettings, imageUrl, runDailyDigests } from './store.js';
-import { consoleRoutes } from './console.js';
+import { consoleRoutes, takeSnapshot, cleanup } from './console.js';
 
 async function publicCatalog(db, slug) {
   const store = await db.prepare('SELECT id, name, slug, status, business_type FROM stores WHERE slug = ?').bind(slug).first();
@@ -40,9 +40,18 @@ async function serveImage(db, id) {
   return new Response(bytes, { headers: { 'content-type': img.mime, 'cache-control': 'public, max-age=31536000, immutable' } });
 }
 
-async function handleApi(request, env) {
+// Nom de la fonction appelée, sans identifiants : « store/products », « public/stores »…
+export function routeName(parts) {
+  const [a, b] = parts;
+  if (!a) return 'racine';
+  if (a === 'images') return 'images';
+  return b && !/^\d+$/.test(b) ? `${a}/${b}` : a;
+}
+
+async function handleApi(request, env, info) {
   const url = new URL(request.url);
   const parts = url.pathname.replace(/^\/api\/?/, '').split('/').filter(Boolean).map(decodeURIComponent);
+  info.route = routeName(parts);
   const m = request.method;
   try {
     if (!env.DB) throw new HttpError(500, 'Base de données non liée (binding DB).');
@@ -70,6 +79,7 @@ async function handleApi(request, env) {
     const ctx = await getContext(db, env, request);
     if (a === 'auth' && b === 'me' && m === 'GET') return json(ctx ? { authenticated: true, ...(await me(db, ctx)) } : { authenticated: false });
     if (!ctx) throw new HttpError(401, 'Session expirée : reconnectez-vous.');
+    info.user_id = ctx.user.id; info.store_id = ctx.store?.id;
     if (a === 'auth' && b === 'password' && m === 'POST') return json(await changePassword(db, ctx, await readBody(request)));
 
     if (a === 'store') {
@@ -84,16 +94,30 @@ async function handleApi(request, env) {
     throw new HttpError(404, 'Route inconnue.');
   } catch (e) {
     const status = e instanceof HttpError ? e.status : 500;
-    if (status === 500) console.error(e);
+    if (status === 500) { console.error(e); info.error = e.message || String(e); }
     return json({ error: status === 500 ? 'Erreur serveur. Réessayez dans un instant.' : e.message }, status);
   }
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
-    if (p === '/api' || p.startsWith('/api/')) return handleApi(request, env);
+    if (p === '/api' || p.startsWith('/api/')) {
+      const t0 = Date.now();
+      const info = { route: 'api' };
+      const res = await handleApi(request, env, info);
+      const ms = Date.now() - t0;
+      if (env.DB) {
+        ctx.waitUntil((async () => {
+          await recordRequest(env.DB, info.route, res.status, ms);
+          if (res.status >= 500) {
+            await logError(env.DB, { method: request.method, route: info.route, path: p, status: res.status, message: info.error || '', store_id: info.store_id, user_id: info.user_id });
+          }
+        })().catch(() => {}));
+      }
+      return res;
+    }
     // Catalogue public d'un commerce : même page pour tous, le JavaScript lit le slug dans l'adresse.
     if (/^\/s\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/store/', url), request));
     return env.ASSETS.fetch(request);
@@ -102,7 +126,11 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       await init(env.DB);
-      await runDailyDigests(env);
+      const done = [];
+      try { await takeSnapshot(env.DB); done.push('instantané'); } catch (e) { done.push('instantané en échec : ' + e.message); }
+      try { await cleanup(env.DB); done.push('nettoyage'); } catch (e) { done.push('nettoyage en échec : ' + e.message); }
+      try { await runDailyDigests(env); done.push('e-mails'); } catch (e) { done.push('e-mails en échec : ' + e.message); }
+      await setMeta(env.DB, 'last_cron', JSON.stringify({ at: new Date().toISOString(), result: done }));
     })().catch((e) => console.error('Tâche du matin :', e.message)));
   },
 };
