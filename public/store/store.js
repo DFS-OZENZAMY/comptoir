@@ -14,12 +14,15 @@
     const n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
     const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
     document.documentElement.style.setProperty('--accent', '#' + m[1]);
+    const dk = (v) => Math.round(v * 0.74).toString(16).padStart(2, '0');
+    document.documentElement.style.setProperty('--accent-dark', lum > 0.62 ? '#' + m[1] : `#${dk(r)}${dk(g)}${dk(b)}`);
     document.documentElement.style.setProperty('--on-accent', lum > 0.62 ? '#16181D' : '#FFFFFF');
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', '#' + m[1]);
   }
 
   const money = (n) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' ' + (state.settings.currency || '€');
-  const initials = (p) => esc((p.ref || p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase());
+  // Sans photo : les trois premières lettres du nom (« Café moulu » donne CAF).
+  const initials = (p) => esc(norm(p.name).replace(/[^a-z0-9]/g, '').slice(0, 3).toUpperCase() || '·');
   const media = (p) => p.image
     ? `<img src="${esc(p.image)}" alt="" loading="lazy">`
     : `<span class="placeholder" aria-hidden="true">${initials(p)}</span>`;
@@ -38,7 +41,11 @@
     applyAccent(s.accent);
     document.querySelectorAll('.infos-list > div').forEach((div) => { div.hidden = !(s[div.querySelector('[data-setting]').dataset.setting] || '').trim(); });
     $('#brandLink').href = location.pathname;
-    $('#hangTag').hidden = !s.hours;
+    $('#hoursPill').hidden = !s.hours;
+    $('#hoursText').textContent = s.hours ? `Horaires : ${s.hours}` : '';
+    $('#callBig').hidden = !s.phone;
+    $('#callBig').href = telHref();
+    if (s.phone) $('#callBigText').textContent = `Appeler le ${s.phone}`;
     if (s.tagline) document.querySelector('meta[name="description"]').setAttribute('content', s.tagline);
     $('#callTop').hidden = !s.phone;
     $('#callTop').href = telHref();

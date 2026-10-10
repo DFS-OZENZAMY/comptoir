@@ -1,21 +1,27 @@
 :root {
-  --steel: #1B1D22;
-  --steel-2: #2A2D35;
-  --steel-deep: #121317;
-  --zinc: #F0F1F3;
+  /* Jetons du design Comptoir (fichier Figma « Fondations ») */
+  --steel: #17181C;
+  --steel-2: #2A2C33;
+  --steel-deep: #101114;
+  --zinc: #F4F4F1;
   --paper: #FFFFFF;
-  --line: #D9DEE2;
-  --ink: #1B2530;
-  --muted: #5A6774;
+  --line: #E3E3DF;
+  --ink: #17181C;
+  --muted: #6B6F78;
   --signal: #E4572E;
+  --signal-strong: #C9461F;
   --on-signal: #FFFFFF;
-  --signal-soft: #FCE9E3;
+  --signal-soft: #FCE8E1;
   --ok: #2E7D4F;
-  --low: #A86411;
-  --out: #A93226;
+  --low: #B7791F;
+  --out: #B3261E;
   --info: #2D5F8A;
-  --radius: 4px;
+  --radius: 8px;
+  --r-card: 12px;
+  --r-tile: 16px;
   --font: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --display: "Archivo Narrow", "Archivo", "Arial Narrow", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -470,3 +476,46 @@ a.kpi:hover { background: #FAFAFB; }
   .pos-mbar .btn-primary { padding: 12px 18px; }
   .pos { padding-bottom: 70px; }
 }
+
+
+/* ================================================================== */
+/* Design Comptoir : titres, arrondis, menu et ticket de caisse       */
+/* ================================================================== */
+.main-head h1, .side-brand a, .auth-brand, .auth-card h1, .home-sell-label, .modal-head h2,
+.drawer-title h2, .mobile-store, .console-gate h1, .sale-change strong, .pay-total strong, .auth-pitch {
+  font-family: var(--display); font-stretch: normal; letter-spacing: -0.005em;
+}
+.main-head h1 { font-size: 2.3rem; }
+.kpi-value, .home-today strong, .sub-current strong, .plan-price strong, .pos-totals .grand { font-stretch: normal; }
+.panel, .table-wrap, .kpis, .modal, .login-card, .auth-card .fields input, .notice, .alert-strip, .access-banner, .facts, .score, .features li { border-radius: var(--r-card); }
+.home-sell, .home-today, .plan, .pos-tile { border-radius: var(--r-card); }
+.home-sell { border-radius: var(--r-tile); }
+.chip, .quick-actions button, .nav-badge, .badge { border-radius: 999px; }
+.badge { padding: 2px 9px; }
+.kpi-value { font-weight: 700; letter-spacing: -0.01em; }
+.panel-head h2 { font-size: 1.1rem; }
+
+/* Menu latéral : entrées arrondies, comme le composant « Élément de menu » */
+.side-nav { padding: 0 12px; gap: 2px; }
+.side-nav a { border-left: 0; border-radius: var(--radius); padding: 11px 14px; color: rgba(255,255,255,.72); }
+.side-nav a:hover { background: rgba(255,255,255,.06); color: #fff; }
+.side-nav a.active { background: var(--steel-2); color: #fff; }
+.side-sell { border-radius: var(--radius); }
+
+/* Caisse : le ticket en cours ressemble à un vrai ticket */
+.pos-ticket {
+  border: 0; border-radius: var(--r-card) var(--r-card) 0 0; padding-bottom: 12px;
+  -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%;
+  mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 12px 100%;
+  box-shadow: 0 1px 0 var(--line), 0 12px 30px rgba(23,24,28,.08);
+}
+.pos-line-total, .pos-totals, .pos-line-price input, .pos-line .stepper input { font-family: var(--mono); }
+.pos-line-total { font-weight: 600; }
+.pos-line { border-bottom: 1px dashed rgba(107,111,120,.35); }
+.pos-totals .grand { font-family: var(--mono); font-weight: 600; font-size: 1.3rem; }
+.pos-bottom { border-top: 1px dashed rgba(107,111,120,.5); }
+.pos-tile { border-color: var(--line); }
+.pos-tile:hover { border-color: var(--ink); box-shadow: 0 4px 14px rgba(23,24,28,.06); }
+.pay-total { border-radius: var(--r-card); }
+.pay-method { border-radius: var(--radius); }
+@media (max-width: 900px) { .pos-mbar:not([hidden]) { border-radius: 14px; } }

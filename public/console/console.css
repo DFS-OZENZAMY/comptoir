@@ -209,3 +209,11 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 .search-results button .health { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
 .search-results button:hover, .search-results button:focus-visible, .search-results button.first { background: var(--zinc); }
 .drawer-body > * { flex-shrink: 0; }
+
+/* Design Comptoir */
+.tip { border-radius: var(--radius); }
+.todo-kind, .t-type { border-radius: 999px; }
+.status-banner { border-radius: var(--r-card); }
+.search-dialog { border-radius: var(--r-tile); }
+.drawer-body .panel, .drawer-body .facts { border-radius: var(--r-card); }
+.heat-panel { border-radius: var(--r-card); }

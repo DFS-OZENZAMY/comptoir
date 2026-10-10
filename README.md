@@ -77,6 +77,19 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Design
+
+Maquettes et système de design : **https://www.figma.com/design/76wfHUeIuxJcFzAcIjRSbr**
+- **Fondations** : 17 couleurs, espacements, arrondis, 14 styles de texte, et 11 composants (bouton, pastille, badge, indicateur, tâche, tuile de caisse, carte produit, champ, ligne de ticket, menu, barre mobile).
+- **Site et vitrine** : site de présentation et vitrine d'un commerce, en version ordinateur et téléphone.
+
+Les mêmes jetons sont utilisés dans le code (variables CSS en tête de `public/app/app.css`, `public/assets/site.css` et `public/store/store.css`) :
+- encre `#17181C`, fond `#F4F4F1`, bordures `#E3E3DF`, vermillon `#E4572E` ;
+- polices : Archivo pour l'interface, **Archivo Narrow** pour les titres, **IBM Plex Mono** pour tout ce qui ressemble à un ticket de caisse ;
+- arrondis : 8 px pour les contrôles, 12 px pour les cartes, 16 px pour les grandes tuiles.
+
+L'élément signature est le **ticket de caisse au bord dentelé** : image d'accueil du site et panier en cours de la caisse.
+
 ## Mise en ligne sur Cloudflare
 
 1. **Workers & Pages**, **Create**, **Import a repository**, puis choisir ce dépôt. Le nom du Worker doit être `comptoir` (champ `name` de `wrangler.jsonc`). La base D1 `comptoir-data` est créée automatiquement au premier déploiement.

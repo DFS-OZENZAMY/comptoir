@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#1B1D22">
+  <meta name="theme-color" content="#17181C">
   <title>Vitrine</title>
   <meta name="description" content="Catalogue en ligne et disponibilité des produits.">
   <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=Archivo+Narrow:wght@600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/store/store.css">
 </head>
 <body>
@@ -17,34 +17,31 @@
 
   <header class="topbar">
     <a class="brand" href="" id="brandLink" data-setting="shop_name"></a>
-    <a class="call-btn" id="callTop" href="#infos">
-      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z" fill="currentColor"/></svg>
-      <span data-setting="phone">Appeler</span>
+    <a class="call-btn" id="callTop" href="#infos" hidden>
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.2.2 2.4.6 3.6a1 1 0 0 1-.3 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      <span class="call-full" data-setting="phone"></span><span class="call-short">Appeler</span>
     </a>
   </header>
 
   <section class="hero" aria-labelledby="heroTitle">
     <div class="hero-inner">
-      <h1 id="heroTitle" class="hero-title"></h1>
+      <h1 id="heroTitle"></h1>
       <p class="hero-lead" data-setting="tagline"></p>
-      <form class="search" role="search" onsubmit="return false">
-        <label class="visually-hidden" for="search">Rechercher un produit</label>
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input id="search" type="search" placeholder="Nom du produit ou référence" autocomplete="off">
-      </form>
-    </div>
-    <div class="hang-tag" id="hangTag" aria-label="Horaires d'ouverture" hidden>
-      <span class="hang-hole" aria-hidden="true"></span>
-      <span class="hang-label">Horaires</span>
-      <span class="hang-hours" data-setting="hours"></span>
+      <div class="hero-row">
+        <form class="search" role="search" onsubmit="return false">
+          <label class="visually-hidden" for="search">Rechercher un produit</label>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20"><path d="M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5 21 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <input id="search" type="search" placeholder="Nom du produit ou référence" autocomplete="off">
+        </form>
+        <p class="hours" id="hoursPill" hidden><span class="hours-dot" aria-hidden="true"></span><span id="hoursText"></span></p>
+      </div>
     </div>
   </section>
 
-  <nav class="cats" aria-label="Catégories">
-    <div class="cats-inner" id="cats"></div>
-  </nav>
+  <nav class="cats" aria-label="Catégories"><div class="cats-inner" id="cats"></div></nav>
 
-  <div class="notfound" id="notFound" hidden><h1>Commerce introuvable</h1><p>Cette vitrine n'existe pas ou n'est plus en ligne.</p><a class="btn btn-primary" href="/">Découvrir Comptoir</a></div>
+  <div class="notfound" id="notFound" hidden><h1>Commerce introuvable</h1><p>Cette vitrine n'existe pas ou n'est plus en ligne.</p><a class="btn-cta" href="/">Découvrir Comptoir</a></div>
+
   <main id="catalogue" class="catalog">
     <p class="result-count" id="resultCount" aria-live="polite"></p>
     <div class="grid" id="grid"></div>
@@ -52,14 +49,20 @@
 
   <section class="infos" id="infos" aria-labelledby="infosTitle">
     <div class="infos-inner">
-      <h2 id="infosTitle">Commander</h2>
+      <div class="infos-main">
+        <h2 id="infosTitle">Pour commander</h2>
+        <p>Appelez-nous en citant la référence du produit, ou passez au magasin : nous préparons votre commande et la mettons de côté.</p>
+        <a class="btn-cta" id="callBig" href="#infos" hidden>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.2.2 2.4.6 3.6a1 1 0 0 1-.3 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <span id="callBigText">Appeler le magasin</span>
+        </a>
+      </div>
       <dl class="infos-list">
         <div><dt>Adresse</dt><dd data-setting="address"></dd></div>
         <div><dt>Horaires</dt><dd data-setting="hours"></dd></div>
         <div><dt>Téléphone</dt><dd><a data-setting="phone" data-href="tel"></a></dd></div>
         <div><dt>E-mail</dt><dd><a data-setting="email" data-href="mailto"></a></dd></div>
       </dl>
-      <p class="infos-note">Passez au magasin ou appelez-nous : nous préparons votre commande et la mettons de côté. Les prix affichés sont TTC ; la disponibilité est mise à jour en temps réel.</p>
     </div>
   </section>
 
@@ -79,11 +82,10 @@
       <p class="avail" id="pdAvail"></p>
       <div class="pd-order">
         <p>Pour commander, appelez-nous en indiquant la référence <strong id="pdRefInline"></strong>, ou passez au magasin.</p>
-        <a class="btn btn-primary" id="pdCall" href="#infos">Appeler le magasin</a>
+        <a class="btn-cta" id="pdCall" href="#infos">Appeler le magasin</a>
       </div>
     </div>
   </dialog>
-
 
   <script src="/store/store.js" defer></script>
 </body>
