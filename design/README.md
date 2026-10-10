@@ -6,12 +6,23 @@ Ce dossier contient l'export de la maquette, pour la consulter sans compte Figma
 
 | Fichier | Contenu |
 |---|---|
+| `comptoir-design.fig` | **Fichier source Figma** : fondations, composants et écrans, modifiables |
 | `maquette-site-et-vitrine.png` | Export complet de la page « Site et vitrine » (4 écrans) |
 | `ecrans/site-ordinateur.png` | Site de présentation, version ordinateur (1440 px) |
 | `ecrans/site-telephone.png` | Site de présentation, version téléphone (390 px) |
 | `ecrans/vitrine-ordinateur.png` | Vitrine d'un commerce (exemple : Épicerie Al Baraka), version ordinateur |
 | `ecrans/vitrine-telephone.png` | Vitrine d'un commerce, version téléphone |
 | `tokens.json` | Couleurs, espacements, arrondis et styles de texte du design |
+
+## Rouvrir le fichier source
+
+Le fichier `comptoir-design.fig` est une copie complète et modifiable du design : pages, couleurs, styles de texte, composants et écrans.
+
+1. Téléchargez `comptoir-design.fig` depuis GitHub (bouton « Download raw file »).
+2. Dans Figma, ouvrez l'écran d'accueil des fichiers, puis glissez-y le fichier. Ou bien : menu **Importer**, puis choisissez le fichier.
+3. Figma crée un nouveau fichier identique, que vous pouvez modifier et partager.
+
+Pensez à remplacer `comptoir-design.fig` dans ce dossier après chaque évolution importante du design, pour que GitHub garde une copie à jour.
 
 ## Aperçu
 
