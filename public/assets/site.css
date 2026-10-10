@@ -177,3 +177,28 @@ h3 { margin: 0; }
 .metier-title a { text-decoration: none; }
 .metier-more { display: inline-block; margin-top: 14px; font-weight: 600; color: var(--signal-strong); }
 @media (max-width: 900px) { .features-2 { grid-template-columns: 1fr; } }
+
+/* Tarifs par pays */
+.price-country { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -20px 0 24px; }
+.price-country label { font-weight: 600; }
+.price-country select { padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--surface); font: inherit; font-weight: 600; min-width: 220px; }
+
+/* Liens légaux */
+.footer-legal { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.footer-legal a { color: #CFD1D6; text-decoration: none; }
+.footer-legal a:hover { color: #fff; text-decoration: underline; }
+
+/* Pages légales */
+.legal { max-width: 820px; padding-bottom: 72px; }
+.legal h1 { font-size: clamp(2.4rem, 5vw, 3.4rem); line-height: 1; margin: 24px 0 8px; }
+.legal h2 { font-family: var(--font); font-size: 1.25rem; font-weight: 700; margin: 32px 0 8px; letter-spacing: 0; }
+.legal p, .legal li { color: #2F3238; line-height: 1.65; }
+.legal ul { padding-left: 20px; display: grid; gap: 6px; }
+.legal code { background: #ECECE8; padding: 1px 6px; border-radius: 4px; font-size: .9em; }
+.legal mark.todo { background: #FBF0D9; color: #8A5E0A; padding: 1px 5px; border-radius: 4px; font-weight: 600; }
+.legal-nav { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); }
+.legal-nav a { padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); text-decoration: none; font-weight: 600; font-size: .9rem; }
+
+.price strong { white-space: nowrap; }
+.price-long { flex-wrap: wrap; }
+.price-long strong { font-size: clamp(2.2rem, 3.4vw, 2.8rem); }

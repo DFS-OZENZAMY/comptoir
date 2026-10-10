@@ -2,13 +2,24 @@
 // données structurées schema.org, pages métier, plan du site et robots.txt.
 import { r2, escHtml as e } from './lib.js';
 import { init, bump } from './db.js';
-import { PLATFORM, PLANS, PAID_PLANS, COUNTRIES } from './catalog.js';
+import { PLATFORM, PLANS, PAID_PLANS, COUNTRIES, waNumber, pricing } from './catalog.js';
 import { getSettings, imageUrl } from './store.js';
 
 const ISO = { FR: 'EUR', BE: 'EUR', LU: 'EUR', CH: 'CHF', MA: 'MAD', DZ: 'DZD', TN: 'TND', SN: 'XOF', CI: 'XOF', CM: 'XAF', CA: 'CAD', XX: 'EUR' };
 const jsonLd = (obj) => `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, '\\u003c')}</script>`;
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length <= n ? s : s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…'; };
 const html = (body, status = 200, cache = 'public, max-age=300') => new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': cache } });
+// Pays du visiteur : choix explicite (?pays=MA, mémorisé), sinon détection Cloudflare, sinon France.
+export function visitorCountry(request, url) {
+  const asked = (url.searchParams.get('pays') || '').toUpperCase();
+  if (COUNTRIES[asked]) return { country: asked, set: true };
+  const m = (request.headers.get('cookie') || '').match(/(?:^|;\s*)cp_pays=([A-Z]{2})/);
+  if (m && COUNTRIES[m[1]]) return { country: m[1], set: false };
+  const cf = request.cf?.country;
+  if (cf && COUNTRIES[cf]) return { country: cf, set: false };
+  return { country: cf ? 'XX' : 'FR', set: false };
+}
+const countryCookie = (c) => `cp_pays=${c}; Path=/; Max-Age=31536000; SameSite=Lax`;
 const fmt = (n) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
 
 function headTags({ origin, path, title, description, image, type = 'website', noindex = false }) {
@@ -169,6 +180,7 @@ const NAV = `<header class="nav">
       <a href="/app/#/inscription" class="btn btn-primary">Essai gratuit</a>
     </nav>
   </header>`;
+const LEGAL_LINKS = '<a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a>';
 const footerLinks = () => Object.entries(METIERS).map(([slug, m]) => `<a href="/logiciel-de-caisse/${slug}">Caisse ${e(m.name)}</a>`).join('');
 const FOOTER = () => `<footer class="footer">
     <div class="wrap footer-cols">
@@ -176,7 +188,7 @@ const FOOTER = () => `<footer class="footer">
       <nav aria-label="Logiciel de caisse par métier"><strong>Par métier</strong>${footerLinks()}</nav>
       <nav aria-label="Comptoir"><strong>Comptoir</strong><a href="/#fonctions">Fonctions</a><a href="/#tarifs">Tarifs</a><a href="/app/#/inscription">Essai gratuit</a><a href="/app/">Espace commerçant</a></nav>
     </div>
-    <div class="wrap footer-in"><span>© ${new Date().getFullYear()} Comptoir</span></div>
+    <div class="wrap footer-in"><span>© ${new Date().getFullYear()} Comptoir</span><span class="footer-legal">${LEGAL_LINKS}</span></div>
   </footer>`;
 const docHead = (title, description, extra) => `<!doctype html>
 <html lang="fr">
@@ -193,25 +205,26 @@ const docHead = (title, description, extra) => `<!doctype html>
   <link rel="stylesheet" href="/assets/site.css">${extra}
 </head>`;
 
-const offersLd = () => ({
-  '@type': 'AggregateOffer', priceCurrency: 'EUR',
-  lowPrice: Math.min(...PAID_PLANS.map((k) => PLANS[k].price)), highPrice: Math.max(...PAID_PLANS.map((k) => PLANS[k].price)), offerCount: PAID_PLANS.length,
+const offersLd = (pr = pricing('FR')) => ({
+  '@type': 'AggregateOffer', priceCurrency: pr.currency,
+  lowPrice: Math.min(...PAID_PLANS.map((k) => pr.price(k))), highPrice: Math.max(...PAID_PLANS.map((k) => pr.price(k))), offerCount: PAID_PLANS.length,
 });
-const softwareLd = (origin, name, description) => ({
+const softwareLd = (origin, name, description, pr) => ({
   '@context': 'https://schema.org', '@type': 'SoftwareApplication', name, description, url: origin + '/',
   applicationCategory: 'BusinessApplication', applicationSubCategory: 'Logiciel de caisse', operatingSystem: 'Web, Android, iOS, Windows, macOS',
-  inLanguage: 'fr', offers: offersLd(),
+  inLanguage: 'fr', offers: offersLd(pr),
 });
 const faqLd = (faq) => ({ '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) });
 
-export function renderMetier(origin, slug) {
+export function renderMetier(origin, slug, country = 'FR') {
   const m = METIERS[slug];
+  const pr = pricing(country);
   if (!m) return null;
   const path = `/logiciel-de-caisse/${slug}`;
   const description = clip(m.lead, 158);
   const others = Object.entries(METIERS).filter(([s]) => s !== slug);
   const ld = [
-    softwareLd(origin, `Comptoir, logiciel de caisse pour ${m.name}`, description),
+    softwareLd(origin, `Comptoir, logiciel de caisse pour ${m.name}`, description, pr),
     faqLd(m.faq),
     { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Comptoir', item: origin + '/' },
@@ -247,6 +260,7 @@ export function renderMetier(origin, slug) {
     </section>
     <section class="faq wrap">
       <h2>Questions fréquentes</h2>
+      <details><summary>Combien coûte Comptoir ${pr.country === 'XX' ? '' : 'en ' + e(pr.country_name)} ?</summary><p>À partir de ${e(pr.format(pr.price('essentiel')))} HT par mois, sans engagement, après 14 jours d’essai gratuit. La formule Pro est à ${e(pr.format(pr.price('pro')))} HT par mois, la formule Business à ${e(pr.format(pr.price('business')))}.</p></details>
       ${m.faq.map(([q, a]) => `<details><summary>${e(q)}</summary><p>${e(a)}</p></details>`).join('')}
     </section>
     <section class="related wrap">
@@ -300,24 +314,28 @@ export async function renderLanding(env, request, url) {
   const res = await env.ASSETS.fetch(new Request(new URL('/', url), request));
   if (!res.ok) return res;
   const origin = url.origin;
+  const vc = visitorCountry(request, url);
+  const pr = pricing(vc.country);
   const title = 'Comptoir : caisse, stock, factures et vitrine en ligne pour les commerces';
   const description = 'Logiciel de caisse en ligne pour commerces de proximité : encaissement, stock, devis et factures, alertes et vitrine en ligne. Essai gratuit de 14 jours.';
   const ld = [
     { '@context': 'https://schema.org', '@type': 'Organization', name: 'Comptoir', url: origin + '/', logo: origin + '/assets/icon-512.png' },
     { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Comptoir', url: origin + '/', inLanguage: 'fr' },
-    softwareLd(origin, 'Comptoir', description),
+    softwareLd(origin, 'Comptoir', description, pr),
     faqLd(LANDING_FAQ),
   ];
   const plans = PAID_PLANS.map((k) => ({ key: k, ...PLANS[k] }));
   const plansHtml = plans.map((pl) => `
         <article class="plan ${pl.key === 'pro' ? 'featured is-shown' : ''}" data-plan="${pl.key}">
           <div class="plan-top"><h3>${e(pl.name)}</h3>${pl.key === 'pro' ? '<span class="plan-tag">Le plus choisi</span>' : ''}</div>
-          <p class="price"><strong>${pl.price} €</strong><span>HT / mois</span></p>
+          <p class="price ${pr.format(pr.price(pl.key)).length > 8 ? 'price-long' : ''}"><strong>${e(pr.format(pr.price(pl.key)))}</strong><span>HT / mois</span></p>
           <p class="plan-desc">${e(pl.description)}</p>
           <ul><li>${pl.products === null ? 'Produits illimités' : new Intl.NumberFormat('fr-FR').format(pl.products) + ' produits'}</li><li>${pl.users} utilisateur${pl.users > 1 ? 's' : ''}</li>${(FEATURES[pl.key] || []).map((f) => `<li>${e(f)}</li>`).join('')}</ul>
           <a class="btn ${pl.key === 'pro' ? 'btn-primary' : 'btn-secondary'} btn-lg btn-block" href="/app/#/inscription">Essayer gratuitement</a>
         </article>`).join('');
   const tabsHtml = plans.map((pl) => `<button type="button" role="tab" data-tab="${pl.key}" aria-selected="${pl.key === 'pro'}">${e(pl.name)}</button>`).join('');
+  // Sélecteur de pays : les tarifs s'affichent dans la devise choisie.
+  const countryHtml = `<label for="paysTarifs">Tarifs pour</label><select id="paysTarifs" name="pays">${Object.entries(COUNTRIES).filter(([k]) => k !== 'XX').map(([k, c]) => `<option value="${k}" ${k === pr.country ? 'selected' : ''}>${e(c.name)} (${e(pricing(k).symbol)})</option>`).join('')}${pr.country === 'XX' ? '<option value="XX" selected>Autre pays (€)</option>' : ''}</select><noscript><button type="submit" class="btn btn-secondary">Afficher</button></noscript>`;
   const tradesHtml = Object.entries(METIERS).map(([s, m]) => `<li><a href="/logiciel-de-caisse/${s}">${e(m.label.split(' et ')[0])}</a></li>`).join('');
   const body = new HTMLRewriter()
     .on('title', { element(el) { el.setInnerContent(title); } })
@@ -327,8 +345,12 @@ export async function renderLanding(env, request, url) {
     .on('#planTabs', { element(el) { el.setInnerContent(tabsHtml, { html: true }); } })
     .on('#trades', { element(el) { el.setInnerContent(tradesHtml, { html: true }); } })
     .on('#footerMetiers', { element(el) { el.setInnerContent(`<strong>Par métier</strong>${footerLinks()}`, { html: true }); } })
+    .on('#pricingCountry', { element(el) { el.setInnerContent(countryHtml, { html: true }); } })
+    .on('#footerLegal', { element(el) { el.setInnerContent(LEGAL_LINKS, { html: true }); } })
     .transform(res);
-  return new Response(body.body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' } });
+  const headers = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'private, no-cache', vary: 'Cookie' };
+  if (vc.set) headers['set-cookie'] = countryCookie(vc.country);
+  return new Response(body.body, { status: 200, headers });
 }
 
 /* ------------------------------------------------------------------ */
@@ -342,6 +364,10 @@ export async function loadCatalog(db, slug) {
   if (s.catalog_public === '0') return null;
   const settings = {};
   for (const k of ['shop_name', 'tagline', 'address', 'phone', 'email', 'hours', 'currency', 'accent', 'show_prices', 'show_stock']) settings[k] = s[k];
+  // Commande WhatsApp : numéro au format international, seulement si le commerçant l'a activée.
+  const wa = waNumber(s.whatsapp || (s.whatsapp_orders === '1' ? '' : ''), store.country);
+  settings.whatsapp = s.whatsapp_orders !== '0' && wa ? wa : '';
+  if (s.loyalty_enabled === '1') settings.loyalty = { earn: Number(s.loyalty_earn) || 1, threshold: Number(s.loyalty_threshold) || 100, reward: Number(s.loyalty_reward) || 0 };
   const categories = (await db.prepare('SELECT id, name FROM categories WHERE store_id = ? ORDER BY position, name').bind(store.id).all()).results;
   const rows = (await db.prepare(`SELECT id, ref, name, description, category_id, price_ht, tva_rate, stock, stock_min, unit, image_v, track_stock
     FROM products WHERE store_id = ? AND visible = 1 ORDER BY name COLLATE NOCASE`).bind(store.id).all()).results;
@@ -351,13 +377,13 @@ export async function loadCatalog(db, slug) {
     price_ttc: showPrices ? r2(p.price_ht * (1 + p.tva_rate / 100)) : null,
     availability: !showStock ? null : !p.track_stock ? 'in' : p.stock <= 0 ? 'out' : p.stock <= p.stock_min ? 'low' : 'in',
   }));
-  return { store: { name: store.name, slug: store.slug, country: store.country }, settings, categories, products };
+  return { store: { id: store.id, name: store.name, slug: store.slug, country: store.country }, settings, categories, products };
 }
 
 const AVAIL = { in: 'En stock', low: 'Stock limité', out: 'Sur commande' };
 const SCHEMA_AVAIL = { in: 'https://schema.org/InStock', low: 'https://schema.org/LimitedAvailability', out: 'https://schema.org/BackOrder' };
 const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-export const cardHtml = (p, currency) => {
+export const cardHtml = (p, currency, wa = false) => {
   const ini = e(norm(p.name).replace(/[^a-z0-9]/g, '').slice(0, 3).toUpperCase());
   const media = p.image ? `<img src="${e(p.image)}" alt="${e(p.name)}" loading="lazy" decoding="async" width="300" height="225">` : `<span class="placeholder" aria-hidden="true">${ini}</span>`;
   return `
@@ -371,6 +397,7 @@ export const cardHtml = (p, currency) => {
           </div>
           ${p.price_ttc !== null ? `<div class="card-foot"><span class="price">${fmt(p.price_ttc)} ${e(currency)} <small>/ ${e(p.unit)}</small></span></div>` : ''}
         </button>
+        ${wa ? `<button class="card-add" type="button" data-inc="${p.id}">Ajouter</button>` : ''}
       </article>`;
 };
 
@@ -387,7 +414,8 @@ export async function renderVitrine(env, request, url, slug) {
       .transform(res);
     return new Response(body.body, { status: 404, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
   }
-  await bump(db, (await db.prepare('SELECT id FROM stores WHERE slug = ?').bind(slug).first()).id, 'catalog_views');
+  await bump(db, data.store.id, 'catalog_views');
+  delete data.store.id;
   const s = data.settings, name = s.shop_name || data.store.name;
   const currency = s.currency || '€', iso = ISO[data.store.country] || 'EUR';
   const country = (COUNTRIES[data.store.country] || COUNTRIES.XX).name;
@@ -409,7 +437,7 @@ export async function renderVitrine(env, request, url, slug) {
   const counts = {}; data.products.forEach((p) => { counts[p.category_id] = (counts[p.category_id] || 0) + 1; });
   const catsHtml = [`<button class="cat" type="button" data-cat="all" aria-pressed="true">Tous les produits<span class="n">${data.products.length}</span></button>`,
     ...data.categories.filter((c) => counts[c.id]).map((c) => `<button class="cat" type="button" data-cat="${c.id}" aria-pressed="false">${e(c.name)}<span class="n">${counts[c.id]}</span></button>`)].join('');
-  const gridHtml = data.products.length ? data.products.map((p) => cardHtml(p, currency)).join('') : '<div class="empty"><strong>Le catalogue est en cours de préparation.</strong>Revenez bientôt ou contactez-nous.</div>';
+  const gridHtml = data.products.length ? data.products.map((p) => cardHtml(p, currency, !!s.whatsapp)).join('') : '<div class="empty"><strong>Le catalogue est en cours de préparation.</strong>Revenez bientôt ou contactez-nous.</div>';
   const words = name.split(' ');
   const h1 = words.length > 1 ? `${e(words.slice(0, -1).join(' '))}<br>${e(words.at(-1))}` : e(name);
   const inline = `<script>window.__STORE__ = ${JSON.stringify(data).replace(/</g, '\\u003c')};</script>`;
@@ -427,6 +455,7 @@ export async function renderVitrine(env, request, url, slug) {
     .on('#resultCount', { element(el) { el.setInnerContent(`${data.products.length} produit${data.products.length > 1 ? 's' : ''}`); } })
     .on('dd[data-setting="address"]', setText('address'))
     .on('dd[data-setting="hours"]', setText('hours'))
+    .on('#vitrineLegal', { element(el) { el.setInnerContent('<a href="/mentions-legales">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a>', { html: true }); } })
     .transform(res);
   return new Response(body.body, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=60' } });
 }
@@ -448,6 +477,7 @@ export async function sitemap(env, url) {
     { loc: '/', priority: '1.0', changefreq: 'weekly', lastmod: today },
     { loc: '/logiciel-de-caisse/', priority: '0.8', changefreq: 'monthly', lastmod: today },
     ...Object.keys(METIERS).map((s) => ({ loc: `/logiciel-de-caisse/${s}`, priority: '0.8', changefreq: 'monthly', lastmod: today })),
+    ...Object.keys(LEGAL_PAGES).map((k) => ({ loc: `/${k}`, priority: '0.3', changefreq: 'yearly', lastmod: today })),
     ...rows.map((r) => ({ loc: `/s/${r.slug}`, priority: '0.6', changefreq: 'daily', lastmod: (r.updated || today).slice(0, 10) })),
   ];
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -470,3 +500,117 @@ Sitemap: ${url.origin}/sitemap.xml
 }
 
 export { html };
+
+/* ------------------------------------------------------------------ */
+/* Pages légales                                                       */
+/* ------------------------------------------------------------------ */
+// Les informations de l'éditeur viennent des variables d'environnement (Cloudflare → Settings → Variables).
+// Tant qu'une information manque, elle s'affiche « à compléter » pour ne jamais publier de données inventées.
+function legalInfo(env) {
+  const v = (k, label) => (env[k] ? e(env[k]) : `<mark class="todo">[à compléter : ${label}]</mark>`);
+  return {
+    name: v('LEGAL_NAME', 'raison sociale'), form: v('LEGAL_FORM', 'forme juridique et capital'), address: v('LEGAL_ADDRESS', 'adresse du siège'),
+    id: v('LEGAL_ID', 'immatriculation : RC, ICE, IF ou SIRET'), director: v('LEGAL_DIRECTOR', 'directeur de la publication'),
+    email: env.LEGAL_EMAIL ? `<a href="mailto:${e(env.LEGAL_EMAIL)}">${e(env.LEGAL_EMAIL)}</a>` : v('LEGAL_EMAIL', 'e-mail de contact'),
+    phone: v('LEGAL_PHONE', 'téléphone'), cndp: v('LEGAL_CNDP', 'numéro de déclaration ou d’autorisation CNDP'),
+    court: v('LEGAL_COURT', 'tribunaux compétents, par exemple ceux de Casablanca'), law: v('LEGAL_LAW', 'droit applicable, par exemple le droit marocain'),
+    complete: ['LEGAL_NAME', 'LEGAL_ADDRESS', 'LEGAL_ID', 'LEGAL_EMAIL'].every((k) => env[k]),
+  };
+}
+const UPDATED = '10 octobre 2026';
+
+export const LEGAL_PAGES = {
+  'mentions-legales': { title: 'Mentions légales', body: (L) => `
+    <h2>Éditeur</h2>
+    <p>Le site Comptoir et le service associé sont édités par ${L.name}, ${L.form}, dont le siège est situé ${L.address}, immatriculée sous le numéro ${L.id}.</p>
+    <p>Directeur de la publication : ${L.director}.<br>Contact : ${L.email}, ${L.phone}.</p>
+    <h2>Hébergement</h2>
+    <p>Le site, l’application et les données sont hébergés par Cloudflare, Inc., 101 Townsend Street, San Francisco, CA 94107, États-Unis (cloudflare.com), sur son réseau mondial et sa base de données D1.</p>
+    <h2>Propriété intellectuelle</h2>
+    <p>La marque Comptoir, le site, le logiciel, les textes, le design et les éléments graphiques sont protégés. Toute reproduction ou réutilisation sans autorisation écrite est interdite.</p>
+    <h2>Vitrines des commerçants</h2>
+    <p>Chaque vitrine publiée à l’adresse <code>/s/…</code> présente le catalogue d’un commerçant indépendant. Les produits, prix, photos, disponibilités et informations de contact y sont publiés sous la seule responsabilité de ce commerçant, qui est aussi l’interlocuteur des clients pour toute commande. Pour signaler un contenu illicite, écrivez à ${L.email}.</p>
+    <h2>Données personnelles</h2>
+    <p>Voir la <a href="/confidentialite">politique de confidentialité</a>.</p>` },
+
+  cgu: { title: 'Conditions générales d’utilisation', body: (L) => `
+    <h2>1. Objet</h2>
+    <p>Les présentes conditions encadrent l’utilisation du service Comptoir, édité par ${L.name} : logiciel en ligne de caisse, de gestion de stock, de devis et factures, et de vitrine en ligne destiné aux commerçants (« l’Utilisateur »). Créer un compte vaut acceptation des présentes conditions.</p>
+    <h2>2. Compte et accès</h2>
+    <p>L’Utilisateur fournit des informations exactes et garde ses identifiants confidentiels. Il est responsable des actions faites avec son compte et avec les accès qu’il crée pour son équipe, dont il fixe lui-même les rôles et permissions. En cas d’accès non autorisé, il doit prévenir ${L.email} sans délai.</p>
+    <h2>3. Essai gratuit</h2>
+    <p>Chaque nouveau commerce bénéficie de 14 jours d’essai gratuit, sans carte bancaire. À la fin de l’essai, sans abonnement, les données restent consultables mais l’encaissement et les modifications sont suspendus.</p>
+    <h2>4. Utilisation du service</h2>
+    <p>L’Utilisateur s’engage à utiliser le service conformément aux lois en vigueur et à ne pas publier sur sa vitrine de contenu illicite, trompeur ou portant atteinte aux droits de tiers. L’éditeur peut suspendre un compte en cas de manquement grave, après en avoir informé l’Utilisateur sauf urgence.</p>
+    <h2>5. Obligations fiscales et comptables</h2>
+    <p>Comptoir est un outil d’aide à la gestion. L’Utilisateur reste seul responsable du respect de ses obligations fiscales, comptables et sociales : facturation, déclarations de TVA, conservation des pièces, et le cas échéant utilisation d’un logiciel de caisse certifié lorsque la réglementation de son pays l’impose (en France, notamment, la certification NF525 ou une attestation de l’éditeur, que Comptoir ne délivre pas à ce jour).</p>
+    <h2>6. Données de l’Utilisateur</h2>
+    <p>Les produits, clients, ventes et documents saisis appartiennent à l’Utilisateur. Pour les données personnelles de ses propres clients, l’Utilisateur est responsable de traitement et l’éditeur agit comme sous-traitant, dans les conditions décrites dans la <a href="/confidentialite">politique de confidentialité</a>.</p>
+    <h2>7. Disponibilité et responsabilité</h2>
+    <p>L’éditeur met en œuvre des moyens raisonnables pour assurer la disponibilité et la sécurité du service, sans garantir une disponibilité ininterrompue. Sa responsabilité est limitée aux dommages directs et, en tout état de cause, au montant payé par l’Utilisateur au cours des douze derniers mois.</p>
+    <h2>8. Modification</h2>
+    <p>Ces conditions peuvent évoluer ; l’Utilisateur est informé de toute modification importante au moins 30 jours avant son entrée en vigueur.</p>
+    <h2>9. Droit applicable</h2>
+    <p>Les présentes conditions sont soumises au ${L.law}. À défaut d’accord amiable, tout litige relève des ${L.court}.</p>` },
+
+  cgv: { title: 'Conditions générales de vente', body: (L) => `
+    <h2>1. Formules</h2>
+    <p>Comptoir est proposé sous forme d’abonnement mensuel (formules Essentiel, Pro et Business) dont le contenu et les limites (produits, utilisateurs, boutiques) sont présentés sur la <a href="/#tarifs">page des tarifs</a>.</p>
+    <h2>2. Prix</h2>
+    <p>Les prix sont indiqués hors taxes, dans la devise du pays du commerce (par exemple en dirhams au Maroc, en euros en France). Les taxes applicables dans le pays du client s’ajoutent au prix hors taxes. Les prix peuvent évoluer ; tout changement est annoncé au moins 30 jours à l’avance et ne s’applique qu’à la période suivante.</p>
+    <h2>3. Souscription et paiement</h2>
+    <p>L’Utilisateur choisit sa formule depuis son espace (Réglages, Abonnement). L’abonnement est activé après réception du paiement, selon les modalités communiquées lors de la demande. L’abonnement est payable d’avance, mois par mois.</p>
+    <h2>4. Durée et résiliation</h2>
+    <p>L’abonnement est sans engagement de durée. Il peut être résilié à tout moment depuis l’espace commerçant ou en écrivant à ${L.email} ; la résiliation prend effet à la fin du mois en cours, sans remboursement de la période entamée.</p>
+    <h2>5. Fin du contrat</h2>
+    <p>Après la fin de l’abonnement, l’Utilisateur peut consulter et exporter ses données pendant 90 jours. Passé ce délai, elles peuvent être supprimées, sous réserve des obligations légales de conservation.</p>
+    <h2>6. Réclamations</h2>
+    <p>Toute réclamation est à adresser à ${L.email}. Une réponse est apportée sous 7 jours ouvrés.</p>
+    <h2>7. Droit applicable</h2>
+    <p>Les présentes conditions sont soumises au ${L.law}. Tout litige relève des ${L.court}. Les <a href="/cgu">conditions générales d’utilisation</a> s’appliquent également.</p>` },
+
+  confidentialite: { title: 'Politique de confidentialité', body: (L) => `
+    <h2>Qui est responsable de vos données</h2>
+    <p>${L.name}, ${L.address} (contact : ${L.email}) est responsable du traitement des données des utilisateurs de Comptoir (commerçants et leurs équipes). Pour les données que chaque commerçant enregistre sur ses propres clients (fichier clients, points de fidélité, ventes), le commerçant est responsable de traitement et Comptoir agit comme sous-traitant.</p>
+    <h2>Données collectées</h2>
+    <ul>
+      <li><strong>Compte</strong> : nom, adresse e-mail, téléphone (facultatif) et mot de passe, conservé uniquement sous forme chiffrée et irréversible.</li>
+      <li><strong>Données du commerce</strong> : produits, stock, ventes, documents, clients et réglages saisis par le commerçant.</li>
+      <li><strong>Données techniques</strong> : journaux de connexion et d’erreurs nécessaires à la sécurité et au bon fonctionnement, conservés au plus 90 jours.</li>
+      <li><strong>Visiteurs des vitrines</strong> : aucune donnée personnelle n’est collectée ; un compteur anonyme du nombre de visites est tenu pour le commerçant. Une commande envoyée par WhatsApp passe directement de votre téléphone à celui du commerçant, sans transiter par Comptoir.</li>
+    </ul>
+    <h2>Pourquoi et sur quelle base</h2>
+    <p>Pour fournir le service souscrit (exécution du contrat), assurer sa sécurité et l’améliorer (intérêt légitime), envoyer les e-mails d’alerte que l’Utilisateur active (consentement, désactivable à tout moment), et respecter nos obligations légales.</p>
+    <h2>Destinataires</h2>
+    <p>Les données ne sont jamais vendues. Elles sont accessibles à l’éditeur et à ses sous-traitants techniques : Cloudflare, Inc. (hébergement, base de données) et Resend (envoi des e-mails d’alerte, si activé). Ces prestataires peuvent traiter des données hors de l’Union européenne et du Maroc, avec des garanties contractuelles appropriées.</p>
+    <h2>Durée de conservation</h2>
+    <p>Pendant toute la durée de l’abonnement, puis 90 jours après sa fin pour permettre l’export, sauf obligation légale de conservation plus longue (par exemple pour les factures).</p>
+    <h2>Cookies et stockage local</h2>
+    <p>Comptoir n’utilise ni cookie publicitaire ni outil de mesure d’audience tiers. Seuls sont utilisés : le cookie de session de l’espace commerçant (indispensable à la connexion), un cookie mémorisant le pays choisi pour l’affichage des tarifs, et le stockage local de votre navigateur pour la boutique affichée et le panier de la vitrine. Aucun consentement n’est requis pour ces usages strictement nécessaires.</p>
+    <h2>Sécurité</h2>
+    <p>Connexions chiffrées (HTTPS), mots de passe hachés, données de chaque commerce strictement séparées, accès de l’équipe limités par rôles et permissions.</p>
+    <h2>Vos droits</h2>
+    <p>Conformément au Règlement général sur la protection des données (RGPD) et à la loi marocaine n° 09-08 relative à la protection des personnes physiques à l’égard du traitement des données à caractère personnel, vous disposez d’un droit d’accès, de rectification, d’opposition, d’effacement, de limitation et de portabilité de vos données. Écrivez à ${L.email}. Vous pouvez également saisir l’autorité de contrôle compétente : la CNDP au Maroc (cndp.ma) ou la CNIL en France (cnil.fr).</p>
+    <p>Ce traitement a fait l’objet d’une déclaration auprès de la CNDP sous le numéro ${L.cndp}.</p>` },
+};
+
+export function renderLegal(origin, key, env) {
+  const page = LEGAL_PAGES[key];
+  if (!page) return null;
+  const L = legalInfo(env);
+  const title = `${page.title} | Comptoir`;
+  const description = `${page.title} du service Comptoir : caisse, stock, factures et vitrine en ligne pour les commerces.`;
+  return `${docHead(title, description, headTags({ origin, path: '/' + key, title: page.title, description, noindex: !L.complete }))}
+<body>
+  ${NAV}
+  <main class="legal wrap">
+    <nav class="breadcrumb" aria-label="Fil d’Ariane"><a href="/">Comptoir</a><span aria-hidden="true">/</span><span aria-current="page">${e(page.title)}</span></nav>
+    <h1>${e(page.title)}</h1>
+    <p class="muted">Dernière mise à jour : ${UPDATED}</p>
+    ${page.body(L)}
+    <nav class="legal-nav" aria-label="Autres documents">${Object.entries(LEGAL_PAGES).filter(([k]) => k !== key).map(([k, p]) => `<a href="/${k}">${e(p.title)}</a>`).join('')}</nav>
+  </main>
+  ${FOOTER()}
+</body>
+</html>`;
+}

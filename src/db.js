@@ -66,6 +66,10 @@ const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS roles (
     id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT DEFAULT '',
     permissions TEXT DEFAULT '[]', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS loyalty_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, customer_id INTEGER NOT NULL, document_id INTEGER,
+    points REAL NOT NULL, reason TEXT DEFAULT '', created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON loyalty_movements(store_id, customer_id, id)`,
   `CREATE INDEX IF NOT EXISTS idx_locations_store ON locations(store_id)`,
   `CREATE INDEX IF NOT EXISTS idx_location_stock_store ON location_stock(store_id, product_id)`,
   `CREATE INDEX IF NOT EXISTS idx_roles_store ON roles(store_id)`,
@@ -102,6 +106,9 @@ const MIGRATIONS = [
     'ALTER TABLE documents ADD COLUMN location_id INTEGER',
     'ALTER TABLE stock_movements ADD COLUMN location_id INTEGER',
     'CREATE INDEX IF NOT EXISTS idx_documents_location ON documents(store_id, location_id, date)',
+  ]],
+  [3, [
+    'ALTER TABLE customers ADD COLUMN loyalty_points REAL DEFAULT 0',
   ]],
 ];
 

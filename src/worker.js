@@ -11,26 +11,14 @@ import { signup, login, logout, getContext, me, changePassword, touchStore } fro
 import { storeRoutes, getSettings, imageUrl, runDailyDigests } from './store.js';
 import { resolveAccess } from './access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './console.js';
-import { renderLanding, renderMetier, renderHub, renderVitrine, sitemap, robots, html } from './seo.js';
+import { renderLanding, renderMetier, renderHub, renderVitrine, renderLegal, LEGAL_PAGES, visitorCountry, sitemap, robots, html, loadCatalog } from './seo.js';
 
 async function publicCatalog(db, slug) {
-  const store = await db.prepare('SELECT id, name, slug, status, business_type FROM stores WHERE slug = ?').bind(slug).first();
-  if (!store || store.status !== 'active') throw new HttpError(404, 'Ce commerce est introuvable.');
-  const s = await getSettings(db, store.id, store);
-  if (s.catalog_public === '0') throw new HttpError(404, "Ce catalogue n'est pas public.");
-  const settings = {};
-  for (const k of ['shop_name', 'tagline', 'address', 'phone', 'email', 'hours', 'currency', 'accent', 'show_prices', 'show_stock']) settings[k] = s[k];
-  const categories = (await db.prepare('SELECT id, name FROM categories WHERE store_id = ? ORDER BY position, name').bind(store.id).all()).results;
-  const rows = (await db.prepare(`SELECT id, ref, name, description, category_id, price_ht, tva_rate, stock, stock_min, unit, image_v, track_stock
-    FROM products WHERE store_id = ? AND visible = 1 ORDER BY name COLLATE NOCASE`).bind(store.id).all()).results;
-  const showPrices = s.show_prices !== '0', showStock = s.show_stock !== '0';
-  const products = rows.map((p) => ({
-    id: p.id, ref: p.ref, name: p.name, description: p.description, category_id: p.category_id, unit: p.unit, image: imageUrl(p),
-    price_ttc: showPrices ? r2(p.price_ht * (1 + p.tva_rate / 100)) : null,
-    availability: !showStock ? null : !p.track_stock ? 'in' : p.stock <= 0 ? 'out' : p.stock <= p.stock_min ? 'low' : 'in',
-  }));
-  await bump(db, store.id, 'catalog_views');
-  return { store: { name: store.name, slug: store.slug }, settings, categories, products };
+  const data = await loadCatalog(db, slug);
+  if (!data) throw new HttpError(404, 'Ce commerce est introuvable.');
+  await bump(db, data.store.id, 'catalog_views');
+  delete data.store.id;
+  return data;
 }
 
 async function serveImage(db, id) {
@@ -144,10 +132,11 @@ export default {
       const mm = p.match(/^\/logiciel-de-caisse\/([a-z-]+)\/?$/);
       if (mm) {
         if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);
-        const page = renderMetier(url.origin, mm[1]);
+        const page = renderMetier(url.origin, mm[1], visitorCountry(request, url).country);
         if (page) return html(page);
         return Response.redirect(url.origin + '/logiciel-de-caisse/', 302);
       }
+      if (LEGAL_PAGES[p.slice(1)]) return html(renderLegal(url.origin, p.slice(1), env), 200, 'public, max-age=3600');
       const sm = p.match(/^\/s\/([a-z0-9-]+)\/?$/);
       if (sm) {
         if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);

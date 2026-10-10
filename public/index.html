@@ -82,6 +82,7 @@
 
     <section class="pricing wrap" id="tarifs">
       <h2>Des tarifs simples, sans engagement</h2>
+      <form class="price-country" id="pricingCountry" method="get" action="/#tarifs"></form>
       <div class="plan-tabs" role="tablist" aria-label="Formules" id="planTabs"></div>
       <div class="plans" id="plans"></div>
       <p class="muted note">Prix hors taxes. Chaque formule commence par 14 jours d’essai gratuit.</p>
@@ -109,7 +110,7 @@
       <nav aria-label="Logiciel de caisse par métier" id="footerMetiers"><strong>Par métier</strong><a href="/logiciel-de-caisse/">Tous les métiers</a></nav>
       <nav aria-label="Comptoir"><strong>Comptoir</strong><a href="#fonctions">Fonctions</a><a href="#tarifs">Tarifs</a><a href="/app/#/inscription">Essai gratuit</a><a href="/app/">Espace commerçant</a></nav>
     </div>
-    <div class="wrap footer-in"><span>© 2026 Comptoir</span></div>
+    <div class="wrap footer-in"><span>© 2026 Comptoir</span><span class="footer-legal" id="footerLegal"><a href="/mentions-legales">Mentions légales</a><a href="/cgu">CGU</a><a href="/cgv">CGV</a><a href="/confidentialite">Confidentialité</a></span></div>
   </footer>
 
   <script>
@@ -121,6 +122,10 @@
         document.querySelectorAll('.plan').forEach((c) => c.classList.toggle('is-shown', c.dataset.plan === key));
       };
       tabs.addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) show(b.dataset.tab); });
+      // Changer de pays recharge les tarifs dans la bonne devise.
+      document.getElementById('pricingCountry').addEventListener('change', (e) => {
+        if (e.target.name === 'pays') location.href = `/?pays=${encodeURIComponent(e.target.value)}#tarifs`;
+      });
     })();
   </script>
 </body>

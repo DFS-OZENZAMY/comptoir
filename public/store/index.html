@@ -17,10 +17,13 @@
 
   <header class="topbar">
     <a class="brand" href="" id="brandLink" data-setting="shop_name"></a>
+    <div class="top-actions">
+    <a class="call-btn wa-btn" id="waTop" href="#" target="_blank" rel="noopener" hidden><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.8-1.2.2-.6.2-1.1.1-1.2l-.5-.3z"/></svg><span>WhatsApp</span></a>
     <a class="call-btn" id="callTop" href="#infos" hidden>
       <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.6 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.2.2 2.4.6 3.6a1 1 0 0 1-.3 1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
       <span class="call-full" data-setting="phone"></span><span class="call-short">Appeler</span>
     </a>
+    </div>
   </header>
 
   <section class="hero" aria-labelledby="heroTitle">
@@ -57,6 +60,10 @@
           <span id="callBigText">Appeler le magasin</span>
         </a>
       </div>
+      <aside class="loyalty-box" id="loyaltyBox" hidden>
+        <strong>Programme de fidélité</strong>
+        <p id="loyaltyText"></p>
+      </aside>
       <dl class="infos-list">
         <div><dt>Adresse</dt><dd data-setting="address"></dd></div>
         <div><dt>Horaires</dt><dd data-setting="hours"></dd></div>
@@ -68,6 +75,7 @@
 
   <footer class="footer">
     <span>© <span id="year"></span> <span data-setting="shop_name"></span></span>
+    <span class="vitrine-legal" id="vitrineLegal"><a href="/mentions-legales">Mentions légales</a> · <a href="/confidentialite">Confidentialité</a></span>
     <a href="/" class="powered">Vitrine créée avec <strong>Comptoir</strong></a>
   </footer>
 
@@ -82,9 +90,34 @@
       <p class="avail" id="pdAvail"></p>
       <div class="pd-order">
         <p>Pour commander, appelez-nous en indiquant la référence <strong id="pdRefInline"></strong>, ou passez au magasin.</p>
+        <button class="btn-cta btn-wa" id="pdAdd" type="button" hidden>Ajouter au panier</button>
         <a class="btn-cta" id="pdCall" href="#infos">Appeler le magasin</a>
       </div>
     </div>
+  </dialog>
+
+  <div class="cart-bar" id="cartBar" hidden>
+    <span class="cart-info"><strong id="cartCount"></strong><span id="cartTotal"></span></span>
+    <button class="btn-cta btn-wa" id="cartOpen" type="button"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.8-1.2.2-.6.2-1.1.1-1.2l-.5-.3z"/></svg>Voir le panier</button>
+  </div>
+
+  <dialog class="cart-dialog" id="cartDialog" aria-labelledby="cartTitle">
+    <div class="cart-head"><h2 id="cartTitle">Votre commande</h2><form method="dialog"><button class="icon-btn" aria-label="Fermer">✕</button></form></div>
+    <ul class="cart-list" id="cartList"></ul>
+    <p class="cart-sum"><span>Total estimé</span><strong id="cartSum"></strong></p>
+    <form class="cart-form" id="cartForm" novalidate>
+      <label><span>Votre nom</span><input name="name" autocomplete="name" required placeholder="Pour que le commerçant vous reconnaisse"></label>
+      <fieldset><legend>Retrait ou livraison</legend>
+        <label class="radio"><input type="radio" name="mode" value="retrait" checked> Je passe récupérer ma commande</label>
+        <label class="radio"><input type="radio" name="mode" value="livraison"> Livraison</label>
+      </fieldset>
+      <label id="addrWrap" hidden><span>Adresse de livraison</span><input name="address" autocomplete="street-address"></label>
+      <label><span>Remarque <small>(facultatif)</small></span><textarea name="note" rows="2" placeholder="Heure de passage, précision…"></textarea></label>
+      <p class="cart-err" id="cartErr" role="alert"></p>
+      <button class="btn-cta btn-wa btn-block" type="submit"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.2-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7.5-.1 1.5-.6 1.8-1.2.2-.6.2-1.1.1-1.2l-.5-.3z"/></svg>Envoyer la commande sur WhatsApp</button>
+      <p class="cart-note">Le message s’ouvre dans WhatsApp, prêt à être envoyé au commerçant, qui vous confirmera la disponibilité et le prix.</p>
+      <button class="link-btn" type="button" id="cartClear">Vider le panier</button>
+    </form>
   </dialog>
 
   <script src="/store/store.js" defer></script>

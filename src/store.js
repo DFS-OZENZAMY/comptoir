@@ -4,7 +4,7 @@ import {
   HttpError, json, r2, r4, num, str, today, nowIso, isDate, addDays, daysBetween, escHtml, isEmail,
   readBody, hashPassword, tempPassword,
 } from './lib.js';
-import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings } from './catalog.js';
+import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings, pricing } from './catalog.js';
 import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, transferStock, listLocations, saveLocation, locationReport, listRoles, saveRole, deleteRole, validRoleAndLocations, updateMember } from './access.js';
 import { bump, logEvent } from './db.js';
 import { storeAccess } from './auth.js';
@@ -15,7 +15,9 @@ import { storeAccess } from './auth.js';
 
 export async function getSettings(db, sid, store = null) {
   const rows = (await db.prepare('SELECT key, value FROM settings WHERE store_id = ?').bind(sid).all()).results;
-  const out = defaultSettings({ name: store ? store.name : '' });
+  // Valeurs par défaut selon le pays du commerce (devise, fidélité) pour les réglages jamais enregistrés.
+  const country = store?.country || (await db.prepare('SELECT country FROM stores WHERE id = ?').bind(sid).first())?.country;
+  const out = defaultSettings({ name: store ? store.name : '', country });
   for (const r of rows) out[r.key] = r.value;
   return out;
 }
@@ -132,6 +134,13 @@ async function getDocument(db, sid, id) {
     db.prepare('SELECT * FROM payments WHERE document_id = ? AND store_id = ? ORDER BY date, id').bind(doc.id, sid).all(),
   ]);
   doc.lines = lines.results; doc.children = children.results; doc.payments = payments.results;
+  if (doc.customer_id) {
+    const lm = (await db.prepare('SELECT points FROM loyalty_movements WHERE document_id = ? AND store_id = ?').bind(doc.id, sid).all()).results;
+    if (lm.length) {
+      const c = await db.prepare('SELECT loyalty_points FROM customers WHERE id = ? AND store_id = ?').bind(doc.customer_id, sid).first();
+      doc.loyalty = { earned: lm.filter((m) => m.points > 0).reduce((a, m) => a + m.points, 0), used: -lm.filter((m) => m.points < 0).reduce((a, m) => a + m.points, 0), balance: c ? c.loyalty_points : 0 };
+    }
+  }
   if (doc.source_id) doc.source = await db.prepare('SELECT id, type, number FROM documents WHERE id = ? AND store_id = ?').bind(doc.source_id, sid).first();
   return doc;
 }
@@ -229,6 +238,7 @@ async function setStatus(ctx, id, status) {
         .bind(sid, doc.id, -p.amount, p.method, today(), `Remboursement ${doc.number}`));
     await db.batch([...refunds, db.prepare("UPDATE documents SET status = 'annulé', amount_paid = 0 WHERE id = ? AND store_id = ?").bind(doc.id, sid)]);
     await syncStock(db, sid, doc.id);
+    await reverseLoyalty(db, sid, doc);
     await bump(db, sid, 'sales_amount', -doc.total_ttc);
     return getDocument(db, sid, doc.id);
   }
@@ -294,14 +304,33 @@ async function deleteDocument(ctx, id) {
 /* Caisse                                                              */
 /* ------------------------------------------------------------------ */
 
-function discountLines(lines, pct) {
+function discountLines(lines, pct, label = null) {
   pct = Math.min(100, Math.max(0, num(pct)));
   if (!pct) return [];
   const byRate = {};
   for (const l of lines) byRate[l.tva_rate] = (byRate[l.tva_rate] || 0) + l.qty * l.unit_price_ht;
   return Object.entries(byRate).filter(([, ht]) => ht > 0).map(([rate, ht]) => ({
-    product_id: null, label: `Remise ${pct} %`, qty: 1, unit_price_ht: -Math.round(ht * pct * 100) / 10000, tva_rate: Number(rate),
+    product_id: null, label: label || `Remise ${pct} %`, qty: 1, unit_price_ht: -Math.round(ht * pct * 100) / 10000, tva_rate: Number(rate),
   }));
+}
+
+/* ---------------- Fidélité ---------------- */
+async function loyaltyConfig(db, sid) {
+  const s = await getSettings(db, sid);
+  return { on: s.loyalty_enabled === '1', earn: Math.max(0.01, num(s.loyalty_earn, 1)), threshold: Math.max(1, num(s.loyalty_threshold, 100)), reward: Math.max(0, num(s.loyalty_reward, 0)), currency: s.currency };
+}
+function loyaltyStmts(db, sid, customerId, docId, points, reason, userId) {
+  return [
+    db.prepare('UPDATE customers SET loyalty_points = COALESCE(loyalty_points, 0) + ? WHERE id = ? AND store_id = ?').bind(points, customerId, sid),
+    db.prepare('INSERT INTO loyalty_movements (store_id, customer_id, document_id, points, reason, created_by) VALUES (?, ?, ?, ?, ?, ?)').bind(sid, customerId, docId, points, reason, userId || null),
+  ];
+}
+// Annulation d'un ticket : les points gagnés et dépensés sont rendus.
+async function reverseLoyalty(db, sid, doc) {
+  const m = await db.prepare('SELECT customer_id, SUM(points) AS pts FROM loyalty_movements WHERE document_id = ? AND store_id = ? GROUP BY customer_id').bind(doc.id, sid).all();
+  const stmts = [];
+  for (const r of m.results) if (r.pts) stmts.push(...loyaltyStmts(db, sid, r.customer_id, doc.id, -r.pts, `Annulation ${doc.number}`, null));
+  if (stmts.length) await db.batch(stmts);
 }
 
 async function posCheckout(ctx, b) {
@@ -325,7 +354,22 @@ async function posCheckout(ctx, b) {
       }
     }
   }
-  const lines = [...base, ...discountLines(base, b.discount_pct)].map((l, i) => ({ ...l, position: i }));
+  // Fidélité : récompense utilisée (vérifiée ici : solde suffisant, montant plafonné à la récompense prévue).
+  const loyalty = await loyaltyConfig(db, sid);
+  const customerForLoyalty = b.customer_id ? await db.prepare('SELECT id, loyalty_points FROM customers WHERE id = ? AND store_id = ?').bind(num(b.customer_id), sid).first() : null;
+  let rewardLines = [];
+  if (b.loyalty_redeem) {
+    if (!loyalty.on) throw new HttpError(400, 'Le programme de fidélité est désactivé.');
+    if (!customerForLoyalty) throw new HttpError(400, 'Choisissez le client pour utiliser ses points.');
+    if ((customerForLoyalty.loyalty_points || 0) < loyalty.threshold) throw new HttpError(409, `Ce client n'a pas assez de points (${customerForLoyalty.loyalty_points || 0} sur ${loyalty.threshold}).`);
+    if (mode !== 'ticket') throw new HttpError(400, 'Les points se dépensent sur une vente payée.');
+    const baseTotal = computeTotals(base).total_ttc;
+    if (baseTotal < loyalty.reward - 0.01) throw new HttpError(409, `La récompense de ${loyalty.reward} ${loyalty.currency} s'utilise sur un achat d'au moins ce montant.`);
+    const pct = num(b.loyalty_pct);
+    if (!(pct > 0) || pct > 100 || (pct * baseTotal) / 100 > loyalty.reward + 0.02) throw new HttpError(400, 'Montant de la récompense fidélité incorrect.');
+    rewardLines = discountLines(base, pct, `Fidélité : ${loyalty.reward} ${loyalty.currency} offerts`);
+  }
+  const lines = [...base, ...discountLines(base, b.discount_pct), ...rewardLines].map((l, i) => ({ ...l, position: i }));
   const total = computeTotals(lines).total_ttc;
   const client = { customer_id: b.customer_id ? num(b.customer_id) || null : null, client_name: str(b.client_name, 160), client_phone: str(b.client_phone, 40) };
   if (mode !== 'ticket' && !client.customer_id && !client.client_name) {
@@ -365,6 +409,14 @@ async function posCheckout(ctx, b) {
     await db.prepare('UPDATE documents SET amount_paid = ?, paid_at = ? WHERE id = ? AND store_id = ?').bind(paid, today(), doc.id, sid).run();
     await bump(db, sid, 'tickets');
     await bump(db, sid, 'sales_amount', total);
+    // Fidélité : points dépensés puis points gagnés sur le montant payé.
+    if (loyalty.on && customerForLoyalty) {
+      const stmts = [];
+      if (rewardLines.length) stmts.push(...loyaltyStmts(db, sid, customerForLoyalty.id, doc.id, -loyalty.threshold, 'Récompense utilisée', ctx.user.id));
+      const earned = Math.floor(total / loyalty.earn);
+      if (earned > 0) stmts.push(...loyaltyStmts(db, sid, customerForLoyalty.id, doc.id, earned, `Achat ${doc.number}`, ctx.user.id));
+      if (stmts.length) await db.batch(stmts);
+    }
   } else await refreshPaid(db, sid, doc.id);
   return getDocument(db, sid, doc.id);
 }
@@ -625,9 +677,11 @@ async function memberOf(db, sid, userId) {
 }
 
 function subscription(store, usage) {
+  // Prix dans la devise du pays du commerce (par exemple 419 DH au Maroc pour la formule Pro).
+  const pr = pricing(store.country);
   return {
-    plan: store.plan, status: store.status, trial_ends_at: store.trial_ends_at, plan_requested: store.plan_requested,
-    usage, plans: Object.entries(PLANS).filter(([k]) => PAID_PLANS.includes(k)).map(([key, p]) => ({ key, ...p })),
+    plan: store.plan, status: store.status, trial_ends_at: store.trial_ends_at, plan_requested: store.plan_requested, currency: pr.symbol,
+    usage, plans: Object.entries(PLANS).filter(([k]) => PAID_PLANS.includes(k)).map(([key, p]) => ({ key, ...p, price: pr.price(key), price_label: pr.format(pr.price(key)) })),
   };
 }
 
@@ -806,6 +860,23 @@ export async function storeRoutes(ctx, parts) {
         const f = customerFields(await body());
         const r = await db.prepare('INSERT INTO customers (store_id, name, company, email, phone, address, notes) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(sid, ...f).run();
         return json({ id: r.meta.last_row_id }, 201);
+      }
+      if (id && action === 'loyalty' && m === 'GET') {
+        const c = await db.prepare('SELECT id, loyalty_points FROM customers WHERE id = ? AND store_id = ?').bind(num(id), sid).first();
+        if (!c) throw new HttpError(404, 'Client introuvable.');
+        const moves = (await db.prepare(`SELECT l.*, d.number FROM loyalty_movements l LEFT JOIN documents d ON d.id = l.document_id AND d.store_id = l.store_id
+          WHERE l.customer_id = ? AND l.store_id = ? ORDER BY l.id DESC LIMIT 100`).bind(c.id, sid).all()).results;
+        return json({ balance: c.loyalty_points || 0, movements: moves, config: await loyaltyConfig(db, sid) });
+      }
+      if (id && action === 'loyalty' && m === 'POST') {
+        const b = await body();
+        const pts = Math.round(num(b.points));
+        if (!pts) throw new HttpError(400, 'Indiquez un nombre de points (positif ou négatif).');
+        const c = await db.prepare('SELECT id, loyalty_points FROM customers WHERE id = ? AND store_id = ?').bind(num(id), sid).first();
+        if (!c) throw new HttpError(404, 'Client introuvable.');
+        if ((c.loyalty_points || 0) + pts < 0) throw new HttpError(409, 'Le solde de points ne peut pas devenir négatif.');
+        await db.batch(loyaltyStmts(db, sid, c.id, null, pts, str(b.reason, 200) || 'Ajustement manuel', ctx.user.id));
+        return json({ ok: true, balance: (c.loyalty_points || 0) + pts });
       }
       if (id && m === 'PUT') {
         const f = customerFields(await body());

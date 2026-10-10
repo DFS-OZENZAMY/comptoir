@@ -339,7 +339,7 @@
     const r = await api('/console/revenue');
     $('#view').innerHTML = `
       <section class="kpis kpis-console">
-        <div class="kpi kpi-strong"><span class="kpi-label">Revenu mensuel (MRR)</span><span class="kpi-value">${money0(r.mrr)}</span><span class="kpi-sub">${money0(r.arr)} par an</span></div>
+        <div class="kpi kpi-strong"><span class="kpi-label">Revenu mensuel (MRR, équivalent €)</span><span class="kpi-value">${money0(r.mrr)}</span><span class="kpi-sub">${money0(r.arr)} par an</span></div>
         <div class="kpi"><span class="kpi-label">Abonnés payants</span><span class="kpi-value">${r.paying}</span><span class="kpi-sub">${money(r.arpa)} par abonné</span></div>
         <div class="kpi"><span class="kpi-label">Conversion des essais</span><span class="kpi-value">${r.trial_conversion === null ? 'n/d' : r.trial_conversion + ' %'}</span><span class="kpi-sub">${r.trials_converted} sur ${r.trials_ended} essai${r.trials_ended > 1 ? 's' : ''} terminé${r.trials_ended > 1 ? 's' : ''}</span></div>
         <div class="kpi"><span class="kpi-label">Essais en cours</span><span class="kpi-value">${r.trials.length}</span><span class="kpi-sub">${r.trials.filter((t) => t.days_left <= 3 && t.days_left >= 0).length} se terminent sous 3 j</span></div>
@@ -365,7 +365,7 @@
         </section>
         <section class="panel">
           <div class="panel-head"><h2>Abonnés payants</h2></div>
-          ${r.paying_stores.length ? `<div class="table-wrap"><table><tbody>${r.paying_stores.map((p) => `<tr class="clickable" data-store="${p.id}" tabindex="0"><td class="cell-main">${esc(p.name)}<div class="cell-sub">${p.since ? `abonné ${since(p.since)}` : ''}, actif ${since(p.last_active_at)}</div></td><td>${esc(p.plan_name)}</td><td class="num">${money0(p.price)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><strong>Pas encore d’abonné payant.</strong>Les demandes de formule arrivent dans « À traiter ».</div>'}
+          ${r.paying_stores.length ? `<div class="table-wrap"><table><tbody>${r.paying_stores.map((p) => `<tr class="clickable" data-store="${p.id}" tabindex="0"><td class="cell-main">${esc(p.name)}<div class="cell-sub">${p.since ? `abonné ${since(p.since)}` : ''}, actif ${since(p.last_active_at)}</div></td><td>${esc(p.plan_name)}</td><td class="num">${esc(p.price_label)}<div class="cell-sub">≈ ${money0(p.price)}</div></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty-state"><strong>Pas encore d’abonné payant.</strong>Les demandes de formule arrivent dans « À traiter ».</div>'}
         </section>
       </div>`;
   }

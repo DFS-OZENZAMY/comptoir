@@ -77,6 +77,65 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Tarifs par pays
+
+Les formules sont affichées dans la devise du visiteur, avec des **prix ronds pensés pour chaque marché** (`LOCAL_PRICES`, dans `src/catalog.js`) :
+
+| Devise | Essentiel | Pro | Business |
+|---|---|---|---|
+| € (France, Belgique, Luxembourg) | 19 € | 39 € | 79 € |
+| DH (Maroc) | 199 DH | 419 DH | 849 DH |
+| DA (Algérie) | 2 900 DA | 5 900 DA | 11 900 DA |
+| DT (Tunisie) | 59 DT | 119 DT | 249 DT |
+| FCFA (Sénégal, Côte d'Ivoire, Cameroun) | 12 500 | 25 000 | 49 000 |
+| CHF (Suisse) | 19 CHF | 39 CHF | 79 CHF |
+| $ (Canada) | 29 $ | 59 $ | 119 $ |
+
+- **Pays du visiteur** : son choix (`?pays=MA`, mémorisé dans le cookie `cp_pays`), sinon la détection de Cloudflare, sinon la France. Un sélecteur « Tarifs pour » permet d'en changer, et les données structurées pour Google suivent la même devise.
+- **Commerçants** : la page Abonnement affiche les prix dans la devise du pays du commerce.
+- **Console** : le revenu mensuel additionne les abonnements convertis en équivalent euros, au taux indicatif `eur` de `LOCAL_PRICES`.
+
+## Commande WhatsApp depuis la vitrine
+
+- **Réglages**, rubrique « Commandes WhatsApp » : le numéro du commerce, en format local accepté (l'indicatif du pays est ajouté automatiquement par `waNumber`), et un interrupteur pour activer la commande.
+- **Vitrine** :
+  - un bouton « Ajouter » sur chaque produit, qui devient un sélecteur de quantité ;
+  - une barre « Voir le panier » ;
+  - un panier avec le nom du client, retrait ou livraison avec adresse, et une remarque ;
+  - « Envoyer la commande sur WhatsApp » ouvre WhatsApp avec un message déjà rédigé : articles, références, prix, total estimé et coordonnées.
+
+  Le panier est gardé sur le téléphone du client. La commande passe directement du client au commerçant, sans transiter par Comptoir.
+- **Barre du haut** : un bouton WhatsApp pour écrire directement au commerce.
+
+## Programme de fidélité
+
+- **Réglages**, rubrique « Programme de fidélité » : activation, montant dépensé pour gagner 1 point, nombre de points pour une récompense et valeur de la récompense. Un aperçu indique le pourcentage reversé. Les valeurs par défaut reversent environ 5 % ; au Maroc, par exemple, 1 point par 10 DH et 100 points = 50 DH.
+- **Caisse** : le solde du client sélectionné s'affiche, avec le bouton « Utiliser 100 points (− 50 DH) ». Il n'est utilisable que sur un panier d'au moins la valeur de la récompense, pour que le client ne perde rien. Les points sont gagnés sur le montant réellement payé.
+- **Contrôles côté serveur** : solde suffisant, montant de la récompense plafonné, une seule récompense par vente. La récompense est accessible même sans le droit de remise, car il s'agit d'un avantage programmé et non d'une remise libre. Si le ticket est annulé, les points sont rendus.
+- **Fiches clients** : colonne « Points », historique des mouvements et ajustement manuel (droit « clients »).
+- **Ticket imprimé** : points gagnés et nouveau solde.
+- **Vitrine** : un encart présente le programme aux clients.
+
+## Pages légales
+
+`/mentions-legales`, `/cgu`, `/cgv` et `/confidentialite`. Elles couvrent le RGPD, la loi marocaine 09-08 et la CNDP, et rappellent les obligations fiscales du commerçant, dont la certification NF525 en France. Elles sont liées depuis toutes les pages publiques, la vitrine et l'inscription.
+
+Les informations de l'éditeur se règlent dans **Cloudflare, Settings, Variables** :
+
+| Variable | Contenu |
+|---|---|
+| `LEGAL_NAME` | Raison sociale |
+| `LEGAL_FORM` | Forme juridique et capital |
+| `LEGAL_ADDRESS` | Adresse du siège |
+| `LEGAL_ID` | RC, ICE, IF ou SIRET |
+| `LEGAL_DIRECTOR` | Directeur de la publication |
+| `LEGAL_EMAIL`, `LEGAL_PHONE` | Contact |
+| `LEGAL_CNDP` | Numéro de déclaration CNDP |
+| `LEGAL_LAW` | Droit applicable, par exemple « droit marocain » |
+| `LEGAL_COURT` | Tribunaux compétents |
+
+Tant qu'une information manque, elle s'affiche surlignée « [à compléter] » et les pages ne sont pas indexées par Google. **Faites relire ces textes par un juriste avant le lancement commercial.**
+
 ## Plusieurs boutiques
 
 Un commerce peut avoir plusieurs points de vente : 1 boutique en Essentiel, 3 en Pro et en essai, sans limite en Business.

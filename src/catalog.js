@@ -16,18 +16,18 @@ export const PLANS = {
 export const PAID_PLANS = ['essentiel', 'pro', 'business'];
 
 export const COUNTRIES = {
-  FR: { name: 'France', currency: '€', tva: 20 },
-  BE: { name: 'Belgique', currency: '€', tva: 21 },
-  CH: { name: 'Suisse', currency: 'CHF', tva: 8.1 },
-  LU: { name: 'Luxembourg', currency: '€', tva: 17 },
-  MA: { name: 'Maroc', currency: 'DH', tva: 20 },
-  DZ: { name: 'Algérie', currency: 'DA', tva: 19 },
-  TN: { name: 'Tunisie', currency: 'DT', tva: 19 },
-  SN: { name: 'Sénégal', currency: 'FCFA', tva: 18 },
-  CI: { name: "Côte d'Ivoire", currency: 'FCFA', tva: 18 },
-  CM: { name: 'Cameroun', currency: 'FCFA', tva: 19.25 },
-  CA: { name: 'Canada (Québec)', currency: '$', tva: 14.975 },
-  XX: { name: 'Autre pays', currency: '€', tva: 20 },
+  FR: { name: 'France', currency: '€', tva: 20, iso: 'EUR', dial: '33' },
+  BE: { name: 'Belgique', currency: '€', tva: 21, iso: 'EUR', dial: '32' },
+  CH: { name: 'Suisse', currency: 'CHF', tva: 8.1, iso: 'CHF', dial: '41' },
+  LU: { name: 'Luxembourg', currency: '€', tva: 17, iso: 'EUR', dial: '352' },
+  MA: { name: 'Maroc', currency: 'DH', tva: 20, iso: 'MAD', dial: '212' },
+  DZ: { name: 'Algérie', currency: 'DA', tva: 19, iso: 'DZD', dial: '213' },
+  TN: { name: 'Tunisie', currency: 'DT', tva: 19, iso: 'TND', dial: '216' },
+  SN: { name: 'Sénégal', currency: 'FCFA', tva: 18, iso: 'XOF', dial: '221' },
+  CI: { name: "Côte d'Ivoire", currency: 'FCFA', tva: 18, iso: 'XOF', dial: '225', keepZero: true },
+  CM: { name: 'Cameroun', currency: 'FCFA', tva: 19.25, iso: 'XAF', dial: '237' },
+  CA: { name: 'Canada (Québec)', currency: '$', tva: 14.975, iso: 'CAD', dial: '1' },
+  XX: { name: 'Autre pays', currency: '€', tva: 20, iso: 'EUR', dial: '' },
 };
 
 // Chaque modèle : catégories, unités, couleur de vitrine, texte d'accueil et quelques produits d'exemple
@@ -129,6 +129,8 @@ export const BUSINESS_TYPES = {
   },
 };
 
+// Valeurs par défaut du programme de fidélité selon la devise : environ 5 % reversés au client.
+const LOYALTY_DEFAULTS = { '€': [1, 5], CHF: [1, 5], $: [1, 5], DH: [10, 50], DT: [3, 15], DA: [100, 500], FCFA: [500, 2500] };
 export function defaultSettings({ name, phone = '', email = '', country = 'FR', type = 'autre' }) {
   const c = COUNTRIES[country] || COUNTRIES.XX;
   const t = BUSINESS_TYPES[type] || BUSINESS_TYPES.autre;
@@ -138,9 +140,50 @@ export function defaultSettings({ name, phone = '', email = '', country = 'FR', 
     legal_info: '', bank_info: '', doc_footer: 'Merci pour votre confiance.',
     accent: t.accent, alert_email: email, alert_digest: '0', due_soon_days: '7',
     catalog_public: '1', show_prices: '1', show_stock: '1',
+    whatsapp: '', whatsapp_orders: '1',
+    loyalty_enabled: '0', loyalty_earn: String((LOYALTY_DEFAULTS[c.currency] || [1, 5])[0]), loyalty_threshold: '100',
+    loyalty_reward: String((LOYALTY_DEFAULTS[c.currency] || [1, 5])[1]),
   };
 }
 export const SETTING_KEYS = Object.keys(defaultSettings({ name: '' }));
+
+/* ------------------------------------------------------------------ */
+/* Prix des formules dans la devise de chaque pays                     */
+/* ------------------------------------------------------------------ */
+// Prix ronds pensés pour chaque marché (pas une simple conversion). eur : valeur approximative en euros (pilotage).
+export const LOCAL_PRICES = {
+  EUR: { symbol: '€', essentiel: 19, pro: 39, business: 79, eur: 1 },
+  CHF: { symbol: 'CHF', essentiel: 19, pro: 39, business: 79, eur: 1.05 },
+  MAD: { symbol: 'DH', essentiel: 199, pro: 419, business: 849, eur: 0.092 },
+  DZD: { symbol: 'DA', essentiel: 2900, pro: 5900, business: 11900, eur: 0.0068 },
+  TND: { symbol: 'DT', essentiel: 59, pro: 119, business: 249, eur: 0.3 },
+  XOF: { symbol: 'FCFA', essentiel: 12500, pro: 25000, business: 49000, eur: 0.001524 },
+  XAF: { symbol: 'FCFA', essentiel: 12500, pro: 25000, business: 49000, eur: 0.001524 },
+  CAD: { symbol: '$', essentiel: 29, pro: 59, business: 119, eur: 0.67 },
+};
+export function pricing(country) {
+  const c = COUNTRIES[country] ? country : 'XX';
+  const iso = COUNTRIES[c].iso, p = LOCAL_PRICES[iso] || LOCAL_PRICES.EUR;
+  const fmt = (n) => `${new Intl.NumberFormat('fr-FR').format(n)} ${p.symbol}`;
+  return { country: c, country_name: COUNTRIES[c].name, currency: iso, symbol: p.symbol, eur: p.eur, price: (plan) => p[plan] ?? 0, format: fmt };
+}
+// Valeur mensuelle d'un abonnement en euros (pilotage de la plateforme, toutes devises confondues).
+export const planEur = (plan, country) => { const p = pricing(country); return Math.round(p.price(plan) * p.eur * 100) / 100; };
+
+// Numéro WhatsApp international (chiffres seulement) à partir d'un numéro saisi localement.
+export function waNumber(raw, country) {
+  let d = String(raw || '').trim();
+  if (!d) return '';
+  const plus = d.startsWith('+') || d.startsWith('00');
+  d = d.replace(/\D/g, '');
+  if (plus) return d.replace(/^00/, '');
+  const c = COUNTRIES[country] || COUNTRIES.XX;
+  if (!c.dial) return d;
+  if (d.startsWith(c.dial) && d.length > 9) return d;
+  if (c.keepZero) return c.dial + d;
+  return c.dial + d.replace(/^0/, '');
+}
+
 
 // Permissions attribuables aux membres de l'équipe (contrôle d'accès par rôle).
 export const PERMISSIONS = [

@@ -413,18 +413,28 @@
   const ttcOf = (ht, rate) => r2(ht * (1 + rate / 100));
 
   // Mêmes calculs que le serveur, pour que le total affiché soit exactement celui encaissé.
+  const loyaltyCfg = () => { const s = state.settings; return { on: s.loyalty_enabled === '1', earn: Number(s.loyalty_earn) || 1, threshold: Number(s.loyalty_threshold) || 100, reward: Number(s.loyalty_reward) || 0 }; };
   function posPayload() {
     const base = pos.lines.map((l) => ({ product_id: l.product_id, label: l.label, qty: Number(l.qty) || 0, unit_price_ht: r4(l.ht), tva_rate: l.tva_rate })).filter((l) => l.qty);
     const pct = Math.min(100, Math.max(0, Number(pos.discount) || 0));
     const byRate = {};
     base.forEach((l) => { byRate[l.tva_rate] = (byRate[l.tva_rate] || 0) + l.qty * l.unit_price_ht; });
     const disc = pct ? Object.entries(byRate).filter(([, ht]) => ht > 0).map(([rate, ht]) => ({ product_id: null, label: `Remise ${pct} %`, qty: 1, unit_price_ht: -Math.round(ht * pct * 100) / 10000, tva_rate: Number(rate) })) : [];
-    const all = [...base, ...disc];
+    // Récompense fidélité : même calcul que le serveur (pourcentage équivalent appliqué par taux de TVA).
+    const L = loyaltyCfg();
+    const grossBase = base.reduce((s, l) => s + l.qty * l.unit_price_ht * (1 + l.tva_rate / 100), 0);
+    let loyaltyPct = 0, rew = [];
+    if (pos.loyalty && L.on && grossBase > 0) {
+      loyaltyPct = Math.min(100, (L.reward / grossBase) * 100);
+      rew = Object.entries(byRate).filter(([, ht]) => ht > 0).map(([rate, ht]) => ({ product_id: null, label: 'Fidélité', qty: 1, unit_price_ht: -Math.round(ht * loyaltyPct * 100) / 10000, tva_rate: Number(rate) }));
+    }
+    const all = [...base, ...disc, ...rew];
     let ht = 0, tva = 0;
     all.forEach((l) => { const h = l.qty * l.unit_price_ht; ht += h; tva += (h * l.tva_rate) / 100; });
     ht = r2(ht); tva = r2(tva);
-    const gross = r2(base.reduce((s, l) => s + l.qty * l.unit_price_ht * (1 + l.tva_rate / 100), 0));
-    return { lines: base, discountLines: disc, ht, tva, ttc: r2(ht + tva), discountAmount: r2(gross - r2(ht + tva)) };
+    const gross = r2(grossBase);
+    const rewardAmount = rew.length ? r2(-rew.reduce((s, l) => s + l.unit_price_ht * (1 + l.tva_rate / 100), 0)) : 0;
+    return { lines: base, discountLines: disc, ht, tva, ttc: r2(ht + tva), discountAmount: r2(gross - r2(ht + tva) - rewardAmount), rewardAmount, loyaltyPct };
   }
 
   function posAdd(p, qty = 1) {
@@ -557,7 +567,7 @@
       </div>
       ${!c && pos.client_name ? `<p class="pos-named">Client : <strong>${esc(pos.client_name)}</strong>${pos.client_phone ? ', ' + esc(pos.client_phone) : ''}</p>` : ''}
       ${c && c.due > 0 ? `<p class="pos-due">Ce client doit déjà ${money(c.due)}.</p>` : ''}`;
-    $('#posCustomer').addEventListener('change', (e) => { pos.customer_id = e.target.value; pos.client_name = ''; pos.client_phone = ''; renderPosTicket(); });
+    $('#posCustomer').addEventListener('change', (e) => { pos.customer_id = e.target.value; pos.client_name = ''; pos.client_phone = ''; pos.loyalty = false; renderPosTicket(); });
     $('#posNewCustomer').addEventListener('click', () => customerForm(null, (id) => { pos.customer_id = id; closeModal(); route(); }));
     $('#posDetach')?.addEventListener('click', () => { pos.source = null; renderPosTicket(); });
 
@@ -586,11 +596,23 @@
 
     const t = posPayload();
     const count = pos.lines.reduce((n, l) => n + Number(l.qty), 0);
+    // Fidélité du client sélectionné
+    const L = loyaltyCfg();
+    const cust = L.on && pos.customer_id ? state.customers.find((c) => c.id === Number(pos.customer_id)) : null;
+    const pts = cust ? Number(cust.loyalty_points) || 0 : 0;
+    if (pos.loyalty && (!cust || pts < L.threshold || t.ttc + t.rewardAmount < L.reward - 0.01)) { pos.loyalty = false; return renderPosTicket(); }
+    const loyaltyHtml = cust ? `<div class="pos-loyalty"><span>Fidélité : <strong>${qtyFmt(pts)} point${pts > 1 ? 's' : ''}</strong>${pts < L.threshold ? ` <em>(récompense à ${L.threshold})</em>` : ''}</span>
+      ${pts >= L.threshold && pos.lines.length ? (t.ttc + t.rewardAmount >= L.reward - 0.01
+        ? `<button type="button" class="btn btn-sm ${pos.loyalty ? 'btn-primary' : ''}" id="posLoyalty">${pos.loyalty ? 'Récompense appliquée' : `Utiliser ${L.threshold} points (− ${money(L.reward)})`}</button>`
+        : `<em>Récompense de ${money(L.reward)} utilisable dès ${money(L.reward)} d’achat</em>`) : ''}</div>` : '';
     $('#posTotals').innerHTML = `
+      ${loyaltyHtml}
       ${pos.discount ? `<div><span>Remise ${pos.discount} %</span><span>− ${money(t.discountAmount)}</span></div>` : ''}
+      ${t.rewardAmount ? `<div><span>Fidélité</span><span>− ${money(t.rewardAmount)}</span></div>` : ''}
       <div><span>dont TVA</span><span>${money(t.tva)}</span></div>
       <div class="grand"><span>TOTAL</span><span>${money(t.ttc)}</span></div>`;
     $('#posCount').textContent = count ? `${qtyFmt(count)} article${count > 1 ? 's' : ''}` : '';
+    $('#posLoyalty')?.addEventListener('click', () => { pos.loyalty = !pos.loyalty; renderPosTicket(); });
     const empty = !pos.lines.length;
     $('#posPay').textContent = empty ? 'Encaisser' : `Encaisser ${money(t.ttc)}`;
     $('#posMbar').hidden = empty;
@@ -635,7 +657,8 @@
   function posBody(mode, payments = [], notes = '') {
     const t = posPayload();
     return { mode, lines: t.lines, discount_pct: pos.discount, payments, notes, source_id: pos.source?.id || null, customer_id: pos.customer_id || null, client_name: pos.client_name, client_phone: pos.client_phone,
-      location_id: state.scope === 'all' ? pos.location || null : undefined };
+      location_id: state.scope === 'all' ? pos.location || null : undefined,
+      loyalty_redeem: !!pos.loyalty || undefined, loyalty_pct: pos.loyalty ? t.loyaltyPct : undefined };
   }
 
   function payModal() {
@@ -697,6 +720,7 @@
       <div class="sale-done">
         <p class="sale-number">${esc(doc.number)} : ${money(doc.total_ttc)}</p>
         ${change ? `<p class="sale-change">À rendre <strong>${money(change)}</strong></p>` : ''}
+        ${doc.loyalty ? `<p class="sale-loyalty">${doc.loyalty.used ? `${qtyFmt(doc.loyalty.used)} points utilisés. ` : ''}${doc.loyalty.earned ? `+${qtyFmt(doc.loyalty.earned)} points gagnés. ` : ''}Nouveau solde : <strong>${qtyFmt(doc.loyalty.balance)} points</strong></p>` : ''}
       </div>
       <div class="modal-foot">
         <div><button class="btn" id="sdPrint">Imprimer le ticket</button> <button class="btn" id="sdInvoice">Faire une facture</button></div>
@@ -834,6 +858,7 @@
       ${change ? `<tr><td>Rendu</td><td class="r">${nf.format(change)}</td></tr>` : ''}</table><hr>
       <table>${Object.entries(byRate).map(([r, v]) => `<tr><td>TVA ${r} % sur ${nf.format(v.ht)}</td><td class="r">${nf.format(v.tva)}</td></tr>`).join('')}</table>
       ${d.status === 'annulé' ? '<p class="c"><b>TICKET ANNULÉ</b></p>' : ''}
+      ${d.loyalty && d.status !== 'annulé' ? `<hr><div>Fidélité${d.loyalty.earned ? ` : +${qtyFmt(d.loyalty.earned)} pts` : ''}${d.loyalty.used ? `, ${qtyFmt(d.loyalty.used)} pts utilisés` : ''}<br>Solde : ${qtyFmt(d.loyalty.balance)} points</div>` : ''}
       <hr><div class="c">${esc(s.doc_footer || 'Merci de votre visite')}<br><small>${esc(s.legal_info || '')}</small></div>
       <script>setTimeout(() => window.print(), 200);<\/script></body></html>`);
   }
@@ -1133,7 +1158,7 @@
   function renderCustomers() {
     const q = norm(cv.q);
     const list = state.customers.filter((c) => !q || norm(`${c.name} ${c.company} ${c.email} ${c.phone}`).includes(q));
-    $('#ctable').innerHTML = state.customers.length ? `<div class="table-wrap"><table><thead><tr><th>Client</th><th>Contact</th><th class="num">Documents</th><th class="num">Total facturé</th><th class="num">Reste dû</th></tr></thead><tbody>
+    $('#ctable').innerHTML = state.customers.length ? `<div class="table-wrap"><table><thead><tr><th>Client</th><th>Contact</th><th class="num">Documents</th><th class="num">Total facturé</th><th class="num">Reste dû</th>${loyaltyCfg().on ? '<th class="num">Points</th>' : ''}</tr></thead><tbody>
       ${list.map((c) => `<tr class="clickable" data-customer="${c.id}"><td><span class="cell-main">${esc(c.name)}</span><div class="cell-sub">${esc(c.company)}</div></td><td>${esc(c.phone)}<div class="cell-sub">${esc(c.email)}</div></td><td class="num">${c.documents}</td><td class="num">${money(c.invoiced)}</td><td class="num ${c.due > 0 ? 'stock-low' : 'muted'}">${c.due > 0 ? money(c.due) : '—'}</td></tr>`).join('') || '<tr><td colspan="5" class="empty-state">Aucun client ne correspond à cette recherche.</td></tr>'}
     </tbody></table></div>` : `<div class="table-wrap"><div class="empty-state"><strong>Aucun client.</strong>Les clients sont créés ici ou automatiquement quand une demande arrive du site.</div></div>`;
   }
@@ -1150,6 +1175,7 @@
         <label class="field full"><span>Notes</span><textarea name="notes" rows="2">${esc(c.notes)}</textarea></label>
         <p class="form-error full" id="cError"></p>
       </form>
+      ${!isNew && loyaltyCfg().on ? `<div id="cLoyalty" class="c-loyalty"></div>` : ''}
       ${isNew ? '' : `<div id="cDocs"></div>`}
       <div class="modal-foot">
         ${isNew ? '' : '<button class="btn btn-danger" id="cDelete">Supprimer</button>'}
@@ -1160,8 +1186,22 @@
       api('/store/documents').then((docs) => {
         const mine = docs.filter((d) => d.customer_id === c.id);
         const el = $('#cDocs'); if (!el || !mine.length) return;
-        el.innerHTML = `<h3 class="section-title">Historique</h3><div class="table-wrap"><table><tbody>${mine.map((d) => `<tr class="clickable" data-doc="${d.id}"><td class="cell-main doc-num">${esc(d.number)}</td><td class="muted">${dateFmt(d.date)}</td><td class="num">${money(d.total_ttc)}</td><td>${docBadge(d)}</td></tr>`).join('')}</tbody></table></div>`;
+        el.innerHTML = `<h3 class="section-title">Historique</h3><div class="table-wrap"><table><tbody>${mine.map((d) => `<tr class="clickable" data-doc="${d.id}"><td class="cell-main doc-num">${esc(d.number)}</td><td class="muted">${dateFmt(d.date)}</td><td class="num">${money(d.total_ttc)}</td><td>${docBadge(d)}</td>${loyaltyCfg().on ? `<td class="num">${qtyFmt(Number(c.loyalty_points) || 0)}</td>` : ''}</tr>`).join('')}</tbody></table></div>`;
       }).catch(() => {});
+    }
+    if (!isNew && loyaltyCfg().on) {
+      const loadLoyalty = () => api(`/store/customers/${c.id}/loyalty`, { fresh: true }).then((l) => {
+        const el = $('#cLoyalty'); if (!el) return;
+        el.innerHTML = `<div class="c-loyalty-head"><h3 class="section-title">Fidélité</h3><strong>${qtyFmt(l.balance)} points</strong>${can('customers.manage') ? '<button type="button" class="btn btn-sm" id="cAdjust">Ajuster</button>' : ''}</div>
+          ${l.movements.length ? `<div class="table-wrap"><table><tbody>${l.movements.slice(0, 8).map((m) => `<tr><td class="muted">${dateTimeFmt(m.created_at)}</td><td>${esc(m.reason)}</td><td class="num ${m.points < 0 ? 'stock-out' : 'stock-ok'}">${m.points > 0 ? '+' : ''}${qtyFmt(m.points)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Aucun point pour l’instant : ils s’ajoutent à chaque achat en caisse.</p>'}`;
+        $('#cAdjust')?.addEventListener('click', async () => {
+          const v = window.prompt('Points à ajouter (ou à retirer avec un signe moins) :', '10');
+          if (!v) return;
+          const reason = window.prompt('Motif :', 'Geste commercial') || '';
+          try { await api(`/store/customers/${c.id}/loyalty`, { method: 'POST', body: { points: Number(v.replace(',', '.')), reason } }); await refresh('customers'); loadLoyalty(); toast('Points mis à jour'); } catch (ex) { fail(ex); }
+        });
+      }).catch(() => {});
+      loadLoyalty();
     }
     $('#cCancel').addEventListener('click', closeModal);
     $('#cQuote')?.addEventListener('click', () => docForm('devis', null, c.id));
@@ -1643,6 +1683,18 @@
             ${chk('show_stock', 'Afficher la disponibilité (en stock, stock limité…)')}
           </div>
         </section>
+        <section class="panel"><h2>Commandes WhatsApp</h2><div class="fields">
+          ${f('whatsapp', 'Numéro WhatsApp du commerce', { type: 'tel', hint: 'Le format local suffit, par exemple 06 12 34 56 78 : l’indicatif de votre pays est ajouté automatiquement.' })}
+          <div></div>
+          ${chk('whatsapp_orders', 'Permettre aux clients de composer un panier sur la vitrine et de vous l’envoyer sur WhatsApp')}
+        </div></section>
+        <section class="panel"><h2>Programme de fidélité</h2><div class="fields">
+          <label class="check full"><input type="checkbox" data-flag="loyalty_enabled" ${s.loyalty_enabled === '1' ? 'checked' : ''}> Activer le programme de fidélité (points gagnés en caisse par les clients enregistrés)</label>
+          ${f('loyalty_earn', `Montant dépensé pour gagner 1 point (${esc(cur())})`, { type: 'number' })}
+          ${f('loyalty_threshold', 'Points nécessaires pour une récompense', { type: 'number' })}
+          ${f('loyalty_reward', `Valeur de la récompense (${esc(cur())})`, { type: 'number' })}
+          <p class="full muted" id="loyaltyPreview" style="margin:0"></p>
+        </div></section>
         <section class="panel"><h2>Facturation</h2><div class="fields">
           ${f('currency', 'Devise', { hint: 'Exemples : €, DH, DA, DT, FCFA, CHF, $' })}${f('tva_default', 'TVA par défaut (%)', { type: 'number' })}
           ${f('invoice_due_days', 'Délai de paiement des factures (jours)', { type: 'number' })}
@@ -1660,6 +1712,11 @@
         <button class="btn btn-primary" type="submit">Enregistrer les paramètres</button>
       </form>`;
     $('#copyUrl').addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('Lien copié'); } catch { toast(url); } });
+    const preview = () => {
+      const fm = $('#sform'); const e1 = Number(fm.loyalty_earn.value) || 0, th = Number(fm.loyalty_threshold.value) || 0, rw = Number(fm.loyalty_reward.value) || 0;
+      $('#loyaltyPreview').textContent = e1 && th ? `Un client gagne 1 point tous les ${e1} ${cur()} : après ${new Intl.NumberFormat('fr-FR').format(e1 * th)} ${cur()} d’achats, il reçoit ${rw} ${cur()} de réduction, soit ${String(Math.round((rw / (e1 * th)) * 1000) / 10).replace('.', ',')} % reversés.` : '';
+    };
+    $('#sform').addEventListener('input', preview); preview();
     api('/store/alerts/email-status').then((r) => {
       $('#mailStatus').textContent = r.configured ? '' : "L'envoi d'e-mails n'est pas encore activé sur la plateforme : vos alertes restent visibles dans le menu Alertes.";
       $('#testMail').hidden = !r.configured;
@@ -1906,14 +1963,14 @@
     $('#view').innerHTML = `
       <section class="panel sub-current">
         <div><span class="kpi-label">Formule actuelle</span><strong>${esc(st.plan_name)}</strong>
-          <span class="muted">${sub.plan === 'essai' ? `Essai gratuit jusqu'au ${dateFmt(sub.trial_ends_at)}` : current ? `${current.price} € HT par mois` : ''}</span></div>
+          <span class="muted">${sub.plan === 'essai' ? `Essai gratuit jusqu'au ${dateFmt(sub.trial_ends_at)}` : current ? `${current.price_label} HT par mois` : ''}</span></div>
         <div><span class="kpi-label">Produits</span><strong>${sub.usage.products}</strong><span class="muted">sur ${lim(state.me.limits.products)}</span></div>
         <div><span class="kpi-label">Utilisateurs</span><strong>${sub.usage.users}</strong><span class="muted">sur ${lim(state.me.limits.users)}</span></div>
       </section>
       ${sub.plan_requested ? `<p class="notice">Demande de passage à la formule <strong>${esc(sub.plans.find((p) => p.key === sub.plan_requested)?.name || sub.plan_requested)}</strong> envoyée. Nous vous contactons pour finaliser l'abonnement.</p>` : ''}
       <div class="plans">
         ${sub.plans.map((p) => `<section class="plan ${p.key === 'pro' ? 'featured' : ''}">
-          <h2>${esc(p.name)}</h2><p class="plan-price"><strong>${p.price} €</strong> HT / mois</p>
+          <h2>${esc(p.name)}</h2><p class="plan-price"><strong>${esc(p.price_label)}</strong> HT / mois</p>
           <p class="muted">${esc(p.description)}</p>
           <ul><li>${lim(p.products)} produits</li><li>${p.users} utilisateur${p.users > 1 ? 's' : ''}</li><li>Caisse, stock, vitrine en ligne</li><li>Devis, factures, alertes</li></ul>
           ${p.key === sub.plan ? '<span class="badge s-ok">Formule actuelle</span>' : `<button class="btn ${p.key === 'pro' ? 'btn-primary' : ''} btn-block" data-plan="${p.key}" ${sub.plan_requested === p.key ? 'disabled' : ''}>${sub.plan_requested === p.key ? 'Demande envoyée' : 'Choisir cette formule'}</button>`}

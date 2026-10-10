@@ -702,3 +702,13 @@ a.kpi:hover { background: #FAFAFB; }
 .loc-access input[type="radio"], .loc-access input[type="checkbox"], .perm-groups input[type="checkbox"] { width: auto; flex: none; margin: 0; }
 .loc-access { grid-template-columns: 1fr; }
 .view > .panel + .panel, .view > section.panel + section.panel { margin-top: 18px; }
+
+/* Fidélité */
+.pos-loyalty { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; margin-bottom: 6px; border-radius: var(--radius); background: #FCE8E1; font-family: var(--font); }
+.pos-loyalty em { font-style: normal; color: var(--muted); font-size: .85rem; }
+.sale-loyalty { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius); background: #E1F1E7; color: var(--ok); }
+.c-loyalty { margin-top: 18px; }
+.c-loyalty-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.c-loyalty-head h3 { margin: 0; }
+.c-loyalty-head strong { margin-right: auto; font-size: 1.1rem; }
+.auth-legal a { color: inherit; }

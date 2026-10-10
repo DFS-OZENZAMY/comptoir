@@ -1,6 +1,6 @@
 // Console du propriétaire de la plateforme : pilotage, monitoring, commerces, revenus, système.
 import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from './lib.js';
-import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './catalog.js';
+import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from './catalog.js';
 import { logEvent } from './db.js';
 
 const SALES = "((d.type = 'facture' AND d.status != 'annulée' AND COALESCE(d.source_type, '') != 'ticket') OR (d.type = 'ticket' AND d.status = 'payé'))";
@@ -28,7 +28,7 @@ const label = (s) => ({
 /* ------------------------------------------------------------------ */
 
 async function platformCounts(db) {
-  const stores = await all(db.prepare('SELECT id, plan, status, trial_ends_at, created_at, last_active_at FROM stores'));
+  const stores = await all(db.prepare('SELECT id, plan, status, trial_ends_at, created_at, last_active_at, country FROM stores'));
   const c = { stores: stores.length, active_7d: 0, active_30d: 0, paying: 0, trial: 0, trial_expired: 0, suspended: 0, mrr: 0, new_month: 0, health: {} };
   for (const s of stores) {
     const h = health(s); c.health[h] = (c.health[h] || 0) + 1;
@@ -37,7 +37,7 @@ async function platformCounts(db) {
     if (s.status === 'suspended') c.suspended++;
     if (s.created_at.slice(0, 7) === today().slice(0, 7)) c.new_month++;
     if (s.plan === 'essai') { if (s.trial_ends_at >= today()) c.trial++; else c.trial_expired++; }
-    if (PAID_PLANS.includes(s.plan) && s.status === 'active') { c.paying++; c.mrr += PLANS[s.plan].price; }
+    if (PAID_PLANS.includes(s.plan) && s.status === 'active') { c.paying++; c.mrr += planEur(s.plan, s.country); }
   }
   return c;
 }
@@ -213,7 +213,8 @@ async function listStores(db) {
       ...label(s), health: health(s),
       sales_30d: r2(m.sales), tickets_30d: m.tickets, views_30d: m.views, documents_30d: m.docs, active_days_30d: m.activeDays,
       spark: days.map((d) => m.spark[d]),
-      mrr: PAID_PLANS.includes(s.plan) && s.status === 'active' ? PLANS[s.plan].price : 0,
+      mrr: PAID_PLANS.includes(s.plan) && s.status === 'active' ? planEur(s.plan, s.country) : 0,
+      price_label: PAID_PLANS.includes(s.plan) ? pricing(s.country).format(pricing(s.country).price(s.plan)) : '',
     };
   });
 }
@@ -314,7 +315,7 @@ async function activityMap(db) {
 async function revenue(db) {
   const c = await platformCounts(db);
   const history = await all(db.prepare('SELECT day, mrr, paying, trial, stores FROM platform_daily WHERE day >= ? ORDER BY day').bind(addDays(today(), -179)));
-  const paying = await all(db.prepare(`SELECT s.id, s.name, s.plan, s.created_at, s.last_active_at,
+  const paying = await all(db.prepare(`SELECT s.id, s.name, s.plan, s.created_at, s.last_active_at, s.country,
       (SELECT MAX(e.created_at) FROM events e WHERE e.store_id = s.id AND e.type = 'plan_change') AS since
       FROM stores s WHERE s.status = 'active' AND s.plan IN (${PAID_PLANS.map((p) => `'${p}'`).join(',')}) ORDER BY s.name`));
   const trials = await all(db.prepare("SELECT id, name, trial_ends_at, last_active_at, created_at FROM stores WHERE plan = 'essai' AND status = 'active' ORDER BY trial_ends_at"));
@@ -322,14 +323,14 @@ async function revenue(db) {
   const converted = await db.prepare(`SELECT COUNT(*) AS n FROM stores WHERE trial_ends_at < ? AND plan IN (${PAID_PLANS.map((p) => `'${p}'`).join(',')})`).bind(today()).first();
   const churned = await db.prepare("SELECT COUNT(*) AS n FROM events WHERE type = 'status_change' AND detail = 'Suspendu' AND created_at >= ?").bind(ago(30)).first();
   const byPlan = PAID_PLANS.map((k) => {
-    const n = paying.filter((p) => p.plan === k).length;
-    return { key: k, name: PLANS[k].name, price: PLANS[k].price, stores: n, mrr: n * PLANS[k].price };
+    const list = paying.filter((p) => p.plan === k);
+    return { key: k, name: PLANS[k].name, price: PLANS[k].price, stores: list.length, mrr: Math.round(list.reduce((a, p) => a + planEur(k, p.country), 0) * 100) / 100 };
   });
   return {
     mrr: c.mrr, arr: c.mrr * 12, paying: c.paying, arpa: c.paying ? r2(c.mrr / c.paying) : 0,
     trial_conversion: ended.n ? Math.round((converted.n / ended.n) * 100) : null, trials_ended: ended.n, trials_converted: converted.n,
     churned_30d: churned.n, by_plan: byPlan, history,
-    paying_stores: paying.map((p) => ({ ...p, plan_name: PLANS[p.plan].name, price: PLANS[p.plan].price })),
+    paying_stores: paying.map((p) => ({ ...p, plan_name: PLANS[p.plan].name, price: planEur(p.plan, p.country), price_label: pricing(p.country).format(pricing(p.country).price(p.plan)) })),
     trials: trials.map((t) => ({ ...t, days_left: Math.round((new Date(t.trial_ends_at + 'T00:00:00Z') - new Date(today() + 'T00:00:00Z')) / 86400000) })),
   };
 }
