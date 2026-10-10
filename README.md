@@ -79,7 +79,7 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ## Design
 
-Maquettes et système de design : **https://www.figma.com/design/76wfHUeIuxJcFzAcIjRSbr**
+Maquettes et système de design : **https://www.figma.com/design/3CaB0cSmhpdObFGUVA9Ktm**
 
 Export consultable sans compte Figma, jetons de design et règles : voir le dossier [`design/`](design/README.md).
 - **Fondations** : 17 couleurs, espacements, arrondis, 14 styles de texte, et 11 composants (bouton, pastille, badge, indicateur, tâche, tuile de caisse, carte produit, champ, ligne de ticket, menu, barre mobile).

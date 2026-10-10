@@ -1,12 +1,12 @@
 # Design de Comptoir
 
-Fichier source dans Figma : **https://www.figma.com/design/76wfHUeIuxJcFzAcIjRSbr**
+Fichier source dans Figma : **https://www.figma.com/design/3CaB0cSmhpdObFGUVA9Ktm**
 
 Ce dossier contient l'export de la maquette, pour la consulter sans compte Figma.
 
 | Fichier | Contenu |
 |---|---|
-| `comptoir-design.fig` | **Fichier source Figma** : fondations, composants et écrans, modifiables |
+| `comptoir-design.fig` | **Fichier source Figma** : fondations, composants, site et vitrine. Version antérieure à la page « Espace commerçant et console » : réexporter depuis Figma pour la mettre à jour. |
 | `maquette-site-et-vitrine.png` | Export complet de la page « Site et vitrine » (4 écrans) |
 | `ecrans/site-ordinateur.png` | Site de présentation, version ordinateur (1440 px) |
 | `ecrans/site-telephone.png` | Site de présentation, version téléphone (390 px) |
@@ -61,7 +61,12 @@ Ces jetons sont repris dans le code, en tête de `public/app/app.css`, `public/a
    - tuile de caisse, carte produit (standard et compacte), ligne de ticket ;
    - champ de saisie, élément de menu, barre de navigation mobile.
 2. **Site et vitrine** : les 4 écrans exportés ici.
-3. **Espace commerçant et console** : à dessiner. Prévu : accueil, caisse, encaissement, fiche produit et vue d'ensemble de la console, en ordinateur et téléphone.
+3. **Espace commerçant et console** : 8 écrans, tous intégrés au site.
+   - Accueil commerçant, ordinateur et téléphone : chiffres du jour en cartes, tâches « À faire » avec un repère de couleur.
+   - Caisse, ordinateur et téléphone : ticket en cours au bord dentelé, lignes « 2 × 9,50 DH », barre d'encaissement fixe sur téléphone.
+   - Encaissement sur téléphone : feuille qui monte du bas, modes de paiement, montant reçu, grand bloc « À rendre ».
+   - Fiche produit sur téléphone : photo, nom, prix TTC, quantité, catégorie, « Plus d'options ».
+   - Console, ordinateur et téléphone : pastille d'état de la plateforme, éléments à traiter avec bouton « Ouvrir », chiffres, activité et entonnoir de conversion.
 
 ## Correspondance avec le site
 

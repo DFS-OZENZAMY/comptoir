@@ -146,6 +146,7 @@
       <li class="p${t.priority}" ${t.store_id ? `data-store="${t.store_id}"` : ''} ${t.link ? `data-link="${t.link}"` : ''} tabindex="0">
         <span class="todo-kind">${esc(TODO_ICON[t.kind] || 'Info')}</span>
         <span class="todo-main"><strong>${esc(t.title)}</strong>${t.store ? ` <span class="todo-store">${esc(t.store)}</span>` : ''}<span class="todo-detail">${esc(t.detail)}</span></span>
+        <span class="todo-open">Ouvrir</span>
       </li>`).join('')}</ul>${limit && items.length > limit ? `<a class="panel-more" href="#/a-traiter">Voir les ${items.length} éléments</a>` : ''}`;
   }
 
@@ -154,6 +155,8 @@
     const c = o.counts;
     updateTodoBadge(o.todo);
     setSysDot(o.system);
+    const [stCls, stLabel] = sysStatus(o.system);
+    $('#viewActions').innerHTML = `<a class="live-pill ${stCls}" href="#/systeme"><span class="status-dot ${stCls}"></span>${stLabel === 'Opérationnel' ? 'Plateforme opérationnelle' : stLabel}</a>`;
     const histLabels = o.history.map((h) => dayShort(h.day));
     const f = o.funnel.steps;
     $('#view').innerHTML = `
@@ -558,6 +561,7 @@
     $('#searchResults').innerHTML = list.map((s, i) => `<li><button data-pick="${s.id}" class="${i === 0 ? 'first' : ''}"><strong>${esc(s.name)}</strong><span>${esc(s.owner_name)}, ${esc(s.type_label)}, ${esc(s.country_name)}</span>${healthBadge(s.health)}</button></li>`).join('') || '<li class="muted">Aucun commerce.</li>';
   }
   $('#openSearch').addEventListener('click', openSearch);
+  $('#openSearchM').addEventListener('click', openSearch);
   $('#searchInput').addEventListener('input', (e) => renderSearch(e.target.value));
   $('#searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') { $('#searchResults button')?.click(); } });
   $('#searchResults').addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (b) { searchDialog.close(); openStore(Number(b.dataset.pick)); } });
@@ -582,7 +586,8 @@
   function route() {
     const key = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0];
     const [title, fn, auto] = VIEWS[key] || VIEWS['vue-d-ensemble'];
-    $$('.side-nav a').forEach((a) => a.classList.toggle('active', a.dataset.view === key));
+    $$('.side-nav a, .console-mnav a').forEach((a) => a.classList.toggle('active', a.dataset.view === key));
+    $('.console-mnav a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
     $('#viewTitle').textContent = title; $('#viewActions').innerHTML = '';
     document.title = `${title} : console Comptoir`;
     $('#view').innerHTML = '<p class="loading">Chargement…</p>';

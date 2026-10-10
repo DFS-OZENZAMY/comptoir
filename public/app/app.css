@@ -519,3 +519,57 @@ a.kpi:hover { background: #FAFAFB; }
 .pay-total { border-radius: var(--r-card); }
 .pay-method { border-radius: var(--radius); }
 @media (max-width: 900px) { .pos-mbar:not([hidden]) { border-radius: 14px; } }
+
+
+/* ================================================================== */
+/* Maquettes Figma : espace commerçant et console                     */
+/* ================================================================== */
+/* Accueil : chiffres du jour en cartes séparées sur ordinateur */
+.home-today { background: none; border: 0; gap: 16px; }
+.home-today > div { background: var(--paper); border: 1px solid var(--line); border-left: 1px solid var(--line); border-radius: var(--r-card); padding: 18px 22px; }
+.home-today strong { font-size: 1.9rem; }
+.home-sell { justify-content: flex-end; }
+.home-sell::after { top: 10px; left: 20px; right: auto; font-size: 3.4rem; }
+/* Tâches « À faire » : cartes avec repère de couleur */
+.tasks { display: grid; gap: 8px; padding: 0 12px 12px; }
+.tasks li { border: 0; border-radius: var(--radius); }
+.tasks a { gap: 14px; padding: 12px 14px; border-radius: var(--radius); }
+.tasks a::before { content: ""; flex: none; width: 4px; height: 36px; border-radius: 2px; background: var(--line); }
+.tasks li.t-bad a::before { background: var(--out); } .tasks li.t-warn a::before { background: var(--low); } .tasks li.t-info a::before { background: var(--info); }
+.task-main { flex: 1; }
+
+/* Caisse : en-tête du ticket */
+.pos-head { display: flex; align-items: baseline; gap: 10px; padding: 18px 16px 4px; }
+.pos-head h2 { margin: 0; font-size: 1.15rem; }
+.pos-head .pos-clear { margin-left: auto; color: var(--out); font-size: .88rem; }
+.pos-client { border-bottom: 0; padding-top: 8px; }
+.pos-client select { background: var(--zinc); border-color: transparent; font-weight: 600; }
+.pos-line-price { font-family: var(--mono); }
+.pos-totals .grand span:first-child { letter-spacing: .02em; }
+.pos-more { grid-template-columns: repeat(3, 1fr); }
+
+/* Encaissement : bloc « À rendre » */
+.pay-change { display: flex; justify-content: space-between; align-items: center; min-height: 0; margin: 14px 0 0; padding: 14px 18px; border-radius: var(--r-card); background: #E1F1E7; color: var(--ok); font-size: 1rem; }
+.pay-change:empty { display: none; }
+.pay-change strong { font-family: var(--display); font-size: 2rem; line-height: 1; }
+.pay-methods { grid-template-columns: repeat(2, 1fr); }
+.quick .btn { border-radius: 999px; }
+
+@media (max-width: 900px) {
+  /* Accueil : chiffres regroupés dans une seule carte sur téléphone */
+  .home-today { background: var(--paper); border: 1px solid var(--line); border-radius: var(--r-card); gap: 0; }
+  .home-today > div { border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 12px; }
+  .home-today > div:first-child { border-left: 0; }
+  .home-today strong { font-size: 1.15rem; }
+  .tasks { padding: 0 8px 8px; }
+  /* Fenêtres : feuille qui monte du bas de l'écran */
+  .modal { margin: auto 0 0; width: 100vw; max-width: 100vw; height: auto; max-height: 92dvh; border-radius: 20px 20px 0 0; }
+  .modal-head { border-radius: 20px 20px 0 0; padding-top: 22px; }
+  .modal-head::before { content: ""; position: absolute; top: 8px; left: 50%; width: 40px; height: 4px; margin-left: -20px; border-radius: 2px; background: var(--line); }
+}
+
+@media (max-width: 900px) {
+  .home-sell::after { top: 50%; left: auto; right: 22px; transform: translateY(-50%); font-size: 3rem; }
+  .home-today strong { font-size: 1rem; white-space: nowrap; }
+  .pos-line-price { white-space: nowrap; }
+}

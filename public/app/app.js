@@ -390,6 +390,7 @@
           <div class="pos-grid" id="posGrid"></div>
         </section>
         <aside class="pos-ticket" aria-label="Ticket en cours">
+          <div class="pos-head"><h2>Ticket en cours</h2><span id="posCount" class="muted"></span><button class="link pos-clear" id="posClear" type="button">Vider</button></div>
           <div id="posClient"></div>
           <div class="pos-lines" id="posLines"></div>
           <div class="pos-bottom">
@@ -399,7 +400,6 @@
               <button class="btn" id="posDiscount" type="button">Remise</button>
               <button class="btn" id="posReserve" type="button">Mettre de côté</button>
               <button class="btn" id="posCredit" type="button">À crédit</button>
-              <button class="btn btn-danger" id="posClear" type="button">Vider</button>
             </div>
           </div>
         </aside>
@@ -476,7 +476,7 @@
     $('#posLines').innerHTML = pos.lines.length ? pos.lines.map((l, i) => `
       <div class="pos-line">
         <div class="pos-line-main"><span class="pos-line-name">${esc(l.label)}</span>
-          <label class="pos-line-price">PU <input type="number" step="0.01" min="0" value="${l.ttc.toFixed(2)}" data-posprice="${i}" aria-label="Prix unitaire TTC"> ${esc(cur())}</label></div>
+          <label class="pos-line-price">${qtyFmt(l.qty)} × <input type="number" step="0.01" min="0" value="${l.ttc.toFixed(2)}" data-posprice="${i}" aria-label="Prix unitaire TTC"> ${esc(cur())}</label></div>
         <div class="stepper"><button type="button" data-posqty="${i}" data-d="-1" aria-label="Diminuer">−</button><input type="number" step="any" min="0" value="${l.qty}" data-posqtyin="${i}" aria-label="Quantité"><button type="button" data-posqty="${i}" data-d="1" aria-label="Augmenter">+</button></div>
         <span class="pos-line-total">${money(l.qty * l.ttc)}</span>
         <button type="button" class="icon-btn" data-posrm="${i}" aria-label="Retirer ${esc(l.label)}">✕</button>
@@ -501,7 +501,8 @@
     $('#posTotals').innerHTML = `
       ${pos.discount ? `<div><span>Remise ${pos.discount} %</span><span>− ${money(t.discountAmount)}</span></div>` : ''}
       <div><span>dont TVA</span><span>${money(t.tva)}</span></div>
-      <div class="grand"><span>Total${count ? ` (${qtyFmt(count)} article${count > 1 ? 's' : ''})` : ''}</span><span>${money(t.ttc)}</span></div>`;
+      <div class="grand"><span>TOTAL</span><span>${money(t.ttc)}</span></div>`;
+    $('#posCount').textContent = count ? `${qtyFmt(count)} article${count > 1 ? 's' : ''}` : '';
     const empty = !pos.lines.length;
     $('#posPay').textContent = empty ? 'Encaisser' : `Encaisser ${money(t.ttc)}`;
     $('#posMbar').hidden = empty;
@@ -573,7 +574,7 @@
       $('#payQuick').innerHTML = method === 'espèces' ? [r, ...notes].map((v) => `<button type="button" class="btn btn-sm" data-quick="${v}">${v === r ? 'Compte juste' : money(v)}</button>`).join('') : '';
       $$('[data-quick]', body).forEach((b) => b.addEventListener('click', () => { amount.value = Number(b.dataset.quick).toFixed(2); refresh(); }));
       const v = r2(Number(amount.value) || 0);
-      $('#payChange').textContent = method === 'espèces' && v > r ? `À rendre : ${money(v - r)}` : '';
+      $('#payChange').innerHTML = method === 'espèces' && v > r ? `<span>À rendre</span><strong>${money(v - r)}</strong>` : '';
       $('#payGo').textContent = v >= r ? 'Valider la vente' : 'Ajouter ce paiement';
       $('#payList').innerHTML = payments.map((p, i) => `<li><span>${cap(p.method)}</span><span>${money(p.amount)} <button type="button" class="link" data-unpay="${i}">retirer</button></span></li>`).join('');
       $$('[data-unpay]', body).forEach((b) => b.addEventListener('click', () => { payments.splice(b.dataset.unpay, 1); amount.value = rest().toFixed(2); refresh(); }));
