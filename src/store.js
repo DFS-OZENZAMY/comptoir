@@ -5,6 +5,7 @@ import {
   readBody, hashPassword, tempPassword,
 } from './lib.js';
 import { PLANS, PAID_PLANS, SETTING_KEYS, defaultSettings, pricing } from './catalog.js';
+import { importProducts } from './importer.js';
 import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, transferStock, listLocations, saveLocation, locationReport, listRoles, saveRole, deleteRole, validRoleAndLocations, updateMember } from './access.js';
 import { bump, logEvent } from './db.js';
 import { storeAccess } from './auth.js';
@@ -694,6 +695,7 @@ function guard(ctx, res, id, action, m, url) {
   const W = m !== 'GET';
   switch (res) {
     case 'dashboard': return ctx.need('reports.view');
+    case 'import': return ctx.need('products.edit');
     case 'settings': if (W) ctx.need('settings.manage'); return;
     case 'categories': case 'products': if (W) ctx.need('products.edit'); return;
     case 'stock': return ctx.need('stock.manage');
@@ -832,6 +834,10 @@ export async function storeRoutes(ctx, parts) {
       }
       if (id === 'transfer' && m === 'POST') return json(await transferStock(ctx, await body()), 201);
       if (!id && m === 'POST') return json(await addStockMovement(ctx, await body()), 201);
+      break;
+
+    case 'import':
+      if (id === 'products' && m === 'POST') return json(await importProducts(ctx, await body()));
       break;
 
     case 'locations':

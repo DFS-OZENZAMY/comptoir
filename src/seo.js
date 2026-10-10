@@ -464,7 +464,7 @@ export async function renderVitrine(env, request, url, slug) {
 /* Plan du site et robots.txt                                          */
 /* ------------------------------------------------------------------ */
 
-const HELP_SLUGS = ['bien-demarrer', 'caisse', 'produits-et-stock', 'devis-commandes-factures', 'clients-et-fidelite', 'vitrine-et-whatsapp', 'boutiques-et-rapports', 'equipe-et-droits', 'reglages-et-abonnement', 'questions-frequentes'];
+const HELP_SLUGS = ['bien-demarrer', 'caisse', 'produits-et-stock', 'importer-ses-produits', 'devis-commandes-factures', 'clients-et-fidelite', 'vitrine-et-whatsapp', 'boutiques-et-rapports', 'equipe-et-droits', 'reglages-et-abonnement', 'questions-frequentes'];
 export async function sitemap(env, url) {
   const db = env.DB;
   await init(db);

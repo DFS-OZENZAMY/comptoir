@@ -77,6 +77,37 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 
 ---
 
+## Import des produits depuis un ancien logiciel
+
+**Produits, Importer** récupère le catalogue d'un autre outil, en CSV ou en Excel (.xlsx) :
+- **logiciels reconnus automatiquement** : Loyverse, Square, Shopify, WooCommerce, Odoo, EBP et Sage (intitulés français), et le modèle Comptoir ;
+- **tout autre tableau** se fait correspondre à la main.
+
+**Côté navigateur** (`public/app/import.js`, chargé seulement sur cette page) :
+- **lecture** :
+  - CSV avec séparateur `;` `,` ou tabulation, en UTF-8 ou en Windows-1252 (CSV d'Excel français) ;
+  - XLSX lu avec la décompression intégrée au navigateur, sans bibliothèque externe ;
+  - le fichier n'est jamais envoyé tel quel.
+- **correspondance des colonnes**, en français et en anglais : nom, variante, référence, code-barres, catégorie, prix (HT ou TTC selon l'intitulé ou le logiciel), prix d'achat, TVA, seuil, unité, description et stock.
+- **nettoyage** :
+  - prix « 1 234,50 € » ;
+  - catégories en chemin (« Épicerie > Miel ») ;
+  - variantes Shopify et Loyverse sur plusieurs lignes (nom, catégorie et description hérités) ;
+  - lignes d'images ignorées ;
+  - produits parents WooCommerce et articles archivés Square ignorés ;
+  - « vendu au poids » transformé en kg ;
+  - codes-barres abîmés par Excel (format scientifique) signalés.
+- **stock par magasin** : chaque colonne « In stock [Magasin] » ou « Current Quantity Magasin » est rapprochée de la boutique Comptoir du même nom.
+- **aperçu** avant import (à créer, à mettre à jour, erreurs), puis envoi par lots de 200 lignes avec une barre de progression.
+
+**Côté serveur** (`src/importer.js`, `POST /api/store/import/products`) :
+- **contrôles** : droit « produits », droit « stock » pour les quantités, limite de produits de la formule, 500 lignes au plus par envoi, valeurs vérifiées, boutiques autorisées seulement.
+- **rapprochement** avec les produits existants par code-barres, puis référence, puis nom : mise à jour ou ignoré, au choix. Les doublons du fichier sont fusionnés.
+- **création** des catégories manquantes.
+- **stock** réparti par boutique, chaque quantité étant tracée dans les mouvements (« Import Loyverse »…). Les produits d'exemple jamais vendus peuvent être retirés.
+
+**Modèle Comptoir** téléchargeable depuis la page. Guide : `/aide/importer-ses-produits`.
+
 ## Application installable (ordinateur et téléphone)
 
 L'espace commerçant s'installe comme une application : icône sur l'écran d'accueil ou le bureau, fenêtre à part, ouverture directe sur le workspace, sans passer par le site.

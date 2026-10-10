@@ -56,6 +56,35 @@ export const GUIDES = [
     ],
   },
   {
+    slug: 'importer-ses-produits', title: 'Importer ses produits depuis un autre logiciel', app: 'importer',
+    summary: 'Récupérer en quelques minutes le catalogue de votre ancien logiciel de caisse ou de gestion : Loyverse, Square, Shopify, WooCommerce, Odoo, EBP, Sage ou Excel.',
+    sections: [
+      ['Comment ça marche', `<ol><li><strong>Exportez vos produits</strong> depuis votre ancien logiciel, en CSV ou en Excel (.xlsx).</li>
+        <li>Dans Comptoir, ouvrez <strong>Produits, Importer</strong> et déposez le fichier.</li>
+        <li>Comptoir <strong>reconnaît le logiciel</strong> et fait correspondre les colonnes : nom, référence, code-barres, catégorie, prix, prix d’achat, TVA, stock, seuil d’alerte. Vérifiez-les et corrigez si besoin.</li>
+        <li>Contrôlez l’<strong>aperçu</strong> (produits à créer, à mettre à jour, erreurs), puis touchez <strong>Importer</strong>.</li></ol>
+        <p>Rien n’est enregistré avant votre confirmation. Les catégories manquantes sont créées, et un produit que vous avez déjà (même code-barres, même référence ou même nom) est mis à jour au lieu d’être dupliqué.</p>`],
+      ['Exporter depuis votre ancien logiciel', `<ul>
+        <li><strong>Loyverse</strong> : Back Office, Articles, liste des articles, bouton Exporter.</li>
+        <li><strong>Square</strong> : Tableau de bord, Articles, Bibliothèque d’articles, Actions, Exporter la bibliothèque.</li>
+        <li><strong>Shopify</strong> : Produits, Exporter, « Tous les produits », format CSV.</li>
+        <li><strong>WooCommerce</strong> : Produits, Exporter, Générer le CSV.</li>
+        <li><strong>Odoo</strong> : Inventaire, Produits, vue liste, cochez les produits, Action, Exporter.</li>
+        <li><strong>EBP</strong> et <strong>Sage</strong> : depuis la liste des articles, export vers Excel ou en CSV.</li>
+        <li><strong>Un autre logiciel ou un tableau Excel</strong> : tout tableau avec une ligne de titres convient. Vous pouvez aussi remplir le <strong>modèle Comptoir</strong>, téléchargeable depuis la page d’import.</li></ul>`],
+      ['Prix, variantes et stock', `<ul>
+        <li><strong>Prix HT ou TTC</strong> : Comptoir le devine d’après le titre de la colonne et le logiciel d’origine ; vérifiez le choix avant d’importer.</li>
+        <li><strong>Variantes</strong> (taille, couleur…) : chacune devient un produit, avec son nom complet (« T-shirt Rouge M »), sa référence et son code-barres.</li>
+        <li><strong>Plusieurs magasins</strong> : si votre fichier a une colonne de stock par magasin, associez chacune à la bonne boutique Comptoir.</li>
+        <li>L’import du stock demande le droit de gérer le stock. Chaque quantité importée est tracée dans les mouvements de stock.</li></ul>`],
+      ['En cas de souci', `<ul>
+        <li><strong>Accents illisibles</strong> : enregistrez le fichier en « CSV UTF-8 » ou en .xlsx.</li>
+        <li><strong>Code-barres en « 3,01762E+12 »</strong> : Excel l’a transformé. Dans votre ancien logiciel, exportez directement en CSV, ou dans Excel mettez la colonne au format Texte avant d’enregistrer.</li>
+        <li><strong>Ancien format .xls</strong> : ouvrez-le dans Excel et enregistrez-le en .xlsx.</li>
+        <li><strong>Limite de produits</strong> : l’import s’arrête à la limite de votre formule ; les lignes non importées sont listées à la fin.</li></ul>`],
+    ],
+  },
+  {
     slug: 'devis-commandes-factures', title: 'Devis, commandes et factures', app: 'devis',
     summary: 'Faire un devis, le transformer en commande puis en facture, enregistrer les paiements partiels et relancer les retards.',
     sections: [

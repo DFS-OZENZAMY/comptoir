@@ -330,26 +330,27 @@
     equipe: ['Réglages', viewTeam],
     abonnement: ['Réglages', viewSubscription],
     boutiques: ['Réglages', viewLocations],
+    importer: ['Produits', viewImport],
     rapports: ['Rapports', viewReports],
   };
   // Permission nécessaire pour afficher chaque rubrique.
   const VIEW_PERM = {
     'tableau-de-bord': 'reports.view', caisse: 'pos.sell', alertes: 'alerts.view', commandes: 'documents.view', devis: 'documents.view',
     factures: 'documents.view', stock: 'stock.manage', parametres: 'settings.manage', equipe: 'team.manage', abonnement: 'billing.manage',
-    boutiques: 'locations.manage', rapports: 'reports.view',
+    boutiques: 'locations.manage', rapports: 'reports.view', importer: 'products.edit',
   };
   // Guide d'aide de chaque écran (centre d'aide public, /aide).
   const HELP_FOR = {
     'tableau-de-bord': 'bien-demarrer', caisse: 'caisse', commandes: 'devis-commandes-factures', devis: 'devis-commandes-factures',
     factures: 'devis-commandes-factures', produits: 'produits-et-stock', stock: 'produits-et-stock', clients: 'clients-et-fidelite',
     alertes: 'reglages-et-abonnement#les-alertes', rapports: 'boutiques-et-rapports', parametres: 'reglages-et-abonnement',
-    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', abonnement: 'reglages-et-abonnement#l-abonnement',
+    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', importer: 'importer-ses-produits', abonnement: 'reglages-et-abonnement#l-abonnement',
   };
   const allowedView = (k) => !!VIEWS[k] && (!VIEW_PERM[k] || can(VIEW_PERM[k]));
   // Les écrans proches sont regroupés sous une seule entrée de menu, avec des onglets.
   const GROUPS = {
     ventes: [['commandes', 'Commandes'], ['devis', 'Devis'], ['factures', 'Factures']],
-    produits: [['produits', 'Catalogue'], ['stock', 'Stock']],
+    produits: [['produits', 'Catalogue'], ['stock', 'Stock'], ['importer', 'Importer']],
     reglages: [['parametres', 'Mon commerce'], ['boutiques', 'Boutiques'], ['equipe', 'Équipe et rôles'], ['abonnement', 'Abonnement']],
   };
   const groupOf = (key) => Object.keys(GROUPS).find((g) => GROUPS[g].some(([k]) => k === key)) || key;
@@ -951,7 +952,7 @@
   const thumb = (p) => p.image ? `<img class="thumb" src="${esc(p.image)}" alt="">` : `<span class="thumb">${esc((p.ref || p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase())}</span>`;
 
   function viewProducts() {
-    setActions(`<button class="btn" id="manageCats">Catégories</button><button class="btn btn-primary" id="newProduct">Nouveau produit</button>`);
+    setActions(`${can('products.edit') ? '<a class="btn" href="#/importer">Importer</a>' : ''}<button class="btn" id="manageCats">Catégories</button><button class="btn btn-primary" id="newProduct">Nouveau produit</button>`);
     $('#view').innerHTML = `
       <div class="toolbar">
         <input type="search" id="pq" placeholder="Rechercher un produit" value="${esc(pv.q)}">
@@ -968,7 +969,7 @@
     const q = norm(pv.q);
     const list = state.products.filter((p) => (!pv.cat || String(p.category_id) === String(pv.cat)) && (!q || norm(`${p.name} ${p.ref}`).includes(q)));
     if (!state.products.length) {
-      $('#ptable').innerHTML = `<div class="table-wrap"><div class="empty-state"><strong>Aucun produit.</strong>Ajoutez votre premier produit : il apparaîtra sur le site dès qu'il est enregistré.<br><button class="btn btn-primary" data-act="new-product">Nouveau produit</button></div></div>`;
+      $('#ptable').innerHTML = `<div class="table-wrap"><div class="empty-state"><strong>Aucun produit.</strong>Ajoutez votre premier produit : il apparaîtra sur le site dès qu'il est enregistré.<br><a class="btn" href="#/importer">Importer</a><button class="btn btn-primary" data-act="new-product">Nouveau produit</button></div></div>`;
       return;
     }
     $('#ptable').innerHTML = `<div class="table-wrap"><table><thead><tr><th></th><th>Produit</th><th>Catégorie</th><th class="num">Prix</th><th class="num">En stock</th><th>Vitrine</th></tr></thead><tbody>
@@ -1798,6 +1799,149 @@
   }
 
   /* ================= Équipe ================= */
+  /* ================= Importer ses produits depuis un ancien logiciel ================= */
+  const TOOLS = [
+    ['loyverse', 'Loyverse', 'Back Office, <strong>Articles</strong>, liste des articles, bouton <strong>Exporter</strong> : un fichier CSV est téléchargé.'],
+    ['square', 'Square', 'Tableau de bord, <strong>Articles</strong>, <strong>Bibliothèque d’articles</strong>, <strong>Actions</strong>, <strong>Exporter la bibliothèque</strong>.'],
+    ['shopify', 'Shopify', 'Administration, <strong>Produits</strong>, <strong>Exporter</strong>, « Tous les produits », format <strong>CSV</strong>.'],
+    ['woocommerce', 'WooCommerce', 'WordPress, <strong>Produits</strong>, <strong>Exporter</strong>, puis <strong>Générer le CSV</strong>.'],
+    ['odoo', 'Odoo', '<strong>Inventaire</strong>, <strong>Produits</strong>, vue liste : cochez tous les produits, <strong>Action</strong>, <strong>Exporter</strong> (nom, référence interne, code-barres, prix de vente, coût, catégorie, quantité en stock).'],
+    ['ebp', 'EBP', 'Depuis la liste des <strong>Articles</strong>, utilisez l’export de la liste au format <strong>Excel</strong> ou l’<strong>export CSV</strong> des articles.'],
+    ['sage', 'Sage', 'Depuis la liste des <strong>Articles</strong>, exportez la liste vers <strong>Excel</strong>, ou utilisez un export au format paramétrable (CSV).'],
+    ['autre', 'Excel ou autre', 'Tout logiciel qui exporte un tableau convient : <strong>CSV</strong> ou <strong>Excel (.xlsx)</strong>. Vous pouvez aussi remplir notre modèle.'],
+  ];
+  const imp = { tool: null, file: null, sheet: null, source: null, map: null, stockMap: {}, onExisting: 'update', setStock: true, delExamples: true };
+  const IMP_FIELDS = [
+    ['name', 'Nom du produit', true], ['variant', 'Variante (taille, couleur…)'], ['ref', 'Référence'], ['barcode', 'Code-barres'], ['category', 'Catégorie'],
+    ['price', 'Prix de vente', true], ['purchase', 'Prix d’achat'], ['tva', 'TVA (%)'], ['stock_min', 'Seuil d’alerte'], ['unit', 'Unité'], ['description', 'Description'],
+  ];
+  async function loadImporter() {
+    if (window.ComptoirImport) return;
+    await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = '/app/import.js'; sc.onload = ok; sc.onerror = () => ko(new Error('Chargement impossible.')); document.head.append(sc); });
+  }
+  async function viewImport() {
+    await loadImporter();
+    const CI = window.ComptoirImport;
+    setActions(`<a class="btn" id="impTemplate" href="#" download="modele-import-comptoir.csv">Télécharger le modèle</a>`);
+    $('#impTemplate').href = URL.createObjectURL(new Blob([CI.TEMPLATE], { type: 'text/csv;charset=utf-8' }));
+    if (!imp.sheet) {
+      $('#view').innerHTML = `
+        <p class="muted imp-intro">Récupérez vos produits depuis votre ancien logiciel en quelques minutes : nom, références, codes-barres, catégories, prix et stock. Rien n’est enregistré avant votre confirmation.</p>
+        <section class="panel imp-step"><div class="panel-head"><h2>1. Votre ancien logiciel</h2><span class="muted">pour savoir comment exporter</span></div>
+          <div class="imp-tools">${TOOLS.map(([k, l]) => `<button type="button" class="chip" data-tool="${k}" aria-pressed="${imp.tool === k}">${l}</button>`).join('')}</div>
+          <p class="imp-how" id="impHow">${imp.tool ? TOOLS.find((t) => t[0] === imp.tool)[2] : 'Choisissez votre logiciel pour voir comment exporter vos produits.'}</p></section>
+        <section class="panel imp-step"><div class="panel-head"><h2>2. Votre fichier</h2><span class="muted">CSV ou Excel (.xlsx)</span></div>
+          <label class="imp-drop" id="impDrop"><input type="file" id="impFile" accept=".csv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+            <strong>Déposez le fichier ici</strong><span>ou touchez pour le choisir</span></label>
+          <p class="form-error" id="impErr"></p></section>`;
+      $$('[data-tool]').forEach((b) => b.addEventListener('click', () => { imp.tool = b.dataset.tool; $$('[data-tool]').forEach((x) => x.setAttribute('aria-pressed', x === b)); $('#impHow').innerHTML = TOOLS.find((t) => t[0] === imp.tool)[2]; }));
+      const take = async (file) => {
+        if (!file) return;
+        $('#impErr').textContent = ''; $('#impDrop').classList.add('busy');
+        try {
+          if (file.size > 15 * 1024 * 1024) throw new Error('Fichier trop lourd (15 Mo au plus).');
+          imp.sheet = await CI.readFile(file); imp.file = file.name;
+          if (!imp.sheet.rows.length) throw new Error('Le fichier ne contient aucune ligne de produit.');
+          imp.source = CI.detect(imp.sheet.headers);
+          imp.map = CI.autoMap(imp.sheet.headers, imp.source);
+          // Stock : une colonne par boutique, rapprochée par le nom du magasin quand c'est possible.
+          const locs = state.me.locations || [];
+          imp.stockMap = {};
+          locs.forEach((l, i) => {
+            const byName = imp.map.stocks.find((c) => CI.norm(imp.sheet.headers[c]).includes(CI.norm(l.name)));
+            imp.stockMap[l.id] = byName ?? (locs.length === 1 || l.id === (state.scope === 'all' ? locs[0].id : state.scope) ? imp.map.stocks[i] ?? imp.map.stocks[0] ?? -1 : imp.map.stocks[i] ?? -1);
+          });
+          route();
+        } catch (e) { imp.sheet = null; $('#impErr').textContent = e.message; }
+        $('#impDrop')?.classList.remove('busy');
+      };
+      $('#impFile').addEventListener('change', (e) => take(e.target.files[0]));
+      const dz = $('#impDrop');
+      ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+      ['dragleave', 'drop'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
+      dz.addEventListener('drop', (e) => take(e.dataTransfer.files[0]));
+      return;
+    }
+    renderImportReview();
+  }
+  function impProducts() {
+    const stockMap = imp.setStock && can('stock.manage') ? imp.stockMap : {};
+    return window.ComptoirImport.toProducts(imp.sheet, imp.map, { stockMap, tvaDefault: Number(state.settings.tva_default) || 20 });
+  }
+  function renderImportReview() {
+    const CI = window.ComptoirImport; const H = imp.sheet.headers; const m = imp.map;
+    const sample = (i) => { const v = imp.sheet.rows.find((r) => String(r[i] ?? '').trim())?.[i]; return v ? ` (ex. ${String(v).slice(0, 24)})` : ''; };
+    const colSelect = (field, value) => `<select data-mapf="${field}"><option value="-1">Ne pas importer</option>${H.map((h, i) => `<option value="${i}" ${i === value ? 'selected' : ''}>${esc(h || 'Colonne ' + (i + 1))}${esc(sample(i))}</option>`).join('')}</select>`;
+    const items = impProducts();
+    const byBarcode = new Map(), byRef = new Map(), byName = new Map();
+    state.products.forEach((p) => { if (p.barcode) byBarcode.set(p.barcode, p); if (p.ref) byRef.set(CI.norm(p.ref), p); byName.set(CI.norm(p.name), p); });
+    let created = 0, updated = 0; const errors = [];
+    const rows = items.map((it) => {
+      const exists = (it.barcode && byBarcode.get(it.barcode)) || (it.ref && byRef.get(CI.norm(it.ref))) || byName.get(CI.norm(it.name));
+      const st = !it.name ? 'err' : exists ? 'upd' : 'new';
+      if (st === 'err') errors.push(it); else if (st === 'upd') updated++; else created++;
+      return { ...it, st };
+    });
+    const locs = state.me.locations || [];
+    const examples = state.products.filter((p) => /^EX-\d{3}$/.test(p.ref || '')).length;
+    const stockOk = can('stock.manage');
+    const label = { new: '<span class="badge s-ok">nouveau</span>', upd: '<span class="badge s-info">mise à jour</span>', err: '<span class="badge s-bad">erreur</span>' };
+    $('#view').innerHTML = `
+      <section class="imp-file"><div><strong>${esc(imp.file)}</strong><span>Reconnu : <b>${esc(imp.source.label)}</b> · ${imp.sheet.rows.length} ligne${imp.sheet.rows.length > 1 ? 's' : ''}</span></div><button class="btn btn-sm" id="impReset">Changer de fichier</button></section>
+      <section class="panel"><div class="panel-head"><h2>Correspondance des colonnes</h2><span class="muted">vérifiez, corrigez si besoin</span></div>
+        <div class="imp-map">${IMP_FIELDS.map(([f, l, req]) => `<label><span>${l}${req ? ' <em>*</em>' : ''}</span>${colSelect(f, m[f])}</label>`).join('')}
+          <div class="imp-mode"><span>Les prix du fichier sont</span><label class="check"><input type="radio" name="impMode" value="ttc" ${m.price_mode === 'ttc' ? 'checked' : ''}> TTC (taxes comprises)</label><label class="check"><input type="radio" name="impMode" value="ht" ${m.price_mode === 'ht' ? 'checked' : ''}> HT (hors taxes)</label></div>
+        </div></section>
+      ${stockOk ? `<section class="panel"><div class="panel-head"><h2>Stock</h2><label class="check"><input type="checkbox" id="impSetStock" ${imp.setStock ? 'checked' : ''}> Importer les quantités</label></div>
+        <div class="imp-map">${locs.map((l) => `<label><span>${locs.length > 1 ? 'Stock de ' + esc(l.name) : 'Quantité en stock'}</span><select data-stockloc="${l.id}" ${imp.setStock ? '' : 'disabled'}><option value="-1">Ne pas importer</option>${H.map((h, i) => `<option value="${i}" ${i === imp.stockMap[l.id] ? 'selected' : ''}>${esc(h)}${esc(sample(i))}</option>`).join('')}</select></label>`).join('')}</div></section>` : '<p class="notice">Votre rôle ne permet pas de modifier le stock : les quantités du fichier ne seront pas importées.</p>'}
+      <section class="panel"><div class="panel-head"><h2>Options</h2></div><div class="imp-opts">
+        <label class="check"><input type="radio" name="impExist" value="update" ${imp.onExisting === 'update' ? 'checked' : ''}> Mettre à jour les produits que j’ai déjà (même code-barres, référence ou nom)</label>
+        <label class="check"><input type="radio" name="impExist" value="skip" ${imp.onExisting === 'skip' ? 'checked' : ''}> Ne pas toucher aux produits que j’ai déjà</label>
+        ${examples ? `<label class="check"><input type="checkbox" id="impDelEx" ${imp.delExamples ? 'checked' : ''}> Retirer les ${examples} produits d’exemple (EX-…) jamais vendus</label>` : ''}
+      </div></section>
+      <section class="panel"><div class="panel-head"><h2>Aperçu</h2><div class="imp-sum"><span class="badge s-ok">${created} à créer</span><span class="badge s-info">${updated} à mettre à jour</span>${errors.length ? `<span class="badge s-bad">${errors.length} en erreur</span>` : ''}</div></div>
+        <div class="table-wrap"><table><thead><tr><th>Ligne</th><th></th><th>Produit</th><th>Référence</th><th>Code-barres</th><th>Catégorie</th><th class="num">Prix TTC</th>${stockOk && imp.setStock ? '<th class="num">Stock</th>' : ''}<th>Remarque</th></tr></thead><tbody>
+          ${rows.slice(0, 40).map((r) => `<tr><td class="muted">${r.line}</td><td>${label[r.st]}</td><td class="cell-main">${esc(r.name || '—')}</td><td>${esc(r.ref)}</td><td class="mono">${esc(r.barcode)}</td><td>${esc(r.category)}</td>
+            <td class="num">${r.price_ttc === null ? '<span class="muted">—</span>' : money(r.price_ttc)}</td>${stockOk && imp.setStock ? `<td class="num">${Object.values(r.stocks).length ? qtyFmt(Object.values(r.stocks).reduce((a, b) => a + b, 0)) : '<span class="muted">—</span>'}</td>` : ''}
+            <td class="muted">${esc(r.warn.join(', '))}</td></tr>`).join('')}
+        </tbody></table></div>
+        ${rows.length > 40 ? `<p class="muted imp-more">… et ${rows.length - 40} autres lignes.</p>` : ''}
+      </section>
+      <div class="imp-go"><p class="form-error" id="impErr"></p><button class="btn btn-primary btn-lg" id="impGo" ${created + updated ? '' : 'disabled'}>Importer ${created + updated} produit${created + updated > 1 ? 's' : ''}</button></div>`;
+    $('#impReset').addEventListener('click', () => { imp.sheet = null; route(); });
+    $$('[data-mapf]').forEach((s) => s.addEventListener('change', () => { m[s.dataset.mapf] = Number(s.value); renderImportReview(); }));
+    $$('input[name="impMode"]').forEach((r) => r.addEventListener('change', () => { m.price_mode = r.value; renderImportReview(); }));
+    $$('[data-stockloc]').forEach((s) => s.addEventListener('change', () => { imp.stockMap[s.dataset.stockloc] = Number(s.value); renderImportReview(); }));
+    $('#impSetStock')?.addEventListener('change', (e) => { imp.setStock = e.target.checked; renderImportReview(); });
+    $$('input[name="impExist"]').forEach((r) => r.addEventListener('change', () => { imp.onExisting = r.value; }));
+    $('#impDelEx')?.addEventListener('change', (e) => { imp.delExamples = e.target.checked; });
+    $('#impGo').addEventListener('click', () => runImport(rows.filter((r) => r.st !== 'err')));
+  }
+  async function runImport(list) {
+    const total = list.length, size = 200;
+    const res = { created: 0, updated: 0, skipped: 0, categories_created: 0, errors: [] };
+    $('#view').innerHTML = `<section class="panel imp-progress"><h2>Import en cours…</h2><div class="imp-bar"><span id="impBar"></span></div><p class="muted" id="impTxt">0 sur ${total}</p><p class="muted">Gardez cette page ouverte jusqu’à la fin.</p></section>`;
+    try {
+      for (let i = 0; i < total; i += size) {
+        const rows = list.slice(i, i + size).map(({ st, warn, price_ttc, ...r }) => r);
+        const r = await api('/store/import/products', { method: 'POST', body: { source: imp.source.label, rows, options: { on_existing: imp.onExisting, set_stock: imp.setStock && can('stock.manage'), delete_examples: imp.delExamples && i === 0 } } });
+        for (const k of ['created', 'updated', 'skipped', 'categories_created']) res[k] += r[k];
+        res.errors.push(...r.errors);
+        const done = Math.min(total, i + size);
+        $('#impBar').style.width = `${Math.round((done / total) * 100)}%`; $('#impTxt').textContent = `${done} sur ${total}`;
+      }
+    } catch (e) { res.errors.push({ line: null, message: e.message }); }
+    await refresh('products', 'categories').catch(() => {});
+    imp.sheet = null;
+    $('#view').innerHTML = `<section class="panel imp-done">
+        <h2>${res.errors.length ? 'Import terminé, avec des remarques' : 'Import terminé'}</h2>
+        <div class="imp-sum big"><span class="badge s-ok">${res.created} produit${res.created > 1 ? 's' : ''} créé${res.created > 1 ? 's' : ''}</span><span class="badge s-info">${res.updated} mis à jour</span>${res.categories_created ? `<span class="badge s-neutral">${res.categories_created} catégorie${res.categories_created > 1 ? 's' : ''} créée${res.categories_created > 1 ? 's' : ''}</span>` : ''}${res.skipped ? `<span class="badge s-neutral">${res.skipped} ignoré${res.skipped > 1 ? 's' : ''}</span>` : ''}</div>
+        ${res.errors.length ? `<ul class="imp-errors">${res.errors.slice(0, 50).map((x) => `<li>${x.line ? `Ligne ${x.line} : ` : ''}${esc(x.message)}</li>`).join('')}</ul>` : '<p class="muted">Vos produits sont prêts à être vendus en caisse et affichés sur votre vitrine.</p>'}
+        <div class="imp-actions"><a class="btn btn-primary" href="#/produits">Voir mes produits</a><button class="btn" id="impAgain" type="button">Importer un autre fichier</button></div>
+      </section>`;
+    $('#impAgain').addEventListener('click', () => { imp.sheet = null; route(); });
+  }
+
   /* ================= Rapports : comparer les boutiques ================= */
   const rep = { period: '30' };
   async function viewReports() {
