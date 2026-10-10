@@ -81,7 +81,7 @@ h3 { margin: 0; }
 .features p { margin: 0; color: #CFD1D6; }
 
 /* Étapes */
-.steps { padding-top: clamp(56px, 7vw, 96px); padding-bottom: clamp(56px, 7vw, 96px); }
+.steps { padding-top: clamp(40px, 6vw, 88px); padding-bottom: clamp(56px, 7vw, 96px); }
 .steps h2 { margin-bottom: 40px; }
 .steps ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .steps li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-tile); padding: 28px 28px 32px; }
@@ -90,7 +90,7 @@ h3 { margin: 0; }
 .steps p { margin: 0; color: var(--muted); }
 
 /* Tarifs */
-.pricing { padding-bottom: clamp(56px, 7vw, 96px); }
+.pricing { padding-top: clamp(20px, 2vw, 28px); padding-bottom: clamp(56px, 7vw, 96px); }
 .pricing h2 { margin-bottom: 40px; }
 .plans { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
 .plan { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-tile); padding: 32px; display: flex; flex-direction: column; gap: 14px; }

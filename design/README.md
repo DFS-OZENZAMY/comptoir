@@ -52,6 +52,6 @@ Ces jetons sont repris dans le code, en tête de `public/app/app.css`, `public/a
 2. **Site et vitrine** : les 4 écrans exportés ici.
 3. **Espace commerçant et console** : à dessiner. Prévu : accueil, caisse, encaissement, fiche produit et vue d'ensemble de la console, en ordinateur et téléphone.
 
-## Écart connu entre la maquette et le site
+## Correspondance avec le site
 
-Dans la maquette, la section « Prêt en trois étapes » est placée **avant** « Tout ce qu'il faut derrière le comptoir ». Le site en ligne affiche encore l'ordre inverse.
+Le site en ligne suit l'ordre des sections de la maquette : accroche, « Prêt en trois étapes », « Tout ce qu'il faut derrière le comptoir », tarifs, questions fréquentes, appel final.
