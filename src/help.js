@@ -87,7 +87,8 @@ export const GUIDES = [
         <li><strong>Plusieurs magasins</strong> : si votre fichier a une colonne de stock par magasin, associez chacune à la bonne boutique Comptoir.</li>
         <li>L’import du stock demande le droit de gérer le stock. Chaque quantité importée est tracée dans les mouvements de stock.</li></ul>`],
       ['En cas de souci', `<ul>
-        <li><strong>Accents illisibles</strong> : enregistrez le fichier en « CSV UTF-8 » ou en .xlsx.</li>
+        <li><strong>Caractères bizarres</strong> (« Ã© » à la place de « é », « ÒíÊ » à la place de l’arabe) : dans l’aperçu, changez l’<strong>encodage du fichier</strong> (UTF-8, Unicode, Windows Europe, Windows arabe, DOS). Comptoir le devine en général tout seul.</li>
+        <li><strong>Fichier de base refusé</strong> (par exemple un .stockdb) : certains logiciels rangent leurs données dans un format qui leur est propre ou protégé. Utilisez alors leur export CSV. Le message affiche une « signature » du fichier : transmettez-la au support Comptoir pour faire ajouter ce format.</li>
         <li><strong>Code-barres en « 3,01762E+12 »</strong> : Excel l’a transformé. Dans votre ancien logiciel, exportez directement en CSV, ou dans Excel mettez la colonne au format Texte avant d’enregistrer.</li>
         <li><strong>Ancien format .xls</strong> : ouvrez-le dans Excel et enregistrez-le en .xlsx.</li>
         <li><strong>Limite de produits</strong> : l’import s’arrête à la limite de votre formule ; les lignes non importées sont listées à la fin.</li></ul>`],

@@ -112,7 +112,10 @@ Elles sont définies dans `src/catalog.js` (prix, limites de produits et d'utili
 - **identifiants remplacés par leurs libellés** : famille, catégorie, marque, unité ou TVA rangées dans une autre table.
 - **stock rangé dans une table à part** (produit, dépôt, quantité) : une colonne « Quantité <dépôt> » par dépôt, rapprochée des boutiques Comptoir.
 - **noms de colonnes de base de données compris** : « PrixVenteHT », « code_barre », « QteStock », « PV », « PA », « PMP », et les noms tronqués à 10 caractères de dBase (« DESIGNATIO »).
-- **formats illisibles dans un navigateur**, avec un message qui oriente vers l'export du logiciel : SQL Server (.mdf), SQL Server Compact (.sdf), Firebird (.fdb).
+- **formats illisibles dans un navigateur**, avec un message qui oriente vers l'export du logiciel : SQL Server (.mdf), SQL Server Compact (.sdf), Firebird (.fdb), LiteDB, HFSQL (WinDev).
+- **le format est reconnu à son contenu, pas à son extension** : un `.stockdb` qui contient une base SQLite, Access ou une archive est lu normalement. Un fichier binaire inconnu n'est jamais lu comme du texte : un message clair s'affiche, avec la signature des premiers octets à transmettre au support.
+- **Encodage des fichiers texte**, détecté automatiquement : UTF-8 (avec ou sans marque), UTF-16 avec ou sans marque (exports « Unicode » des logiciels Windows), Windows européen (1252) ou arabe (1256) selon les lettres obtenues. Les fichiers dBase utilisent leur page de code. L'aperçu permet d'imposer un autre encodage (UTF-8, UTF-16, Windows Europe, Windows arabe, DOS 850). Les caractères de contrôle sont retirés des valeurs.
+- **Champ de fichier sans filtre d'extension**, pour accepter les formats propres à chaque logiciel.
 
 **Connexion directe aux outils en ligne** (`src/connectors.js`) : Loyverse, Square, Shopify, WooCommerce et Odoo.
 - **Détection de l'outil** (`POST /api/store/connect/detect`) :

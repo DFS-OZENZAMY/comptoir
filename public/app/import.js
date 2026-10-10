@@ -6,9 +6,48 @@
   /* ------------------------------------------------------------ */
   /* Lecture                                                       */
   /* ------------------------------------------------------------ */
-  function decode(bytes) {
-    try { return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, ''); }
-    catch { return new TextDecoder('windows-1252').decode(bytes); } // Excel français « CSV (séparateur : point-virgule) »
+  // Encodage d'un fichier texte : marque d'en-tête (BOM), UTF-16 sans marque, UTF-8, sinon Windows
+  // européen ou arabe selon les lettres obtenues. « forced » impose un encodage choisi par l'utilisateur.
+  const ENCODINGS = { 'utf-8': 'UTF-8', 'utf-16le': 'UTF-16 (Unicode)', 'utf-16be': 'UTF-16 BE', 'windows-1252': 'Windows (Europe occidentale)', 'windows-1256': 'Windows (arabe)', ibm850: 'DOS (Europe occidentale)' };
+  function sniffEncoding(b) {
+    if (b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) return 'utf-8';
+    if (b[0] === 0xff && b[1] === 0xfe) return 'utf-16le';
+    if (b[0] === 0xfe && b[1] === 0xff) return 'utf-16be';
+    const n = Math.min(b.length, 2000); let odd = 0, even = 0;
+    for (let i = 0; i < n; i++) if (b[i] === 0) { if (i % 2) odd++; else even++; }
+    if (odd > n * 0.2 && even < n * 0.02) return 'utf-16le';
+    if (even > n * 0.2 && odd < n * 0.02) return 'utf-16be';
+    try { new TextDecoder('utf-8', { fatal: true }).decode(b); return 'utf-8'; } catch { /* pas de l'UTF-8 */ }
+    const fr = (new TextDecoder('windows-1252').decode(b).match(/[éèêàâçùûôîëïüœÉÈÀÇ]/g) || []).length;
+    const ar = (new TextDecoder('windows-1256').decode(b).match(/[\u0621-\u064A]/g) || []).length;
+    return ar > fr * 2 && ar > 3 ? 'windows-1256' : 'windows-1252';
+  }
+  const cleanText = (t) => t.replace(/^\uFEFF/, '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD]/g, '');
+  function decode(bytes, forced) {
+    const enc = forced || sniffEncoding(bytes);
+    return { text: cleanText(new TextDecoder(enc).decode(bytes)), encoding: enc };
+  }
+  // Un fichier binaire inconnu ne doit jamais être lu comme du texte (sinon : caractères au hasard).
+  function looksBinary(b) {
+    const n = Math.min(b.length, 4096); if (!n) return false;
+    const enc = sniffEncoding(b.subarray(0, n));
+    if (enc.startsWith('utf-16')) return false;
+    let bad = 0; for (let i = 0; i < n; i++) { const c = b[i]; if (c === 0 || (c < 9) || (c > 13 && c < 32)) bad++; }
+    return bad > n * 0.03;
+  }
+  function describeUnknown(b, name) {
+    const ext = (name.match(/\.[^.]+$/) || [''])[0].toLowerCase();
+    const head = ascii(b, 0, 64);
+    const hex = [...b.subarray(0, 16)].map((x) => x.toString(16).padStart(2, '0')).join(' ');
+    const printable = head.replace(/[^\x20-\x7e]/g, '.').slice(0, 32);
+    let what = 'un format de base de données propre au logiciel, ou protégé';
+    if (/LiteDB/.test(head)) what = 'une base LiteDB, format que Comptoir ne lit pas encore';
+    else if (/\.(fic|ndx|mmo)$/.test(ext)) what = 'une base HFSQL (WinDev), format que Comptoir ne lit pas';
+    else if (ext === '.stockdb') what = 'la base de données de Stock Express, dans un format propre au logiciel ou protégé';
+    const how = ext === '.stockdb' ? 'Dans Stock Express, ouvrez la liste des Produits et utilisez l’export des produits vers CSV, puis déposez ce fichier ici.' : 'Utilisez l’export des articles en CSV ou en Excel depuis le logiciel, puis déposez ce fichier ici.';
+    const e = new Error(`Ce fichier${ext ? ` (${ext})` : ''} est ${what} : il ne peut pas être lu directement. ${how}`);
+    e.detail = `Signature du fichier : ${hex}  |  ${printable}`;
+    return e;
   }
   function parseCsv(text) {
     const first = text.split(/\r?\n/).find((l) => l.trim()) || '';
@@ -105,7 +144,7 @@
     if (document.querySelector(`script[src="${src}"]`)) return ok();
     const sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = () => ko(new Error('Chargement du lecteur impossible.')); document.head.append(sc);
   });
-  const cell = (v) => (v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'object' ? '' : typeof v === 'bigint' ? String(v) : v);
+  const cell = (v) => (v === null || v === undefined ? '' : v instanceof Date ? v.toISOString().slice(0, 10) : typeof v === 'object' ? '' : typeof v === 'bigint' ? String(v) : typeof v === 'string' ? cleanText(v) : v);
   const MAX_ROWS = 200000;
 
   async function openSqlite(u8) {
@@ -132,7 +171,9 @@
       rows: (n) => { const t = reader.getTable(n); const cols = t.getColumnNames(); return t.getData({ rowLimit: MAX_ROWS }).map((o) => cols.map((c) => cell(o[c]))); },
     };
   }
-  function openDbf(u8, name) {
+  // Page de code dBase (octet 29) → encodage.
+  const DBF_CP = { 0x01: 'ibm437', 0x02: 'ibm850', 0x03: 'windows-1252', 0x57: 'windows-1252', 0x58: 'windows-1252', 0x59: 'windows-1252', 0x64: 'ibm852', 0x65: 'ibm866', 0x7d: 'windows-1255', 0x7e: 'windows-1256', 0xc8: 'windows-1250', 0xc9: 'windows-1251', 0xcb: 'windows-1253' };
+  function openDbf(u8, name, forced) {
     const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
     const count = dv.getUint32(4, true), headLen = dv.getUint16(8, true), recLen = dv.getUint16(10, true);
     const fields = []; let off = 1;
@@ -140,15 +181,17 @@
       const fname = ascii(u8, p, p + 11).replace(/\0.*$/, '').trim(); const type = String.fromCharCode(u8[p + 11]); const len = u8[p + 16];
       fields.push({ name: fname, type, off, len }); off += len;
     }
-    const td = new TextDecoder(u8[29] === 0x02 || u8[29] === 0x01 || u8[29] === 0x64 ? 'ibm850' : 'windows-1252');
+    let enc = forced || DBF_CP[u8[29]];
+    if (!enc) { const sample = u8.subarray(headLen, Math.min(u8.length, headLen + recLen * 200)); enc = sniffEncoding(sample); if (enc.startsWith('utf-16')) enc = 'windows-1252'; }
+    let td; try { td = new TextDecoder(enc); } catch { td = new TextDecoder('windows-1252'); enc = 'windows-1252'; }
     const rows = [];
     for (let i = 0; i < Math.min(count, MAX_ROWS); i++) {
       const base = headLen + i * recLen; if (base + recLen > u8.length) break;
       if (u8[base] === 0x2a) continue; // enregistrement supprimé
-      rows.push(fields.map((f) => { const raw = td.decode(u8.subarray(base + f.off, base + f.off + f.len)).trim(); return f.type === 'L' ? (/^[TtYy]/.test(raw) ? 'TRUE' : 'FALSE') : raw; }));
+      rows.push(fields.map((f) => { const raw = cleanText(td.decode(u8.subarray(base + f.off, base + f.off + f.len))).trim(); return f.type === 'L' ? (/^[TtYy]/.test(raw) ? 'TRUE' : 'FALSE') : raw; }));
     }
     const tname = name.replace(/^.*[\\/]/, '').replace(/\.dbf$/i, '');
-    return { label: 'dBase', tables: [{ name: tname, headers: fields.map((f) => f.name), count: rows.length }], rows: () => rows };
+    return { label: 'dBase', encoding: enc, tables: [{ name: tname, headers: fields.map((f) => f.name), count: rows.length }], rows: () => rows };
   }
 
   // La table des produits : celle dont les colonnes ressemblent le plus à un catalogue.
@@ -208,7 +251,7 @@
     return { headers: headers.map((h) => String(h)), rows: rows.filter((r) => r.some((c) => String(c).trim())) };
   }
 
-  async function openDatabase(u8, name) {
+  async function openDatabase(u8, name, forced) {
     let kind = kindOf(u8, name);
     if (kind === 'zip') {
       // Archive (sauvegarde, dossier zippé) : la plus grande base lisible qu'elle contient.
@@ -216,16 +259,23 @@
       const cands = Object.entries(files).map(([n, b]) => ({ n, b, k: kindOf(b, n) })).filter((x) => ['sqlite', 'access', 'dbf'].includes(x.k)).sort((a, b) => b.b.length - a.b.length);
       if (!cands.length) {
         const other = Object.entries(files).map(([n, b]) => kindOf(b, n)).find((k) => UNREADABLE[k]);
-        throw new Error(other ? UNREADABLE[other] : 'Aucune base de données lisible dans cette archive. Utilisez l’export des articles en Excel ou en CSV.');
+        if (other) throw new Error(UNREADABLE[other]);
+        // Une archive peut aussi contenir un export CSV ou Excel : il est lu comme un fichier ordinaire.
+        const text = Object.entries(files).find(([n]) => /\.(csv|txt)$/i.test(n));
+        if (text) return { textFile: text };
+        const big = Object.entries(files).sort((a, b) => b[1].length - a[1].length)[0];
+        throw big ? describeUnknown(big[1], big[0]) : new Error('Archive vide.');
       }
       if (cands[0].k === 'dbf') { // plusieurs .dbf : une table par fichier
-        const dbs = cands.filter((c) => c.k === 'dbf').map((c) => openDbf(c.b, c.n));
-        return { label: 'dBase', tables: dbs.map((d) => d.tables[0]), rows: (n) => dbs.find((d) => d.tables[0].name === n).rows() };
+        const dbs = cands.filter((c) => c.k === 'dbf').map((c) => openDbf(c.b, c.n, forced));
+        const multi = { label: 'dBase', encoding: dbs[0].encoding, tables: dbs.map((d) => d.tables[0]), rows: (n) => dbs.find((d) => d.tables[0].name === n).rows() };
+        multi.tables.forEach((t) => { t.score = scoreTable(t); }); multi.tables.sort((a, b) => b.score - a.score || b.count - a.count); multi.sheet = (n) => buildSheet(multi, n);
+        return multi;
       }
       u8 = cands[0].b; name = cands[0].n; kind = cands[0].k;
     }
     if (UNREADABLE[kind]) throw new Error(UNREADABLE[kind]);
-    const db = kind === 'sqlite' ? await openSqlite(u8) : kind === 'access' ? await openAccess(u8) : kind === 'dbf' ? openDbf(u8, name) : null;
+    const db = kind === 'sqlite' ? await openSqlite(u8) : kind === 'access' ? await openAccess(u8) : kind === 'dbf' ? openDbf(u8, name, forced) : null;
     if (!db) return null;
     db.tables.forEach((t) => { t.score = scoreTable(t); });
     db.tables.sort((a, b) => b.score - a.score || b.count - a.count);
@@ -233,28 +283,35 @@
     return db;
   }
 
-  async function readFile(file) {
+  async function readFile(file, opts = {}) {
     const buf = await file.arrayBuffer();
-    const u8 = new Uint8Array(buf);
+    let u8 = new Uint8Array(buf);
     const head = u8.subarray(0, 4);
     const kind = kindOf(u8, file.name);
+    let encoding = null, rows;
     if (kind && kind !== 'zip') {
-      const db = await openDatabase(u8, file.name);
-      return { db, ...(await db.sheet(db.tables[0].name)) };
+      const db = await openDatabase(u8, file.name, opts.encoding);
+      return { db, encoding: db.encoding || null, ...(await db.sheet(db.tables[0].name)) };
     }
-    let rows;
     if (kind === 'zip') {
       const isXlsx = Object.keys(await unzip(buf, (n) => n === 'xl/workbook.xml')).length > 0;
-      if (!isXlsx) { const db = await openDatabase(u8, file.name); return { db, ...(await db.sheet(db.tables[0].name)) }; }
-      rows = await parseXlsx(buf);
+      if (!isXlsx) {
+        const db = await openDatabase(u8, file.name, opts.encoding);
+        if (!db.textFile) return { db, encoding: db.encoding || null, ...(await db.sheet(db.tables[0].name)) };
+        u8 = db.textFile[1];
+      } else rows = await parseXlsx(buf);
     }
     else if (head[0] === 0xd0 && head[1] === 0xcf) throw new Error('Ancien format Excel (.xls) : ouvrez-le dans Excel et enregistrez-le en .xlsx ou en CSV.');
-    else rows = parseCsv(decode(u8));
+    if (!rows) {
+      if (looksBinary(u8)) throw describeUnknown(u8, file.name);
+      const d = decode(u8, opts.encoding); encoding = d.encoding;
+      rows = parseCsv(d.text);
+    }
     const start = rows.findIndex((r) => r.filter((c) => String(c).trim()).length >= 2);
     if (start < 0) throw new Error('Aucun tableau trouvé dans ce fichier.');
     const headers = rows[start].map((h) => String(h).trim());
     const data = rows.slice(start + 1).filter((r) => r.some((c) => String(c).trim()));
-    return { headers, rows: data };
+    return { headers, rows: data, encoding };
   }
 
   /* ------------------------------------------------------------ */
@@ -397,5 +454,5 @@
     'Café moulu 250 g;CAF-250;3017620422003;Épicerie;4,80;2,90;24;6;5,5;paquet;Arabica, mouture fine',
     'Perceuse sans fil 18 V;PER-18V;;Outillage;149,00;92,00;5;2;20;pièce;'].join('\r\n');
 
-  window.ComptoirImport = { readFile, detect, autoMap, toProducts, number, TEMPLATE, FIELDS, norm, kindOf };
+  window.ComptoirImport = { readFile, detect, autoMap, toProducts, number, TEMPLATE, FIELDS, norm, kindOf, ENCODINGS };
 })();

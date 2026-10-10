@@ -777,3 +777,6 @@ a.kpi:hover { background: #FAFAFB; }
 .cn-actions { display: flex; align-items: center; gap: 12px; padding: 0 18px; flex-wrap: wrap; }
 .cn-note { margin: 10px 18px 0; font-size: .82rem; }
 #cnErr { margin: 8px 18px 14px; }
+
+.imp-sig { display: block; margin-top: 8px; color: var(--muted); font-family: var(--mono); font-size: .78rem; font-weight: 400; word-break: break-all; }
+#impErr { white-space: normal; }

@@ -1859,8 +1859,8 @@
           <div class="imp-tools">${TOOLS.map(([k, l]) => `<button type="button" class="chip" data-tool="${k}" aria-pressed="${imp.tool === k}">${l}</button>`).join('')}</div>
           <p class="imp-how" id="impHow">${imp.tool ? TOOLS.find((t) => t[0] === imp.tool)[2] : 'Choisissez votre logiciel pour voir comment exporter vos produits.'}</p></section>
         <section class="panel imp-step"><div class="panel-head"><h2>2. Votre fichier</h2><span class="muted">CSV ou Excel (.xlsx)</span></div>
-          <label class="imp-drop" id="impDrop"><input type="file" id="impFile" accept=".csv,.txt,.xlsx,.db,.sqlite,.sqlite3,.s3db,.db3,.mdb,.accdb,.dbf,.zip,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-            <strong>Déposez le fichier ici</strong><span>Export CSV ou Excel, ou base de données (SQLite, Access, dBase, sauvegarde .zip)</span></label>
+          <label class="imp-drop" id="impDrop"><input type="file" id="impFile" hidden>
+            <strong>Déposez le fichier ici</strong><span>Export CSV ou Excel, ou fichier de base de données de votre logiciel (SQLite, Access, dBase, .stockdb, sauvegarde .zip…)</span></label>
           <p class="form-error" id="impErr"></p></section>`;
       $$('[data-tool]').forEach((b) => b.addEventListener('click', () => {
         imp.tool = b.dataset.tool; $$('[data-tool]').forEach((x) => x.setAttribute('aria-pressed', x === b)); $('#impHow').innerHTML = TOOLS.find((t) => t[0] === imp.tool)[2];
@@ -1904,12 +1904,12 @@
         try {
           if (file.size > 300 * 1024 * 1024) throw new Error('Fichier trop lourd (300 Mo au plus).');
           $('#impDrop strong').textContent = 'Lecture du fichier…';
-          imp.sheet = await CI.readFile(file); imp.file = file.name; imp.forced = null;
+          imp.sheet = await CI.readFile(file); imp.file = file.name; imp.forced = null; imp.fileObj = file; imp.encodingForced = null;
           imp.db = imp.sheet.db || null; imp.table = imp.db ? imp.db.tables[0].name : null;
           if (!imp.sheet.rows.length) throw new Error(imp.db ? 'Aucune table de produits remplie n’a été trouvée dans cette base.' : 'Le fichier ne contient aucune ligne de produit.');
           prepareImport();
           route();
-        } catch (e) { imp.sheet = null; $('#impErr').textContent = e.message; }
+        } catch (e) { imp.sheet = null; $('#impErr').innerHTML = esc(e.message) + (e.detail ? `<small class="imp-sig">${esc(e.detail)}<br>Si le problème persiste, transmettez cette signature au support Comptoir pour faire ajouter ce format.</small>` : ''); $('#impDrop strong').textContent = 'Déposez le fichier ici'; }
         $('#impDrop')?.classList.remove('busy');
       };
       $('#impFile').addEventListener('change', (e) => take(e.target.files[0]));
@@ -1958,6 +1958,8 @@
     const label = { new: '<span class="badge s-ok">nouveau</span>', upd: '<span class="badge s-info">mise à jour</span>', err: '<span class="badge s-bad">erreur</span>' };
     $('#view').innerHTML = `
       <section class="imp-file"><div><strong>${esc(imp.file)}</strong><span>Reconnu : <b>${esc(imp.source.label)}</b> · ${imp.sheet.rows.length} ligne${imp.sheet.rows.length > 1 ? 's' : ''}${imp.db ? ` · table « ${esc(imp.table)} »` : ''}</span></div><button class="btn btn-sm" id="impReset">Changer de fichier</button></section>
+      ${imp.sheet.encoding && imp.fileObj ? `<section class="panel imp-enc"><div class="panel-head"><h2>Caractères</h2><span class="muted">des lettres bizarres (Ã©, Ø§…) ? changez l’encodage</span></div>
+        <div class="imp-map"><label><span>Encodage du fichier</span><select id="impEnc"><option value="">Automatique (${esc(CI.ENCODINGS[imp.sheet.encoding] || imp.sheet.encoding)})</option>${Object.entries(CI.ENCODINGS).map(([k, l]) => `<option value="${k}" ${imp.encodingForced === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label></div></section>` : ''}
       ${imp.db ? `<section class="panel"><div class="panel-head"><h2>Table des produits</h2><span class="muted">base ${esc(imp.db.label)}, ${imp.db.tables.length} table${imp.db.tables.length > 1 ? 's' : ''}</span></div>
         <div class="imp-map"><label><span>Table lue</span><select id="impTable">${imp.db.tables.map((t) => `<option value="${esc(t.name)}" ${t.name === imp.table ? 'selected' : ''}>${esc(t.name)} (${t.count} ligne${t.count > 1 ? 's' : ''})</option>`).join('')}</select></label>
         <p class="muted" style="grid-column:span 2;margin:0;align-self:end">Comptoir a choisi la table qui ressemble le plus à un catalogue de produits. Les familles, marques et unités rangées dans d’autres tables sont reprises par leur nom, et le stock par dépôt est ajouté.</p></div></section>` : ''}
@@ -1982,9 +1984,18 @@
         ${rows.length > 40 ? `<p class="muted imp-more">… et ${rows.length - 40} autres lignes.</p>` : ''}
       </section>
       <div class="imp-go"><p class="form-error" id="impErr"></p><button class="btn btn-primary btn-lg" id="impGo" ${created + updated ? '' : 'disabled'}>Importer ${created + updated} produit${created + updated > 1 ? 's' : ''}</button></div>`;
-    $('#impReset').addEventListener('click', () => { imp.sheet = null; imp.db = null; route(); });
+    $('#impReset').addEventListener('click', () => { imp.sheet = null; imp.db = null; imp.fileObj = null; route(); });
+    $('#impEnc')?.addEventListener('change', async (e) => {
+      try {
+        imp.encodingForced = e.target.value || null;
+        const s = await CI.readFile(imp.fileObj, { encoding: imp.encodingForced || undefined });
+        imp.sheet = s; imp.db = s.db || null; if (imp.db && !imp.db.tables.some((t) => t.name === imp.table)) imp.table = imp.db.tables[0].name;
+        if (imp.db && imp.table !== imp.db.tables[0].name) imp.sheet = { db: imp.db, encoding: s.encoding, ...(await imp.db.sheet(imp.table)) };
+        prepareImport(); renderImportReview();
+      } catch (ex) { fail(ex); }
+    });
     $('#impTable')?.addEventListener('change', async (e) => {
-      try { imp.table = e.target.value; imp.sheet = { db: imp.db, ...(await imp.db.sheet(imp.table)) }; prepareImport(); renderImportReview(); } catch (ex) { fail(ex); }
+      try { imp.table = e.target.value; imp.sheet = { db: imp.db, encoding: imp.db.encoding || null, ...(await imp.db.sheet(imp.table)) }; prepareImport(); renderImportReview(); } catch (ex) { fail(ex); }
     });
     $$('[data-mapf]').forEach((s) => s.addEventListener('change', () => { m[s.dataset.mapf] = Number(s.value); renderImportReview(); }));
     $$('input[name="impMode"]').forEach((r) => r.addEventListener('change', () => { m.price_mode = r.value; renderImportReview(); }));
