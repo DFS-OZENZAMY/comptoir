@@ -1,0 +1,105 @@
+// Schéma D1. Toutes les données métier portent un store_id : chaque requête est filtrée par commerce.
+
+const SCHEMA = [
+  // Plateforme
+  `CREATE TABLE IF NOT EXISTS stores (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+    business_type TEXT DEFAULT 'autre', country TEXT DEFAULT 'FR',
+    plan TEXT DEFAULT 'essai', status TEXT DEFAULT 'active', trial_ends_at TEXT, plan_requested TEXT,
+    console_notes TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP, last_active_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
+    password_hash TEXT NOT NULL, must_change_password INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, last_login_at TEXT)`,
+  `CREATE TABLE IF NOT EXISTS memberships (
+    user_id INTEGER NOT NULL, store_id INTEGER NOT NULL, role TEXT DEFAULT 'staff',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, store_id))`,
+  `CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, store_id INTEGER, expires_at TEXT NOT NULL,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS daily_stats (
+    store_id INTEGER NOT NULL, day TEXT NOT NULL, catalog_views INTEGER DEFAULT 0, logins INTEGER DEFAULT 0,
+    tickets INTEGER DEFAULT 0, documents INTEGER DEFAULT 0, sales_amount REAL DEFAULT 0, actions INTEGER DEFAULT 0,
+    PRIMARY KEY (store_id, day))`,
+  `CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER, user_id INTEGER, type TEXT, detail TEXT DEFAULT '',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+
+  // Données de chaque commerce
+  `CREATE TABLE IF NOT EXISTS settings (store_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT, PRIMARY KEY (store_id, key))`,
+  `CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL, position INTEGER DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, ref TEXT DEFAULT '', barcode TEXT DEFAULT '',
+    name TEXT NOT NULL, description TEXT DEFAULT '', category_id INTEGER, price_ht REAL DEFAULT 0, purchase_price REAL DEFAULT 0,
+    tva_rate REAL DEFAULT 20, stock REAL DEFAULT 0, stock_min REAL DEFAULT 0, unit TEXT DEFAULT 'pièce',
+    visible INTEGER DEFAULT 1, track_stock INTEGER DEFAULT 1, image_v INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS images (product_id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, mime TEXT, data TEXT)`,
+  `CREATE TABLE IF NOT EXISTS stock_movements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, product_id INTEGER, qty REAL, type TEXT, reason TEXT,
+    document_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL, company TEXT DEFAULT '',
+    email TEXT DEFAULT '', phone TEXT DEFAULT '', address TEXT DEFAULT '', notes TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, type TEXT NOT NULL, number TEXT NOT NULL, customer_id INTEGER,
+    client_name TEXT DEFAULT '', client_email TEXT DEFAULT '', client_phone TEXT DEFAULT '', client_address TEXT DEFAULT '',
+    status TEXT, date TEXT, due_date TEXT, notes TEXT DEFAULT '',
+    total_ht REAL DEFAULT 0, total_tva REAL DEFAULT 0, total_ttc REAL DEFAULT 0, amount_paid REAL DEFAULT 0,
+    source_id INTEGER, source_type TEXT, stock_applied INTEGER DEFAULT 0, paid_at TEXT, origin TEXT DEFAULT 'admin',
+    reminders INTEGER DEFAULT 0, last_reminder_at TEXT, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (store_id, number))`,
+  `CREATE TABLE IF NOT EXISTS document_lines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, document_id INTEGER NOT NULL, product_id INTEGER, label TEXT,
+    qty REAL DEFAULT 1, unit_price_ht REAL DEFAULT 0, tva_rate REAL DEFAULT 20, position INTEGER DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, document_id INTEGER NOT NULL, amount REAL NOT NULL,
+    method TEXT DEFAULT '', date TEXT, note TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+
+  `CREATE INDEX IF NOT EXISTS idx_memberships_store ON memberships(store_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_events_store ON events(store_id, id)`,
+  `CREATE INDEX IF NOT EXISTS idx_categories_store ON categories(store_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_products_store ON products(store_id, name)`,
+  `CREATE INDEX IF NOT EXISTS idx_moves_store ON stock_movements(store_id, id)`,
+  `CREATE INDEX IF NOT EXISTS idx_customers_store ON customers(store_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_documents_store ON documents(store_id, type, date)`,
+  `CREATE INDEX IF NOT EXISTS idx_lines_doc ON document_lines(document_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_payments_doc ON payments(document_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_payments_store_date ON payments(store_id, date)`,
+];
+
+// Évolutions futures du schéma : [version, [requêtes]]. Chaque version ne s'applique qu'une fois.
+const MIGRATIONS = [];
+
+let ready = false;
+export async function init(db) {
+  if (ready) return;
+  await db.batch(SCHEMA.map((s) => db.prepare(s)));
+  await db.prepare(`CREATE TABLE IF NOT EXISTS platform_meta (key TEXT PRIMARY KEY, value TEXT)`).run();
+  const row = await db.prepare("SELECT value FROM platform_meta WHERE key = 'schema_version'").first();
+  let version = row ? Number(row.value) : 1;
+  for (const [v, statements] of MIGRATIONS) {
+    if (version >= v) continue;
+    for (const sql of statements) {
+      try { await db.prepare(sql).run(); } catch (e) { if (!/duplicate column/i.test(e.message)) throw e; }
+    }
+    version = v;
+  }
+  await db.prepare("INSERT OR REPLACE INTO platform_meta (key, value) VALUES ('schema_version', ?)").bind(String(version)).run();
+  ready = true;
+}
+
+// Compteurs d'usage par jour (console de la plateforme).
+const STAT_FIELDS = ['catalog_views', 'logins', 'tickets', 'documents', 'sales_amount', 'actions'];
+export async function bump(db, storeId, field, inc = 1) {
+  if (!STAT_FIELDS.includes(field) || !storeId) return;
+  const day = new Date().toISOString().slice(0, 10);
+  await db.prepare(`INSERT INTO daily_stats (store_id, day, ${field}) VALUES (?, ?, ?)
+    ON CONFLICT (store_id, day) DO UPDATE SET ${field} = ${field} + excluded.${field}`).bind(storeId, day, inc).run();
+}
+
+export async function logEvent(db, storeId, userId, type, detail = '') {
+  await db.prepare('INSERT INTO events (store_id, user_id, type, detail) VALUES (?, ?, ?, ?)')
+    .bind(storeId || null, userId || null, type, String(detail).slice(0, 300)).run();
+}

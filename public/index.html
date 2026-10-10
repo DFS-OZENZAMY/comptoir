@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Comptoir : caisse, stock, factures et vitrine en ligne pour les commerces</title>
+  <meta name="description" content="Comptoir réunit la caisse, le stock, les devis et factures et une vitrine en ligne pour tous les commerces de proximité. Essai gratuit de 14 jours.">
+  <meta name="theme-color" content="#1B1D22">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+  <header class="nav">
+    <a class="logo" href="/">Comptoir</a>
+    <nav aria-label="Navigation">
+      <a href="#fonctions">Fonctions</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="/app/" class="nav-login">Se connecter</a>
+      <a href="/app/#/inscription" class="btn btn-primary">Essai gratuit</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-copy">
+        <h1>Votre commerce, tenu au comptoir.</h1>
+        <p class="lead">La caisse, le stock, les devis et factures, et une vitrine en ligne pour vos clients. Un seul outil, pensé pour les commerces de proximité.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary btn-lg" href="/app/#/inscription">Créer mon commerce</a>
+          <span class="muted">14 jours gratuits, sans carte bancaire.</span>
+        </div>
+        <ul class="trades" id="trades" aria-label="Types de commerce">
+          <li>Quincaillerie</li><li>Épicerie</li><li>Mode</li><li>Beauté</li><li>Téléphonie</li><li>Librairie</li><li>Maison</li>
+        </ul>
+      </div>
+
+      <figure class="receipt" aria-label="Exemple de ticket de caisse">
+        <div class="receipt-paper">
+          <p class="r-shop">Épicerie du Marché</p>
+          <p class="r-meta">TIC-2026-0412, 09/10 17:42</p>
+          <hr>
+          <div class="r-line"><span>Café moulu 250 g</span><span>4,80</span></div>
+          <div class="r-line"><span>2 x Huile d'olive 1 L</span><span>19,00</span></div>
+          <div class="r-line"><span>Tomates grappe 1,2 kg</span><span>3,84</span></div>
+          <div class="r-line"><span>Remise fidélité 5 %</span><span>−1,38</span></div>
+          <hr>
+          <div class="r-total"><span>Total</span><span>26,26 €</span></div>
+          <div class="r-line r-muted"><span>Espèces</span><span>30,00</span></div>
+          <div class="r-line r-muted"><span>Rendu</span><span>3,74</span></div>
+          <hr>
+          <p class="r-thanks">Stock mis à jour. Merci de votre visite.</p>
+        </div>
+      </figure>
+    </section>
+
+    <section class="band" id="fonctions">
+      <h2>Tout ce qu'il faut derrière le comptoir</h2>
+      <div class="features">
+        <article><h3>Caisse</h3><p>Scan des codes-barres, remises, espèces avec monnaie à rendre, carte, chèque, paiement mobile. Ticket imprimable et journal de caisse du jour.</p></article>
+        <article><h3>Stock et alertes</h3><p>Le stock baisse à chaque vente. Ruptures, seuils et quantités à recommander arrivent dans vos alertes, avec la liste à imprimer pour le fournisseur.</p></article>
+        <article><h3>Devis et factures</h3><p>Numérotation automatique, paiements partiels, relances clients en un clic, ventes à crédit pour les professionnels.</p></article>
+        <article><h3>Vitrine en ligne</h3><p>Votre catalogue, vos prix et la disponibilité en temps réel, à vos couleurs. Vos clients vous appellent avec la bonne référence.</p></article>
+        <article><h3>Commandes par téléphone</h3><p>Mettez de côté une commande prise au téléphone, encaissez-la au retrait. Le stock n'est déduit qu'une fois.</p></article>
+        <article><h3>Équipe</h3><p>Vos employés tiennent la caisse avec leur propre accès. Les réglages et l'abonnement restent entre vos mains.</p></article>
+      </div>
+    </section>
+
+    <section class="split">
+      <div>
+        <h2>Adapté à votre métier dès l'inscription</h2>
+        <p>Choisissez votre type de commerce : catégories, unités de vente et exemples sont prêts. Vendez au kilo, à la pièce, au mètre ou à la prestation, avec ou sans suivi de stock.</p>
+      </div>
+      <div>
+        <h2>Pensé pour la France, le Maghreb et l'Afrique francophone</h2>
+        <p>Devises et taux de TVA par pays (€, DH, DA, DT, FCFA, CHF…), mentions légales libres, paiement mobile parmi les modes d'encaissement.</p>
+      </div>
+    </section>
+
+    <section class="pricing" id="tarifs">
+      <h2>Des tarifs simples, sans engagement</h2>
+      <div class="plans" id="plans"></div>
+      <p class="muted center">Prix hors taxes. Tous les abonnements commencent par 14 jours d'essai gratuit.</p>
+    </section>
+
+    <section class="faq">
+      <h2>Questions fréquentes</h2>
+      <details><summary>Ai-je besoin de matériel particulier ?</summary><p>Non. Comptoir fonctionne dans un navigateur, sur ordinateur ou tablette. Une douchette code-barres USB et une imprimante de tickets 80 mm se branchent sans réglage si vous le souhaitez.</p></details>
+      <details><summary>Mes clients peuvent-ils commander en ligne ?</summary><p>La vitrine présente votre catalogue, vos prix et la disponibilité. Vos clients vous appellent ou passent en boutique ; vous mettez la commande de côté en un clic.</p></details>
+      <details><summary>Mes données sont-elles séparées de celles des autres commerces ?</summary><p>Oui. Chaque commerce dispose de son propre espace, inaccessible aux autres. Vous pouvez inviter vos employés avec des accès limités.</p></details>
+      <details><summary>Que se passe-t-il à la fin de l'essai ?</summary><p>Vous choisissez une formule depuis votre espace. Sans abonnement, vos données restent consultables mais l'encaissement est suspendu.</p></details>
+    </section>
+
+    <section class="final">
+      <h2>Ouvrez votre comptoir en ligne aujourd'hui.</h2>
+      <a class="btn btn-primary btn-lg" href="/app/#/inscription">Commencer l'essai gratuit</a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="logo small">Comptoir</span>
+    <span>© <span id="year"></span> Comptoir</span>
+    <a href="/app/">Espace commerçant</a>
+  </footer>
+
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    fetch('/api/platform').then((r) => r.json()).then((p) => {
+      const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      document.getElementById('plans').innerHTML = p.plans.map((pl) => `
+        <article class="plan ${pl.key === 'pro' ? 'featured' : ''}">
+          ${pl.key === 'pro' ? '<span class="plan-tag">Le plus choisi</span>' : ''}
+          <h3>${esc(pl.name)}</h3>
+          <p class="price"><strong>${pl.price} €</strong> / mois</p>
+          <p class="muted">${esc(pl.description)}</p>
+          <ul><li>${pl.products === null ? 'Produits illimités' : pl.products + ' produits'}</li><li>${pl.users} utilisateur${pl.users > 1 ? 's' : ''}</li><li>Caisse, stock et vitrine</li><li>Devis, factures et alertes</li></ul>
+          <a class="btn ${pl.key === 'pro' ? 'btn-primary' : ''}" href="/app/#/inscription">Essayer gratuitement</a>
+        </article>`).join('');
+      document.getElementById('trades').innerHTML = p.business_types.filter((t) => t.key !== 'autre').map((t) => `<li>${esc(t.label)}</li>`).join('');
+    }).catch(() => {});
+  </script>
+</body>
+</html>

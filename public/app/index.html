@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Comptoir</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app/app.css">
+</head>
+<body>
+  <div class="auth" id="auth" hidden>
+    <div class="auth-side">
+      <a class="auth-brand" href="/">Comptoir</a>
+      <p class="auth-pitch">La caisse, le stock, les factures et la vitrine en ligne de votre commerce. Au même endroit.</p>
+    </div>
+    <div class="auth-main">
+      <div class="auth-card">
+        <div class="chips auth-tabs">
+          <button class="chip" type="button" data-authtab="login" aria-pressed="true">Se connecter</button>
+          <button class="chip" type="button" data-authtab="signup" aria-pressed="false">Créer mon commerce</button>
+        </div>
+
+        <form id="loginForm" novalidate>
+          <h1>Bon retour</h1>
+          <label class="field"><span>E-mail</span><input id="liEmail" type="email" autocomplete="email" required></label>
+          <label class="field"><span>Mot de passe</span><input id="liPassword" type="password" autocomplete="current-password" required></label>
+          <p class="form-error" id="loginError" role="alert"></p>
+          <button class="btn btn-primary btn-block" type="submit">Se connecter</button>
+          <p class="auth-help">Mot de passe oublié ? Le propriétaire du commerce peut vous en générer un nouveau depuis l'onglet Équipe, ou contactez le support.</p>
+        </form>
+
+        <form id="signupForm" hidden novalidate>
+          <h1>Votre commerce en ligne en 2 minutes</h1>
+          <p class="muted">Essai gratuit de <span id="trialDays">14</span> jours, sans carte bancaire.</p>
+          <div class="fields">
+            <label class="field"><span>Votre nom</span><input id="suName" name="name" autocomplete="name" required></label>
+            <label class="field"><span>Téléphone <span class="muted">(facultatif)</span></span><input name="phone" type="tel" autocomplete="tel"></label>
+            <label class="field full"><span>E-mail</span><input name="email" type="email" autocomplete="email" required></label>
+            <label class="field full"><span>Mot de passe</span><input name="password" type="password" autocomplete="new-password" minlength="8" required><small>8 caractères minimum.</small></label>
+            <label class="field full"><span>Nom du commerce</span><input name="store_name" required placeholder="Ex. : Épicerie du Marché"></label>
+            <label class="field"><span>Type de commerce</span><select name="business_type" id="suType"></select></label>
+            <label class="field"><span>Pays</span><select name="country" id="suCountry"></select></label>
+            <label class="check full"><input type="checkbox" id="suDemo" checked> Ajouter quelques produits d'exemple pour découvrir l'outil</label>
+          </div>
+          <p class="form-error" id="signupError" role="alert"></p>
+          <button class="btn btn-primary btn-block" type="submit">Créer mon commerce</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="app" id="app" hidden>
+    <aside class="side">
+      <div class="side-brand">
+        <span class="side-platform">Comptoir</span>
+        <a href="#/tableau-de-bord" id="storeName"></a>
+        <span class="plan-badge" id="planBadge"></span>
+      </div>
+      <nav class="side-nav" aria-label="Navigation principale">
+        <a href="#/caisse" data-view="caisse">Caisse</a>
+        <a href="#/tableau-de-bord" data-view="tableau-de-bord">Tableau de bord</a>
+        <a href="#/alertes" data-view="alertes">Alertes <span class="nav-badge alert" id="badgeAlerts" hidden></span></a>
+        <a href="#/commandes" data-view="commandes">Commandes <span class="nav-badge" id="badgeOrders" hidden></span></a>
+        <a href="#/devis" data-view="devis">Devis</a>
+        <a href="#/factures" data-view="factures">Factures</a>
+        <a href="#/produits" data-view="produits">Produits</a>
+        <a href="#/stock" data-view="stock">Stock <span class="nav-badge warn" id="badgeStock" hidden></span></a>
+        <a href="#/clients" data-view="clients">Clients</a>
+        <a href="#/parametres" data-view="parametres" data-owner>Paramètres</a>
+        <a href="#/equipe" data-view="equipe" data-owner>Équipe</a>
+        <a href="#/abonnement" data-view="abonnement" data-owner>Abonnement</a>
+      </nav>
+      <div class="side-foot">
+        <a href="#" id="storeLink" target="_blank" rel="noopener">Voir ma vitrine</a>
+        <a href="/console/" id="consoleLink" hidden>Console plateforme</a>
+        <button type="button" id="accountBtn"><span id="userName"></span></button>
+        <button type="button" id="logout">Se déconnecter</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="access-banner" id="accessBanner" hidden></div>
+      <header class="main-head">
+        <h1 id="viewTitle"></h1>
+        <div class="main-actions" id="viewActions"></div>
+      </header>
+      <div id="view" class="view"></div>
+    </main>
+  </div>
+
+  <dialog class="modal" id="modal" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h2 id="modalTitle"></h2>
+      <button type="button" class="icon-btn" id="modalClose" aria-label="Fermer">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </dialog>
+
+  <script src="/app/app.js" defer></script>
+</body>
+</html>

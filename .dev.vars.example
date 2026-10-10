@@ -1,0 +1,5 @@
+# Copier ce fichier en .dev.vars pour le développement local.
+PLATFORM_ADMIN_EMAILS=admin@exemple.fr
+# RESEND_API_KEY=re_xxx
+# MAIL_FROM=Comptoir <alertes@votre-domaine.fr>
+# APP_URL=https://comptoir.exemple.fr

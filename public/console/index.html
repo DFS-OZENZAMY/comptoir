@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Console : Comptoir</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/app/app.css">
+  <link rel="stylesheet" href="/console/console.css">
+</head>
+<body>
+  <div class="console-gate" id="gate" hidden>
+    <div class="auth-card">
+      <h1>Console Comptoir</h1>
+      <p class="muted" id="gateMsg">Connectez-vous avec le compte administrateur de la plateforme.</p>
+      <a class="btn btn-primary" href="/app/">Se connecter</a>
+    </div>
+  </div>
+
+  <div class="app" id="app" hidden>
+    <aside class="side">
+      <div class="side-brand">
+        <span class="side-platform">Console</span>
+        <a href="#/vue-d-ensemble">Comptoir</a>
+      </div>
+      <nav class="side-nav" aria-label="Navigation de la console">
+        <a href="#/vue-d-ensemble" data-view="vue-d-ensemble">Vue d'ensemble</a>
+        <a href="#/commerces" data-view="commerces">Commerces</a>
+        <a href="#/demandes" data-view="demandes">Demandes <span class="nav-badge" id="badgeRequests" hidden></span></a>
+      </nav>
+      <div class="side-foot">
+        <a href="/app/" id="myStore">Mon commerce</a>
+        <a href="/" target="_blank" rel="noopener">Site Comptoir</a>
+        <button type="button" id="logout">Se déconnecter</button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="main-head">
+        <h1 id="viewTitle"></h1>
+        <div class="main-actions" id="viewActions"></div>
+      </header>
+      <div id="view" class="view"></div>
+    </main>
+  </div>
+
+  <dialog class="modal wide" id="modal" aria-labelledby="modalTitle">
+    <div class="modal-head">
+      <h2 id="modalTitle"></h2>
+      <button type="button" class="icon-btn" id="modalClose" aria-label="Fermer">✕</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </dialog>
+
+  <script src="/console/console.js" defer></script>
+</body>
+</html>

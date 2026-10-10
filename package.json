@@ -1,0 +1,13 @@
+{
+  "name": "comptoir",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Comptoir : plateforme de caisse, stock, facturation et vitrine en ligne pour les commerces",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.0"
+  }
+}
