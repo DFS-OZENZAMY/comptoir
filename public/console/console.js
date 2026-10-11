@@ -697,7 +697,162 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
   }
 
   /* ---------------- Utilisateurs ---------------- */
-  async function viewUsers() {
+  async 
+  async function viewTeam() {
+    const canManage = can('platform.staff.manage');
+    const canRoles = can('platform.roles.manage');
+    const [staff, roles, perms] = await Promise.all([
+      api('/console/staff'),
+      api('/console/roles'),
+      canRoles || canManage ? api('/console/permissions') : Promise.resolve([]),
+    ]);
+    const byGroup = {};
+    for (const p of perms) { (byGroup[p.group] ||= []).push(p); }
+
+    $('#viewActions').innerHTML = canManage
+      ? `<button type="button" class="btn btn-primary" id="addStaff">Inviter un membre</button>`
+      : '';
+
+    $('#view').innerHTML = `
+      <section class="panel">
+        <div class="panel-head"><h2>Équipe de la plateforme</h2>
+          <p class="muted">Rôles et accès à la console Comptoir (RBAC). Les propriétaires déclarés dans la configuration serveur ont toujours un accès total.</p>
+        </div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Membre</th><th>Rôle</th><th>Depuis</th><th></th></tr></thead>
+          <tbody>
+            ${staff.map((m) => `<tr>
+              <td><span class="cell-main">${esc(m.name)}</span>
+                ${m.super ? ' <span class="badge s-info">propriétaire</span>' : ''}
+                ${m.pending ? ' <span class="badge">compte à créer</span>' : ''}
+                <div class="cell-sub">${esc(m.email)}</div></td>
+              <td>${esc(m.role_name || '—')}</td>
+              <td class="muted">${m.joined_at ? since(m.joined_at) : (m.super ? 'config serveur' : '—')}</td>
+              <td class="num nowrap">${canManage && m.id && !m.super ? `
+                <button type="button" class="btn btn-sm" data-edit-staff="${m.id}" data-role="${m.role_id || ''}">Rôle</button>
+                <button type="button" class="btn btn-sm" data-rm-staff="${m.id}">Retirer</button>` : ''}
+              </td>
+            </tr>`).join('') || '<tr><td colspan="4" class="muted">Aucun membre pour l’instant.</td></tr>'}
+          </tbody>
+        </table></div>
+      </section>
+
+      <section class="panel" style="margin-top:18px">
+        <div class="panel-head" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+          <div><h2>Rôles</h2><p class="muted">Permissions regroupées. Les rôles système ne sont pas supprimables.</p></div>
+          ${canRoles ? '<button type="button" class="btn" id="addRole">Nouveau rôle</button>' : ''}
+        </div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Rôle</th><th>Membres</th><th>Permissions</th><th></th></tr></thead>
+          <tbody>
+            ${roles.map((r) => `<tr>
+              <td><span class="cell-main">${esc(r.name)}</span>${r.system ? ' <span class="badge">système</span>' : ''}
+                <div class="cell-sub">${esc(r.description || '')}</div></td>
+              <td class="num">${r.members}</td>
+              <td class="muted">${r.permissions.length} permission${r.permissions.length > 1 ? 's' : ''}</td>
+              <td class="num nowrap">${canRoles && !r.system ? `
+                <button type="button" class="btn btn-sm" data-edit-role="${r.id}">Modifier</button>
+                <button type="button" class="btn btn-sm" data-del-role="${r.id}">Supprimer</button>` : canRoles ? `
+                <button type="button" class="btn btn-sm" data-edit-role="${r.id}">Voir</button>` : ''}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </section>`;
+
+    const roleOptions = roles.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join('');
+
+    $('#addStaff')?.addEventListener('click', () => {
+      openModal('Inviter un membre', `
+        <form id="staffForm" class="form-grid">
+          <label>Nom<input name="name" required maxlength="80" placeholder="Prénom Nom"></label>
+          <label>E-mail<input name="email" type="email" required maxlength="160" placeholder="prenom@entreprise.com"></label>
+          <label>Rôle<select name="role_id" required>${roleOptions}</select></label>
+          <p class="muted">Si le compte n’existe pas, un mot de passe temporaire sera généré.</p>
+          <p class="form-error" id="staffErr"></p>
+          <button type="submit" class="btn btn-primary">Inviter</button>
+        </form>`);
+      $('#staffForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        data.role_id = Number(data.role_id);
+        try {
+          const r = await api('/console/staff', { method: 'POST', body: data });
+          closeModal();
+          if (r.temp_password) alert(`Compte créé.\\nE-mail : ${r.email}\\nMot de passe temporaire : ${r.temp_password}`);
+          else toast('Membre ajouté');
+          viewTeam();
+        } catch (ex) { $('#staffErr').textContent = ex.message; }
+      });
+    });
+
+    $$('[data-edit-staff]').forEach((btn) => btn.addEventListener('click', () => {
+      const id = btn.dataset.editStaff;
+      openModal('Changer le rôle', `
+        <form id="staffRoleForm" class="form-grid">
+          <label>Rôle<select name="role_id" required>${roleOptions}</select></label>
+          <button type="submit" class="btn btn-primary">Enregistrer</button>
+        </form>`);
+      if (btn.dataset.role) $('#staffRoleForm [name=role_id]').value = btn.dataset.role;
+      $('#staffRoleForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const role_id = Number(new FormData(e.target).get('role_id'));
+        try { await api(`/console/staff/${id}`, { method: 'PUT', body: { role_id } }); closeModal(); toast('Rôle mis à jour'); viewTeam(); }
+        catch (ex) { toast(ex.message, true); }
+      });
+    }));
+
+    $$('[data-rm-staff]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Retirer ce membre de l’équipe plateforme ?')) return;
+      try { await api(`/console/staff/${btn.dataset.rmStaff}`, { method: 'DELETE' }); toast('Membre retiré'); viewTeam(); }
+      catch (ex) { toast(ex.message, true); }
+    }));
+
+    const roleForm = (role) => {
+      const checked = new Set(role?.permissions || []);
+      const groups = Object.entries(byGroup).map(([g, list]) => `
+        <fieldset class="perm-group"><legend>${esc(g)}</legend>
+          ${list.map((p) => `<label class="perm-item"><input type="checkbox" name="perm" value="${esc(p.key)}" ${checked.has(p.key) ? 'checked' : ''} ${role?.system ? 'disabled' : ''}> ${esc(p.label)}</label>`).join('')}
+        </fieldset>`).join('');
+      openModal(role ? (role.system ? `Rôle : ${role.name}` : `Modifier : ${role.name}`) : 'Nouveau rôle', `
+        <form id="roleForm" class="form-grid">
+          <label>Nom<input name="name" required maxlength="60" value="${esc(role?.name || '')}" ${role?.system ? 'readonly' : ''}></label>
+          <label>Description<input name="description" maxlength="300" value="${esc(role?.description || '')}" ${role?.system ? 'readonly' : ''}></label>
+          <div class="perm-list">${groups}</div>
+          ${role?.system ? '<p class="muted">Rôle système : consultation seule. Créez un rôle personnalisé pour composer d’autres permissions.</p>' : ''}
+          <p class="form-error" id="roleErr"></p>
+          ${role?.system ? '<button type="button" class="btn" data-close>Fermer</button>' : '<button type="submit" class="btn btn-primary">Enregistrer</button>'}
+        </form>`);
+      $('[data-close]')?.addEventListener('click', closeModal);
+      $('#roleForm')?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (role?.system) return;
+        const fd = new FormData(e.target);
+        const body = {
+          name: fd.get('name'), description: fd.get('description'),
+          permissions: [...e.target.querySelectorAll('[name=perm]:checked')].map((el) => el.value),
+        };
+        try {
+          if (role) await api(`/console/roles/${role.id}`, { method: 'PUT', body });
+          else await api('/console/roles', { method: 'POST', body });
+          closeModal(); toast(role ? 'Rôle enregistré' : 'Rôle créé'); viewTeam();
+        } catch (ex) { $('#roleErr').textContent = ex.message; }
+      });
+    };
+
+    $('#addRole')?.addEventListener('click', () => roleForm(null));
+    $$('[data-edit-role]').forEach((btn) => {
+      const role = roles.find((r) => String(r.id) === btn.dataset.editRole);
+      btn.addEventListener('click', () => roleForm(role));
+    });
+    $$('[data-del-role]').forEach((btn) => btn.addEventListener('click', async () => {
+      if (!confirm('Supprimer ce rôle ?')) return;
+      try { await api(`/console/roles/${btn.dataset.delRole}`, { method: 'DELETE' }); toast('Rôle supprimé'); viewTeam(); }
+      catch (ex) { toast(ex.message, true); }
+    }));
+  }
+
+function viewUsers() {
     const users = await api('/console/users');
     const render = (q) => {
       const n = norm(q);
@@ -854,12 +1009,33 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
     'vue-d-ensemble': ["Vue d'ensemble", viewOverview, true], 'a-traiter': ['À traiter', viewTodo, true], commerces: ['Commerces', viewStores, false],
     activite: ['Activité des commerces', viewActivity, false], revenus: ['Revenus', viewRevenue, false], systeme: ['Système', viewSystem, true], sauvegardes: ['Sauvegardes', viewBackups, true], messagerie: ['Messagerie', viewInbox, false],
     journal: ['Journal', () => viewEvents(false), false], utilisateurs: ['Utilisateurs', viewUsers, false],
+    equipe: ['Équipe plateforme', viewTeam, false],
   };
+  // Permission minimale pour afficher chaque vue (RBAC plateforme).
+  const VIEW_PERM = {
+    'vue-d-ensemble': 'platform.overview', 'a-traiter': 'platform.todo', commerces: 'platform.stores.view',
+    activite: 'platform.activity', revenus: 'platform.revenue', systeme: 'platform.system.view',
+    sauvegardes: 'platform.system.backups', messagerie: 'platform.support.view', journal: 'platform.events',
+    utilisateurs: 'platform.users.view', equipe: 'platform.staff.view',
+  };
+  const can = (key) => !!(state.me?.platform_super || (state.me?.platform_permissions || []).includes(key));
+  function applyNavAccess() {
+    $$('.side-nav a[data-view], .console-mnav a[data-view]').forEach((a) => {
+      const p = VIEW_PERM[a.dataset.view];
+      a.hidden = !!(p && !can(p));
+    });
+  }
+  function firstAllowedView() {
+    for (const [k, p] of Object.entries(VIEW_PERM)) if (can(p)) return k;
+    return 'vue-d-ensemble';
+  }
   let lastRefresh = null;
   function route() {
-    const [key, arg] = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0].split('/');
+    let [key, arg] = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0].split('/');
+    const need = VIEW_PERM[key];
+    if (need && !can(need)) { key = firstAllowedView(); location.hash = `#/${key}`; }
     state.routeArg = arg || null;
-    const [title, fn, auto] = VIEWS[key] || VIEWS['vue-d-ensemble'];
+    const [title, fn, auto] = VIEWS[key] || VIEWS[firstAllowedView()] || VIEWS['vue-d-ensemble'];
     $$('.side-nav a, .console-mnav a').forEach((a) => a.classList.toggle('active', a.dataset.view === key));
     $('.console-mnav a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
     $('#viewTitle').textContent = title; $('#viewActions').innerHTML = '';
@@ -898,13 +1074,22 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
         return;
       }
       state.me = me;
+      // Compléter les permissions depuis l'endpoint dédié (source de vérité RBAC).
+      try {
+        const pm = await api('/console/me');
+        state.me.platform_super = pm.super;
+        state.me.platform_role = pm.role;
+        state.me.platform_permissions = pm.permissions || [];
+      } catch { /* me basique suffit pour super-admin */ }
       $('#myStore').hidden = !me.store;
-      state.plans = await api('/console/plans');
+      applyNavAccess();
+      if (can('platform.stores.view')) state.plans = await api('/console/plans').catch(() => ({}));
+      else state.plans = {};
       $('#app').hidden = false;
       route();
-      api('/console/todo', { background: true }).then(updateTodoBadge).catch(() => {});
-      chat.connect(); chat.summary();
-      setTimeout(() => ['commerces', 'a-traiter', 'systeme'].forEach(prefetch), 1500);
+      if (can('platform.todo')) api('/console/todo', { background: true }).then(updateTodoBadge).catch(() => {});
+      if (can('platform.support.view')) { chat.connect(); chat.summary(); }
+      setTimeout(() => ['commerces', 'a-traiter', 'systeme'].filter((k) => can(VIEW_PERM[k])).forEach(prefetch), 1500);
     } catch (e) { $('#gate').hidden = false; }
   })();
 })();

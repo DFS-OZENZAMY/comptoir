@@ -337,3 +337,10 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 .inbox-notify:empty { display: none; }
 .inbox-notify.on { background: #EEF6F1; color: var(--ok); } .inbox-notify.denied, .inbox-notify.unsupported { background: var(--zinc); color: var(--muted); }
 .inbox-notify span { flex: 1; } .inbox-notify .btn { flex: none; }
+
+/* RBAC équipe plateforme */
+.perm-list { display: grid; gap: 12px; max-height: 50vh; overflow-y: auto; }
+.perm-group { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 0; }
+.perm-group legend { font-weight: 700; padding: 0 6px; }
+.perm-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: .9rem; cursor: pointer; }
+.perm-item input { margin-top: 3px; }

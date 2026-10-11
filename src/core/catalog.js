@@ -217,3 +217,89 @@ export const DEFAULT_ROLES = [
   { name: 'Comptable', description: 'Suit les factures, les paiements et les chiffres, sans encaisser.',
     permissions: ['documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'pos.journal', 'customers.manage'] },
 ];
+
+
+/* ------------------------------------------------------------------ */
+/* RBAC de la plateforme (console Comptoir)                            */
+/* Permissions granulaires + rôles système, sur le modèle enterprise.  */
+/* ------------------------------------------------------------------ */
+
+export const PLATFORM_PERMISSIONS = [
+  // Pilotage
+  { key: 'platform.overview', group: 'Pilotage', label: 'Voir la vue d\'ensemble et les indicateurs' },
+  { key: 'platform.todo', group: 'Pilotage', label: 'Voir la file « À traiter »' },
+  { key: 'platform.activity', group: 'Pilotage', label: 'Voir la carte d\'activité des commerces' },
+  { key: 'platform.revenue', group: 'Pilotage', label: 'Voir les revenus et le MRR' },
+  { key: 'platform.events', group: 'Pilotage', label: 'Consulter le journal d\'événements' },
+  // Commerces
+  { key: 'platform.stores.view', group: 'Commerces', label: 'Lister et ouvrir les fiches commerces' },
+  { key: 'platform.stores.edit', group: 'Commerces', label: 'Modifier un commerce (notes, statut, formule)' },
+  { key: 'platform.stores.export', group: 'Commerces', label: 'Exporter la liste des commerces (CSV)' },
+  // Support
+  { key: 'platform.support.view', group: 'Support', label: 'Lire les conversations du support' },
+  { key: 'platform.support.reply', group: 'Support', label: 'Répondre et prendre en charge les tickets' },
+  // Utilisateurs
+  { key: 'platform.users.view', group: 'Utilisateurs', label: 'Voir les comptes utilisateurs' },
+  { key: 'platform.users.reset', group: 'Utilisateurs', label: 'Réinitialiser un mot de passe ou forcer la déconnexion' },
+  // Système
+  { key: 'platform.system.view', group: 'Système', label: 'Voir l\'état système, les stats API et les erreurs' },
+  { key: 'platform.system.backups', group: 'Système', label: 'Gérer les sauvegardes (créer, vérifier, télécharger)' },
+  // Équipe plateforme
+  { key: 'platform.staff.view', group: 'Équipe', label: 'Voir l\'équipe de la plateforme et les rôles' },
+  { key: 'platform.staff.manage', group: 'Équipe', label: 'Inviter, retirer ou changer le rôle d\'un membre' },
+  { key: 'platform.roles.manage', group: 'Équipe', label: 'Créer et modifier les rôles de la plateforme' },
+];
+export const PLATFORM_PERMISSION_KEYS = PLATFORM_PERMISSIONS.map((p) => p.key);
+
+// Rôles système : seedés à l\'init, non supprimables. « Propriétaire » = toutes les permissions.
+export const DEFAULT_PLATFORM_ROLES = [
+  {
+    name: 'Propriétaire',
+    description: 'Accès total à la console. Réservé aux fondateurs (souvent via PLATFORM_ADMIN_EMAILS).',
+    system: true,
+    permissions: [...PLATFORM_PERMISSION_KEYS],
+  },
+  {
+    name: 'Administrateur',
+    description: 'Pilotage opérationnel : commerces, support, utilisateurs, système. Ne gère pas les rôles critiques.',
+    system: true,
+    permissions: PLATFORM_PERMISSION_KEYS.filter((k) => k !== 'platform.roles.manage'),
+  },
+  {
+    name: 'Support',
+    description: 'Aide les commerçants : messagerie, fiches commerces, réinitialisation de mots de passe.',
+    system: true,
+    permissions: [
+      'platform.overview', 'platform.todo', 'platform.stores.view', 'platform.stores.edit',
+      'platform.support.view', 'platform.support.reply',
+      'platform.users.view', 'platform.users.reset', 'platform.events',
+    ],
+  },
+  {
+    name: 'Analyste',
+    description: 'Lecture seule des indicateurs, revenus, activité et commerces (pas de modification).',
+    system: true,
+    permissions: [
+      'platform.overview', 'platform.todo', 'platform.activity', 'platform.revenue',
+      'platform.events', 'platform.stores.view', 'platform.stores.export',
+    ],
+  },
+  {
+    name: 'Développeur',
+    description: 'Surveillance technique : système, sauvegardes, journal, commerces en lecture.',
+    system: true,
+    permissions: [
+      'platform.overview', 'platform.system.view', 'platform.system.backups',
+      'platform.events', 'platform.stores.view',
+    ],
+  },
+  {
+    name: 'Marketing',
+    description: 'Vue business : croissance, revenus, activité des commerces.',
+    system: true,
+    permissions: [
+      'platform.overview', 'platform.activity', 'platform.revenue',
+      'platform.stores.view', 'platform.stores.export',
+    ],
+  },
+];

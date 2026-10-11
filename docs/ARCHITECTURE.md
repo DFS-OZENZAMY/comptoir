@@ -122,3 +122,15 @@ Les opérations à numérotation légale (factures, devis) restent volontairemen
 Une seule base, partagée par tous les commerces. Les tables principales : `stores`, `users`, `memberships` (rôle et boutiques d'un membre), `sessions`, `roles`, `locations` (boutiques), `products`, `location_stock`, `stock_movements`, `categories`, `customers`, `loyalty_movements`, `documents` et `document_lines` (devis, commandes, factures, tickets), `payments`, `settings` (réglages clé/valeur par commerce), `images` (index des photos), et pour la plateforme `daily_stats`, `api_stats`, `error_log`, `events`, `platform_daily`, `platform_meta`.
 
 Le schéma complet est dans `src/core/db.js`.
+
+## RBAC de la plateforme (console)
+
+L'accès à `/console/` n'est plus binaire. Deux voies :
+
+1. **Super-admin** : adresses dans `PLATFORM_ADMIN_EMAILS` (config serveur) — toutes les permissions, rôle implicite « Propriétaire ».
+2. **Équipe** : table `platform_staff` + `platform_roles` — permissions granulaires (`platform.*`).
+
+Les rôles système (Propriétaire, Administrateur, Support, Analyste, Développeur, Marketing) sont seedés au premier accès. Des rôles personnalisés se composent dans **Console → Équipe**. Chaque route `/api/console/…` vérifie la permission côté serveur ; le menu ne montre que les sections autorisées.
+
+Voir `src/features/platform-rbac.js` et `PLATFORM_PERMISSIONS` dans `src/core/catalog.js`.
+

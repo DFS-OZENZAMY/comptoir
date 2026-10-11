@@ -105,7 +105,7 @@ async function handleApi(request, env, info, exec) {
       return await storeRoutes({ ...ctx, db, env, request, url, later }, parts.slice(1));
     }
     if (a === 'console') {
-      if (!ctx.platformAdmin) throw new HttpError(403, 'Accès réservé à l’administrateur de la plateforme.');
+      if (!ctx.platformAdmin) throw new HttpError(403, 'Accès réservé à l’équipe de la plateforme.');
       return await consoleRoutes({ ...ctx, db, env, request, url, later }, parts.slice(1));
     }
     throw new HttpError(404, 'Route inconnue.');

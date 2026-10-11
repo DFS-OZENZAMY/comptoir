@@ -4,6 +4,7 @@ import {
 } from '../core/lib.js';
 import { PLATFORM, PLANS, COUNTRIES, BUSINESS_TYPES, defaultSettings } from '../core/catalog.js';
 import { bump, logEvent } from '../core/db.js';
+import { resolvePlatformAccess } from './platform-rbac.js';
 
 const COOKIE = 'cp_session';
 const SESSION_DAYS = 30;
@@ -93,7 +94,12 @@ export async function login(db, env, b) {
     throw new HttpError(401, 'E-mail ou mot de passe incorrect.');
   }
   const m = await db.prepare('SELECT store_id FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1').bind(user.id).first();
-  if (!m && !isPlatformAdmin(env, user.email)) throw new HttpError(403, "Ce compte n'est rattaché à aucun commerce.");
+  // Accès autorisé si commerce, super-admin env, ou membre de l'équipe plateforme (RBAC console).
+  let platformMember = false;
+  if (!m && !isPlatformAdmin(env, user.email)) {
+    platformMember = !!(await db.prepare('SELECT 1 FROM platform_staff WHERE user_id = ?').bind(user.id).first());
+    if (!platformMember) throw new HttpError(403, "Ce compte n'est rattaché à aucun commerce.");
+  }
   await db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').bind(nowIso(), user.id).run();
   if (m) { await bump(db, m.store_id, 'logins'); await logEvent(db, m.store_id, user.id, 'login'); }
   // Ménage des sessions expirées de cet utilisateur.
@@ -128,7 +134,14 @@ export async function getContext(db, env, request) {
       store = await db.prepare('SELECT * FROM stores WHERE id = ?').bind(s.store_id).first();
     }
   }
-  return { user, store, role, platformAdmin: isPlatformAdmin(env, user.email) };
+  const platform = await resolvePlatformAccess(db, env, user);
+  return {
+    user, store, role,
+    platformAdmin: platform.platformAdmin,
+    platformSuper: platform.platformSuper,
+    platformRole: platform.platformRole,
+    platformPermissions: platform.platformPermissions,
+  };
 }
 
 // Le commerce peut-il modifier ses données ? (suspendu ou essai terminé : lecture seule)
@@ -162,6 +175,9 @@ export async function me(db, ctx) {
   return {
     platform: { name: PLATFORM.name },
     user: ctx.user, role: ctx.owner ? 'owner' : ctx.role ? 'member' : null, platform_admin: ctx.platformAdmin,
+    platform_super: !!ctx.platformSuper,
+    platform_role: ctx.platformRole || null,
+    platform_permissions: ctx.platformPermissions || [],
     role_name: ctx.roleName || null, permissions: ctx.permissions || [],
     locations: (ctx.locations || []).map((l) => ({ id: l.id, name: l.name, address: l.address, phone: l.phone })),
     all_locations: !!ctx.allLocations, scope: ctx.scope ?? null,

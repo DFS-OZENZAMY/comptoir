@@ -5,6 +5,11 @@ import { pushRoutes } from './push.js';
 import { backupStatus, backupConfig, listBackups, createBackup, verifyBackup, readManifest, readBackup } from './backup.js';
 import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from '../core/catalog.js';
 import { logEvent } from '../core/db.js';
+import {
+  platformNeed, platformCan, CONSOLE_ROUTE_PERM,
+  listPlatformPermissions, listPlatformRoles, createPlatformRole, updatePlatformRole, deletePlatformRole,
+  listPlatformStaff, addPlatformStaff, updatePlatformStaff, removePlatformStaff,
+} from './platform-rbac.js';
 
 const SALES = "((d.type = 'facture' AND d.status != 'annulée' AND COALESCE(d.source_type, '') != 'ticket') OR (d.type = 'ticket' AND d.status = 'payé'))";
 const ago = (days) => new Date(Date.now() - days * 86400000).toISOString().replace('T', ' ').slice(0, 19);
@@ -419,7 +424,36 @@ export async function consoleRoutes(ctx, parts) {
   const { db, request, env, url } = ctx;
   const m = request.method;
   const [res, id, action] = parts;
-  if (res === 'support') return await consoleSupportRoutes(ctx, parts.slice(1), m);
+
+  // Profil console : rôle et permissions de l'opérateur connecté.
+  if (res === 'me' && m === 'GET') {
+    return json({
+      user: ctx.user,
+      super: !!ctx.platformSuper,
+      role: ctx.platformRole,
+      permissions: ctx.platformPermissions || [],
+    });
+  }
+
+  // RBAC : permission de base selon la ressource (écriture affinée plus bas).
+  const basePerm = CONSOLE_ROUTE_PERM[res];
+  if (basePerm) platformNeed(ctx, basePerm);
+
+  // ——— Équipe & rôles plateforme ———
+  if (res === 'permissions' && m === 'GET') return json(await listPlatformPermissions());
+  if (res === 'roles' && !id && m === 'GET') return json(await listPlatformRoles(db));
+  if (res === 'roles' && !id && m === 'POST') return json(await createPlatformRole(ctx, await readBody(request)), 201);
+  if (res === 'roles' && id && m === 'PUT') return json(await updatePlatformRole(ctx, id, await readBody(request)));
+  if (res === 'roles' && id && m === 'DELETE') return json(await deletePlatformRole(ctx, id));
+  if (res === 'staff' && !id && m === 'GET') return json(await listPlatformStaff(db, env));
+  if (res === 'staff' && !id && m === 'POST') return json(await addPlatformStaff(ctx, await readBody(request)), 201);
+  if (res === 'staff' && id && m === 'PUT') return json(await updatePlatformStaff(ctx, id, await readBody(request)));
+  if (res === 'staff' && id && m === 'DELETE') return json(await removePlatformStaff(ctx, id));
+
+  if (res === 'support') {
+    platformNeed(ctx, m === 'GET' ? 'platform.support.view' : 'platform.support.reply');
+    return await consoleSupportRoutes(ctx, parts.slice(1), m);
+  }
   // Notifications de l'équipe Comptoir (messages des commerçants, plateforme), activées depuis la console.
   if (res === 'push') return await pushRoutes({ ...ctx, consoleMode: true }, id, m, () => request.json().catch(() => ({})));
   if (res === 'overview' && m === 'GET') return json(await overview(db, env));
@@ -430,12 +464,17 @@ export async function consoleRoutes(ctx, parts) {
   if (res === 'events' && m === 'GET') return json(await eventsList(db, url));
   if (res === 'users' && !id && m === 'GET') return json(await usersList(db, env));
   if (res === 'export' && id === 'stores.csv' && m === 'GET') {
+    platformNeed(ctx, 'platform.stores.export');
     return new Response(storesCsv(await listStores(db)), { headers: { 'content-type': 'text/csv; charset=utf-8', 'content-disposition': `attachment; filename="comptoir-commerces-${today()}.csv"`, 'cache-control': 'no-store' } });
   }
   if (res === 'stores' && !id && m === 'GET') return json(await listStores(db));
   if (res === 'stores' && id && !action && m === 'GET') return json(await storeDetail(db, id));
-  if (res === 'stores' && id && !action && m === 'POST') return json(await updateStore(db, ctx, id, await readBody(request)));
+  if (res === 'stores' && id && !action && m === 'POST') {
+    platformNeed(ctx, 'platform.stores.edit');
+    return json(await updateStore(db, ctx, id, await readBody(request)));
+  }
   if (res === 'users' && id && action === 'reset' && m === 'POST') {
+    platformNeed(ctx, 'platform.users.reset');
     const user = await db.prepare('SELECT id, email FROM users WHERE id = ?').bind(num(id)).first();
     if (!user) throw new HttpError(404, 'Utilisateur introuvable.');
     const password = tempPassword();
@@ -446,6 +485,7 @@ export async function consoleRoutes(ctx, parts) {
     return json({ ok: true, email: user.email, temp_password: password });
   }
   if (res === 'users' && id && action === 'logout' && m === 'POST') {
+    platformNeed(ctx, 'platform.users.reset');
     await db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(num(id)).run();
     return json({ ok: true });
   }
@@ -453,13 +493,15 @@ export async function consoleRoutes(ctx, parts) {
   // Sauvegardes
   if (res === 'backups' && !id && m === 'GET') return json({ status: await backupStatus(env), backups: await listBackups(env) });
   if (res === 'backups' && !id && m === 'POST') {
+    platformNeed(ctx, 'platform.system.backups');
     const b = await createBackup(env, { trigger: 'manuel' });
     const v = await verifyBackup(env, b.id);
     await logEvent(db, null, ctx.user.id, 'backup', `Sauvegarde manuelle ${b.id}`);
     return json({ backup: b, verified: v.ok }, 201);
   }
-  if (res === 'backups' && id && action === 'verify' && m === 'POST') return json(await verifyBackup(env, id));
+  if (res === 'backups' && id && action === 'verify' && m === 'POST') { platformNeed(ctx, 'platform.system.backups'); return json(await verifyBackup(env, id)); }
   if (res === 'backups' && id && action === 'download' && m === 'GET') {
+    platformNeed(ctx, 'platform.system.backups');
     // Export SQL déchiffré et compressé, pour un administrateur : téléchargement tracé.
     const manifest = await readManifest(env, id);
     await logEvent(db, null, ctx.user.id, 'backup', `Téléchargement de la sauvegarde ${id}`);

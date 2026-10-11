@@ -149,6 +149,17 @@ const MIGRATIONS = [
     'ALTER TABLE products ADD COLUMN client_ref TEXT',
     'CREATE UNIQUE INDEX IF NOT EXISTS uq_products_client_ref ON products(store_id, client_ref) WHERE client_ref IS NOT NULL',
   ]],
+  [7, [
+    // RBAC plateforme : rôles et membres de l'équipe Comptoir (console).
+    `CREATE TABLE IF NOT EXISTS platform_roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, description TEXT DEFAULT '',
+      permissions TEXT NOT NULL DEFAULT '[]', system INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE TABLE IF NOT EXISTS platform_staff (
+      user_id INTEGER PRIMARY KEY, role_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP, invited_by INTEGER)`,
+    'CREATE INDEX IF NOT EXISTS idx_platform_staff_role ON platform_staff(role_id)',
+  ]],
 ];
 
 // Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).
