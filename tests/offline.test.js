@@ -93,3 +93,25 @@ test('un produit créé hors ligne est rejouable sans doublon', async () => {
   assert.equal(again.result.id, res[0].result.id);
   assert.equal(products.filter((x) => x.name === 'Tournevis cruciforme').length, 1);
 });
+
+test('un produit créé hors ligne peut être vendu hors ligne (résolu à la sync)', async () => {
+  const pRef = ref('p'), vRef = ref('v');
+  const productBody = { name: 'Marteau 500 g', price_ht: 20, tva_rate: 20, stock: 10, unit: 'pièce', track_stock: 1, visible: 1 };
+  const saleBody = {
+    mode: 'ticket',
+    lines: [{ product_client_ref: pRef, label: 'Marteau 500 g', qty: 2, unit_price_ht: 20, tva_rate: 20 }],
+    payments: [{ method: 'espèces', amount: 48 }],
+  };
+  const res = (await shop.post('/api/store/sync', { ops: [
+    { ref: pRef, type: 'product', at: day(0), body: productBody },
+    { ref: vRef, type: 'sale', at: day(0), body: saleBody },
+  ] })).data.results;
+  assert.deepEqual(res.map((x) => x.status), ['ok', 'ok']);
+  const productId = res[0].result.id;
+  const doc = (await shop.get(`/api/store/documents/${res[1].result.id}`)).data;
+  assert.equal(doc.lines[0].product_id, productId);
+  assert.equal(doc.lines[0].label, 'Marteau 500 g');
+  const products = (await shop.get('/api/store/products')).data;
+  const p = products.find((x) => x.id === productId);
+  assert.equal(p.stock, 8, 'stock déduit de 2');
+});

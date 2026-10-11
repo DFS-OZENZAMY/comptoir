@@ -882,6 +882,13 @@
   async function posSubmit(body) {
     body.client_ref ||= window.ComptoirOutbox.uuid();
     if (String(body.customer_id || '').startsWith('tmp-')) { body.customer_client_ref = String(body.customer_id).slice(4); body.customer_id = null; }
+    // Produits créés hors ligne (id temporaire tmp-…) : on envoie le client_ref pour que le serveur les rattache.
+    for (const l of body.lines || []) {
+      if (String(l.product_id || '').startsWith('tmp-')) {
+        l.product_client_ref = String(l.product_id).slice(4);
+        l.product_id = null;
+      }
+    }
     if (navigator.onLine) {
       try { return await api('/store/pos/checkout', { method: 'POST', body }); }
       catch (e) { if (e.name !== 'Offline') throw e; }
@@ -890,7 +897,14 @@
     const location_id = body.location_id || (state.scope !== 'all' ? state.scope : null);
     const op = await enqueue({ ref: body.client_ref, type: 'sale', body, location_id });
     if (body.mode !== 'reserve') {
-      for (const l of body.lines) { const p = state.products.find((x) => x.id === l.product_id); if (p && p.track_stock) { p.stock = Math.round((p.stock - l.qty) * 1000) / 1000; if (p.stock_by_location && location_id) p.stock_by_location[location_id] = (p.stock_by_location[location_id] || 0) - l.qty; } }
+      for (const l of body.lines) {
+        const pid = l.product_id ?? (l.product_client_ref ? `tmp-${l.product_client_ref}` : null);
+        const p = state.products.find((x) => String(x.id) === String(pid));
+        if (p && p.track_stock) {
+          p.stock = Math.round((p.stock - l.qty) * 1000) / 1000;
+          if (p.stock_by_location && location_id) p.stock_by_location[location_id] = (p.stock_by_location[location_id] || 0) - l.qty;
+        }
+      }
       keep('/store/products', state.products);
     }
     const ht = body.lines.reduce((s, l) => s + l.qty * l.unit_price_ht, 0), ttc = body.lines.reduce((s, l) => s + l.qty * l.unit_price_ht * (1 + l.tva_rate / 100), 0);

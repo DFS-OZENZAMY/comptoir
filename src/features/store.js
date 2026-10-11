@@ -51,6 +51,8 @@ async function nextNumber(db, sid, type, date) {
 function cleanLines(lines) {
   return (Array.isArray(lines) ? lines : []).slice(0, 300).map((l, i) => ({
     product_id: l.product_id ? num(l.product_id) || null : null,
+    // Produit créé hors ligne : résolu plus tard via client_ref (comme customer_client_ref).
+    product_client_ref: clientRef(l.product_client_ref),
     label: str(l.label, 300),
     qty: num(l.qty, 1),
     unit_price_ht: r4(num(l.unit_price_ht)),
@@ -356,6 +358,13 @@ async function posCheckout(ctx, b) {
   const location = writeLocation(ctx, b.location_id);
   const base = cleanLines(b.lines);
   if (!base.length) throw new HttpError(400, 'Le ticket est vide.');
+  // Produits créés hors ligne : rattacher l'id serveur à partir du client_ref (déjà synchronisé avant la vente).
+  for (const l of base) {
+    if (!l.product_id && l.product_client_ref) {
+      const p = await db.prepare('SELECT id FROM products WHERE store_id = ? AND client_ref = ?').bind(sid, l.product_client_ref).first();
+      if (p) l.product_id = p.id;
+    }
+  }
   if (!ctx.can('pos.discount')) {
     // Sans le droit de remise, impossible de vendre un produit en dessous de son prix.
     const ids = [...new Set(base.filter((l) => l.product_id).map((l) => l.product_id))];
