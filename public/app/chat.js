@@ -78,10 +78,11 @@
   }
 
   /* ---------------- Ouverture ---------------- */
-  // Clavier mobile : caler le panneau sur la zone visible (visualViewport).
+  // Clavier / zone visible iOS & Android : caler le panneau sur visualViewport.
+  function isMobileChat() { return matchMedia('(max-width: 900px)').matches; }
   function layoutViewport() {
     const root = document.documentElement;
-    if (!S.open || !matchMedia('(max-width: 900px)').matches) {
+    if (!S.open || !isMobileChat()) {
       root.style.removeProperty('--chat-vvh');
       root.style.removeProperty('--chat-vvt');
       root.style.removeProperty('--chat-kb-safe');
@@ -89,15 +90,17 @@
     }
     const vv = window.visualViewport;
     if (!vv) {
-      root.style.setProperty('--chat-vvh', '100dvh');
+      // Repli : 100dvh ou hauteur fenêtre (Safari ancien).
+      const h = window.innerHeight || document.documentElement.clientHeight;
+      root.style.setProperty('--chat-vvh', `${h}px`);
       root.style.setProperty('--chat-vvt', '0px');
       root.style.setProperty('--chat-kb-safe', 'env(safe-area-inset-bottom, 0px)');
       return;
     }
-    // Hauteur et décalage de la zone visible (clavier ouvert → vv.height réduit).
-    const h = Math.round(vv.height);
-    const top = Math.round(vv.offsetTop);
-    const kbOpen = window.innerHeight - vv.height - vv.offsetTop > 40;
+    // iOS : quand le clavier s'ouvre, vv.height diminue et vv.offsetTop peut bouger.
+    const h = Math.max(120, Math.round(vv.height));
+    const top = Math.max(0, Math.round(vv.offsetTop));
+    const kbOpen = (window.innerHeight - vv.height - vv.offsetTop) > 40;
     root.style.setProperty('--chat-vvh', `${h}px`);
     root.style.setProperty('--chat-vvt', `${top}px`);
     root.style.setProperty('--chat-kb-safe', kbOpen ? '0px' : 'env(safe-area-inset-bottom, 0px)');
@@ -105,37 +108,51 @@
   function bindViewport() {
     if (S._vvBound) return;
     S._vvBound = true;
-    const run = () => layoutViewport();
+    const run = () => { layoutViewport(); if (S.open) scroll(); };
     window.visualViewport?.addEventListener('resize', run);
     window.visualViewport?.addEventListener('scroll', run);
     window.addEventListener('resize', run);
+    // orientationchange : iOS ne déclenche pas toujours resize tout de suite
+    window.addEventListener('orientationchange', () => setTimeout(run, 300));
+  }
+  function lockBody(lock) {
+    if (!isMobileChat()) return;
+    if (lock) {
+      S._scrollY = window.scrollY || window.pageYOffset || 0;
+      document.body.style.top = `-${S._scrollY}px`;
+      document.body.classList.add('chat-open');
+    } else {
+      document.body.classList.remove('chat-open');
+      document.body.style.top = '';
+      window.scrollTo(0, S._scrollY || 0);
+    }
   }
   function toggle(open) {
     S.open = open;
     const panel = $('#chatPanel');
-    const scrollY = open ? window.scrollY : (S._scrollY || 0);
-    if (open) S._scrollY = window.scrollY;
-    panel.hidden = !open; document.body.classList.toggle('chat-open', open);
+    panel.hidden = !open;
+    if (!isMobileChat()) document.body.classList.toggle('chat-open', open);
+    else lockBody(open);
     $('#chatLauncher').classList.toggle('is-open', open);
     $('#chatLauncher').innerHTML = open ? `${ICON.close}<span class="chat-count" hidden></span>` : `${ICON.chat}<span class="chat-count" hidden></span>`;
     if (open) {
       bindViewport(); layoutViewport();
-      requestAnimationFrame(() => panel.classList.add('in'));
+      requestAnimationFrame(() => { panel.classList.add('in'); layoutViewport(); });
       render(true); load().then(() => { render(true); markRead(); });
-      // Mobile : focus après l'animation pour ouvrir le clavier sans saut brutal.
+      // iOS : ne pas focus immédiat (clavier + animation = saut). Desktop : focus direct.
       setTimeout(() => {
         const ta = $('textarea', panel);
-        if (matchMedia('(max-width: 900px)').matches) { ta?.focus({ preventScroll: true }); scroll(); layoutViewport(); }
-        else ta?.focus();
-      }, matchMedia('(max-width: 900px)').matches ? 280 : 60);
+        if (isMobileChat()) {
+          // Focus sans forcer le clavier si l'utilisateur n'a pas tapé le champ :
+          // sur iOS le focus programmatique n'ouvre le clavier que suite à un geste utilisateur
+          // (le clic sur l'icône compte) — preventScroll évite le jump.
+          try { ta?.focus({ preventScroll: true }); } catch { ta?.focus(); }
+          layoutViewport(); scroll();
+        } else ta?.focus();
+      }, isMobileChat() ? 280 : 60);
     } else {
       panel.classList.remove('in');
       layoutViewport();
-      // Restaurer le scroll de la page (body fixed sur mobile).
-      if (matchMedia('(max-width: 900px)').matches) {
-        document.body.style.top = '';
-        window.scrollTo(0, scrollY);
-      }
     }
     badge(); poll();
   }
