@@ -22,12 +22,18 @@ const seeded = new WeakSet();
 /** Crée les rôles système s'ils n'existent pas encore. */
 export async function ensurePlatformRoles(db) {
   if (seeded.has(db)) return;
+  // INSERT OR IGNORE : idempotent même sous concurrence (Workers, multi-onglets, WebSocket).
+  // Sans ça, deux requêtes parallèles peuvent toutes les deux passer le SELECT puis
+  // échouer sur UNIQUE(name) — erreur visible sur GET /api/chat/socket.
   for (const r of DEFAULT_PLATFORM_ROLES) {
-    const ex = await db.prepare('SELECT id FROM platform_roles WHERE name = ?').bind(r.name).first();
-    if (ex) continue;
-    await db.prepare(
-      'INSERT INTO platform_roles (name, description, permissions, system) VALUES (?, ?, ?, 1)',
-    ).bind(r.name, r.description, JSON.stringify(r.permissions)).run();
+    try {
+      await db.prepare(
+        'INSERT OR IGNORE INTO platform_roles (name, description, permissions, system) VALUES (?, ?, ?, 1)',
+      ).bind(r.name, r.description, JSON.stringify(r.permissions)).run();
+    } catch (e) {
+      // Filet de sécurité si le moteur ne supporte pas OR IGNORE de la même façon.
+      if (!/unique|constraint/i.test(String(e.message || e))) throw e;
+    }
   }
   seeded.add(db);
 }
