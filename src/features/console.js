@@ -1,6 +1,7 @@
 // Console du propriétaire de la plateforme : pilotage, monitoring, commerces, revenus, système.
 import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from '../core/lib.js';
 import { consoleSupportRoutes } from './support.js';
+import { pushRoutes } from './push.js';
 import { backupStatus, backupConfig, listBackups, createBackup, verifyBackup, readManifest, readBackup } from './backup.js';
 import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from '../core/catalog.js';
 import { logEvent } from '../core/db.js';
@@ -419,6 +420,8 @@ export async function consoleRoutes(ctx, parts) {
   const m = request.method;
   const [res, id, action] = parts;
   if (res === 'support') return await consoleSupportRoutes(ctx, parts.slice(1), m);
+  // Notifications de l'équipe Comptoir (messages des commerçants, plateforme), activées depuis la console.
+  if (res === 'push') return await pushRoutes({ ...ctx, consoleMode: true }, id, m, () => request.json().catch(() => ({})));
   if (res === 'overview' && m === 'GET') return json(await overview(db, env));
   if (res === 'todo' && m === 'GET') return json(await todo(db, env));
   if (res === 'activity' && m === 'GET') return json(await activityMap(db));

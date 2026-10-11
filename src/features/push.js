@@ -11,9 +11,10 @@ export const CATEGORIES = {
   paiements: { label: 'Factures en retard et échéances', detail: 'chaque matin', perms: ['alerts.view', 'payments.manage'] },
   abonnement: { label: 'Essai et abonnement', detail: 'fin d’essai, formule', perms: ['billing.manage'] },
   support: { label: 'Messages du support', detail: 'réponses de l’équipe Comptoir', all: true },
+  messages: { label: 'Messages des commerçants', detail: 'chaque nouveau message, en direct', admin: true },
   plateforme: { label: 'Plateforme (administrateur)', detail: 'inscriptions, demandes de formule, sauvegardes', admin: true },
 };
-const DEFAULT_PREFS = { stock: true, paiements: true, abonnement: true, support: true, plateforme: true };
+const DEFAULT_PREFS = { stock: true, paiements: true, abonnement: true, support: true, messages: true, plateforme: true };
 
 /* ------------------------------------------------------------------ */
 /* Clés VAPID : fournies par l'environnement, sinon créées une fois    */
@@ -44,8 +45,9 @@ const deviceName = (ua = '') => {
   const nav = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
   return nav ? `${os}, ${nav}` : os;
 };
-// Catégories auxquelles un membre a droit.
+// Catégories auxquelles un membre a droit (depuis la console : seulement celles de l'équipe Comptoir).
 function allowedCategories(ctx) {
+  if (ctx.consoleMode) return Object.entries(CATEGORIES).filter(([, c]) => c.admin).map(([k]) => k);
   return Object.entries(CATEGORIES).filter(([, c]) => (c.admin ? ctx.platformAdmin : c.all || c.perms.some((p) => ctx.permissions.includes(p)))).map(([k]) => k);
 }
 
@@ -53,7 +55,7 @@ function allowedCategories(ctx) {
 /* Routes : /api/store/push/…                                          */
 /* ------------------------------------------------------------------ */
 export async function pushRoutes(ctx, id, m, body) {
-  const { db, env } = ctx; const sid = ctx.store.id; const uid = ctx.user.id;
+  const { db, env } = ctx; const sid = ctx.store?.id || 0; const uid = ctx.user.id;
   if (id === 'key' && m === 'GET') {
     const allowed = allowedCategories(ctx);
     return json({ publicKey: (await getVapid(env)).publicKey, categories: allowed.map((k) => ({ key: k, label: CATEGORIES[k].label, detail: CATEGORIES[k].detail })) });
@@ -61,7 +63,7 @@ export async function pushRoutes(ctx, id, m, body) {
   if (id === 'subscriptions') {
     if (m === 'GET') {
       // Les appareils de la personne connectée, avec leurs préférences.
-      const rows = (await db.prepare('SELECT id, endpoint, label, prefs, created_at, last_success_at FROM push_subscriptions WHERE user_id = ? AND store_id = ? ORDER BY created_at DESC').bind(uid, sid).all()).results;
+      const rows = (await db.prepare(`SELECT id, endpoint, label, prefs, created_at, last_success_at FROM push_subscriptions WHERE user_id = ?${ctx.consoleMode ? '' : ' AND store_id = ?'} ORDER BY created_at DESC`).bind(uid, ...(ctx.consoleMode ? [] : [sid])).all()).results;
       return json(rows.map((r) => ({ id: r.id, endpoint: r.endpoint, label: r.label, prefs: parsePrefs(r.prefs), created_at: r.created_at, last_success_at: r.last_success_at })));
     }
     const b = await body();
@@ -94,7 +96,7 @@ export async function pushRoutes(ctx, id, m, body) {
     const b = await body();
     const sub = await db.prepare('SELECT * FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').bind(str(b.endpoint, 1000), uid).first();
     if (!sub) throw new HttpError(404, 'Activez d’abord les notifications sur cet appareil.');
-    const r = await deliver(env, [sub], { title: 'Comptoir', body: 'Les notifications fonctionnent sur cet appareil.', url: '/app/#/parametres', tag: 'test' });
+    const r = await deliver(env, [sub], { title: 'Comptoir', body: 'Les notifications fonctionnent sur cet appareil.', url: ctx.consoleMode ? '/console/#/messagerie' : '/app/#/notifications', tag: 'test' }, { urgency: 'high' });
     if (!r.sent) throw new HttpError(502, 'Le service de notification n’a pas accepté le message. Réessayez dans un instant.');
     return json({ ok: true });
   }
@@ -141,16 +143,18 @@ async function storeRecipients(env, storeId, category, locationId = null) {
   });
 }
 
-export async function notifyStore(env, storeId, category, message, { dedupe, locationId } = {}) {
+// urgency « high » : le téléphone est réveillé tout de suite (écran verrouillé compris).
+// topic : un téléphone resté hors ligne ne reçoit que la dernière notification de ce sujet.
+export async function notifyStore(env, storeId, category, message, { dedupe, locationId, urgency, topic, ttl } = {}) {
   if (dedupe && !(await once(env, dedupe))) return { sent: 0, skipped: 'déjà envoyée' };
-  return deliver(env, await storeRecipients(env, storeId, category, locationId), message);
+  return deliver(env, await storeRecipients(env, storeId, category, locationId), message, { urgency, topic, ttl });
 }
 
-export async function notifyPlatform(env, message, { dedupe } = {}) {
+export async function notifyPlatform(env, message, { dedupe, category = 'plateforme', urgency, topic, ttl } = {}) {
   if (!env.PLATFORM_ADMIN_EMAILS) return { sent: 0 };
   if (dedupe && !(await once(env, dedupe))) return { sent: 0, skipped: 'déjà envoyée' };
   const rows = (await env.DB.prepare('SELECT p.*, u.email FROM push_subscriptions p JOIN users u ON u.id = p.user_id').all()).results;
-  return deliver(env, rows.filter((s) => isPlatformAdmin(env, s.email) && parsePrefs(s.prefs).plateforme), message);
+  return deliver(env, rows.filter((s) => isPlatformAdmin(env, s.email) && parsePrefs(s.prefs)[category]), message, { urgency, topic, ttl });
 }
 
 /* ------------------------------------------------------------------ */

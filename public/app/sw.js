@@ -1,6 +1,6 @@
 // Service worker de l'espace commerçant : rend Comptoir installable et démarre plus vite.
 // Règle : les données (/api/) viennent TOUJOURS du serveur, jamais d'une copie ancienne.
-const VERSION = 'comptoir-2026-10-11c';
+const VERSION = 'comptoir-2026-10-11d';
 const SHELL = [
   '/app/', '/app/app.js', '/app/app.css', '/app/offline', '/assets/fonts.css',
   '/assets/fonts/archivo.woff2', '/assets/fonts/archivo-narrow.woff2', '/assets/fonts/plex-mono-400.woff2', '/assets/fonts/plex-mono-600.woff2',
@@ -54,10 +54,23 @@ self.addEventListener('fetch', (e) => {
 self.addEventListener('push', (e) => {
   let d = {};
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
-  e.waitUntil(self.registration.showNotification(d.title || 'Comptoir', {
-    body: d.body || '', icon: '/assets/icon-192.png', badge: '/assets/badge-96.png', lang: 'fr',
-    tag: d.tag || undefined, renotify: !!d.tag, data: { url: d.url || '/app/' },
-  }));
+  e.waitUntil((async () => {
+    const target = new URL(d.url || '/app/', self.location.origin);
+    // Messagerie : si la page concernée est ouverte et visible, le message y arrive déjà en direct.
+    // On le lui transmet au lieu d'afficher une notification en double (sauf sur iPhone, où Apple exige
+    // une notification pour chaque message reçu).
+    if (d.kind === 'chat' && !/iPhone|iPad|iPod/.test(self.navigator.userAgent)) {
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const visible = wins.filter((c) => c.visibilityState === 'visible' && c.focused && new URL(c.url).pathname === target.pathname);
+      if (visible.length) { visible.forEach((c) => c.postMessage({ type: 'push', data: d })); return; }
+    }
+    await self.registration.showNotification(d.title || 'Comptoir', {
+      body: d.body || '', icon: '/assets/icon-192.png', badge: '/assets/badge-96.png', lang: 'fr',
+      tag: d.tag || undefined, renotify: !!d.tag, timestamp: Date.now(), data: { url: target.href },
+      // Message : vibration et nouvelle alerte à chaque message, même si la notification est déjà affichée.
+      ...(d.kind === 'chat' ? { vibrate: [90, 60, 90], silent: false, requireInteraction: false } : {}),
+    });
+  })());
 });
 
 // Toucher la notification : on reprend une fenêtre de Comptoir déjà ouverte, sinon on en ouvre une.

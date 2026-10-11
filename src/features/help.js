@@ -169,7 +169,10 @@ export const GUIDES = [
         <li>Choisissez les catégories qui vous intéressent, et envoyez une notification d’essai.</li>
         <li>Activez-les sur chaque appareil où vous voulez être prévenu. Chacun ne reçoit que ce que son rôle lui permet de voir, et seulement pour ses boutiques.</li>
         <li><strong>iPhone et iPad</strong> : installez d’abord Comptoir sur l’écran d’accueil (iOS 16.4 ou plus récent), puis ouvrez-le depuis son icône pour activer les notifications.</li></ul>
-        <p>Une même alerte n’est envoyée qu’une fois par jour.</p>`],
+        <p>Une même alerte de stock ou de paiement n’est envoyée qu’une fois par jour. Les <strong>messages du support</strong>, eux, sont notifiés à chaque fois, en priorité haute : le téléphone est réveillé et la notification apparaît sur l’écran verrouillé.</p>
+        <p><strong>Rien ne s’affiche sur l’écran verrouillé ?</strong> Ce réglage dépend du téléphone :</p>
+        <ul><li><strong>Android</strong> : Paramètres, Notifications, puis Chrome (ou Comptoir si l’application est installée) : autorisez les notifications et, dans « Écran de verrouillage », choisissez « Afficher tout le contenu ». Vérifiez aussi que le mode Ne pas déranger est désactivé et que l’économiseur de batterie ne restreint pas Chrome.</li>
+        <li><strong>iPhone et iPad</strong> : Réglages, Notifications, Comptoir : activez « Autoriser les notifications » et « Écran verrouillé », et choisissez « Toujours » pour « Afficher les aperçus ». Vérifiez que le mode Concentration ne bloque pas Comptoir.</li></ul>`],
       ['L’abonnement', `<p><strong>Réglages, Abonnement</strong> montre votre formule, votre utilisation (produits et utilisateurs) et les formules disponibles, dans la devise de votre pays. Choisissez une formule : elle est activée dès réception du paiement. Sans engagement.</p>`],
     ],
   },

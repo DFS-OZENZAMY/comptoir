@@ -65,6 +65,8 @@
     form.addEventListener('submit', (e) => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ''; ta.dispatchEvent(new Event('input')); send(v); });
     $('.chat-list', panel).addEventListener('click', (e) => {
       const topic = e.target.closest('[data-topic]'); if (topic) { ta.value = `Bonjour, j’ai une question : ${topic.dataset.topic.toLowerCase()}. `; ta.dispatchEvent(new Event('input')); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+      if (e.target.closest('[data-notify]')) { App.enablePush().then(() => { S.notify = null; render(false); App.toast('Vous serez prévenu de chaque réponse du support'); }).catch((ex) => App.toast(ex.message, true)); return; }
+      if (e.target.closest('[data-notify-later]')) { try { sessionStorage.setItem('comptoir.chat.notify', 'plus-tard'); } catch { /* navigation privée */ } S.notify = null; render(false); return; }
       const retry = e.target.closest('[data-retry]'); if (retry) { const p = S.pending.find((x) => x.tmp === retry.dataset.retry); if (p) { S.pending = S.pending.filter((x) => x !== p); send(p.body); } }
     });
   }
@@ -188,16 +190,36 @@
       html += `<div class="chat-msg me pending${p.state === 'échec' ? ' failed' : ''}"><div class="chat-bubble">${text(p.body)}</div><span class="chat-meta">${p.state === 'échec' ? `Non envoyé · <button type="button" class="chat-retry" data-retry="${p.tmp}">Réessayer</button>` : 'Envoi…'}</span></div>`;
     }
     if (S.thread?.status === 'résolue' && S.messages.length) html += '<div class="chat-event">Conversation résolue. Écrivez un message pour la rouvrir.</div>';
+    if (S.notify && (S.messages.length || S.pending.length)) html += S.notify === 'ios'
+      ? '<div class="chat-notify"><strong>Être prévenu de la réponse</strong><span>Sur iPhone, installez Comptoir sur l’écran d’accueil (Partager, puis Sur l’écran d’accueil) pour recevoir les réponses en notification, même téléphone verrouillé.</span></div>'
+      : '<div class="chat-notify"><strong>Être prévenu de la réponse</strong><span>Recevez une notification dès que le support vous répond, même application fermée et téléphone verrouillé.</span><div><button type="button" class="btn btn-primary btn-sm" data-notify>Activer les notifications</button><button type="button" class="btn btn-sm" data-notify-later>Plus tard</button></div></div>';
     const b = $('#chatPanel .chat-body');
     const atBottom = b.scrollHeight - b.scrollTop - b.clientHeight < 80;
     list.innerHTML = html;
     if (toBottom || atBottom) scroll();
   }
 
+  // Faut-il proposer d'activer les notifications ? (null : non ; 'ask' : bouton ; 'ios' : expliquer l'installation)
+  async function checkNotify() {
+    let later = false; try { later = sessionStorage.getItem('comptoir.chat.notify') === 'plus-tard'; } catch { /* navigation privée */ }
+    if (later) return (S.notify = null);
+    const P = App.push;
+    if (!P || !P.supported()) return (S.notify = P && P.iosNeedsInstall() ? 'ios' : null);
+    if (Notification.permission === 'denied') return (S.notify = null);
+    const sub = await P.current().catch(() => null);
+    S.notify = sub ? null : 'ask';
+  }
+
   /* ---------------- Démarrage ---------------- */
   function start(app) {
     if (App) return;
     App = app; build(); load().then(() => { badge(); render(false); }); connect();
+    checkNotify().then(() => render(false));
+    // Notification reçue alors que l'application est ouverte : affichée ici plutôt qu'en double.
+    navigator.serviceWorker?.addEventListener('message', (e) => {
+      const d = e.data && e.data.data; if (!e.data || e.data.type !== 'push' || !d || d.kind !== 'chat') return;
+      if (!S.open) { load().then(() => { badge(); render(false); }); App.toast(`${d.body}`); }
+    });
     if (location.hash === '#/support') toggle(true);
     // La notification « réponse du support » ouvre la conversation (adresse /app/#/support).
     window.addEventListener('hashchange', () => { if (location.hash === '#/support') toggle(true); });

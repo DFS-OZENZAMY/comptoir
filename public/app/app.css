@@ -893,3 +893,7 @@ a, button, label, select, [role="button"] { touch-action: manipulation; -webkit-
   .chat-msg { max-width: 86%; }
   body.chat-open { overflow: hidden; }
 }
+
+.chat-notify { align-self: stretch; display: grid; gap: 6px; margin-top: 4px; padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--line); font-size: .86rem; }
+.chat-notify strong { font-size: .92rem; } .chat-notify span { color: var(--muted); line-height: 1.45; }
+.chat-notify div { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }

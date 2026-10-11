@@ -43,7 +43,7 @@ globalThis.fetch = async (url, init = {}) => {
   assert.equal(init.headers['content-encoding'], 'aes128gcm');
   if (gone.has(u)) return new Response(null, { status: 410 });
   const device = devices[u];
-  inbox.push({ to: u, message: await readPush(device, new Uint8Array(init.body)) });
+  inbox.push({ to: u, message: await readPush(device, new Uint8Array(init.body)), urgency: init.headers.urgency, topic: init.headers.topic });
   return new Response(null, { status: 201 });
 };
 
@@ -125,4 +125,26 @@ test('résumé du matin : stock à réapprovisionner et fin d’essai', async ()
   assert.ok(r.sent >= 2);
   inbox = []; await dailyPushes(app.env);
   assert.equal(inbox.filter((i) => i.to === ownerDevice.sub.endpoint).length, 0, 'une seule fois par jour');
+});
+
+test('messagerie : chaque message notifié, en priorité haute, dans les deux sens', async () => {
+  const admin = app.client(); await admin.post('/api/auth/login', { email: 'admin@test.dev', password: 'motdepasse1' });
+  assert.deepEqual((await admin.get('/api/console/push/key')).data.categories.map((c) => c.key), ['messages', 'plateforme'], 'catégories de l’équipe support dans la console');
+  const desk = await newDevice('console-support'); devices[desk.sub.endpoint] = desk;
+  assert.equal((await admin.post('/api/console/push/subscriptions', { subscription: desk.sub })).status, 201);
+  assert.ok((await admin.get('/api/console/push/subscriptions')).data.some((d) => d.endpoint === desk.sub.endpoint));
+  inbox = [];
+  await owner.post('/api/store/support/messages', { body: 'Premier message' });
+  await owner.post('/api/store/support/messages', { body: 'Deuxième message' }); await flush();
+  const toSupport = inbox.filter((i) => i.to === desk.sub.endpoint);
+  assert.deepEqual(toSupport.map((i) => i.message.title), ['Quincaillerie Atlas', 'Quincaillerie Atlas · 2 nouveaux messages'], 'chaque message, sans anti-doublon');
+  assert.match(toSupport[1].message.body, /: Deuxième message$/);
+  assert.ok(toSupport.every((i) => i.urgency === 'high' && /^chat\d+$/.test(i.topic) && i.message.kind === 'chat'), 'priorité haute et sujet par conversation');
+  assert.match(toSupport[0].message.url, /^\/console\/#\/messagerie\/\d+$/);
+  const tid = (await admin.get('/api/console/support/threads')).data.threads[0].id;
+  await admin.post(`/api/console/support/threads/${tid}/messages`, { body: 'Réponse une' });
+  await admin.post(`/api/console/support/threads/${tid}/messages`, { body: 'Réponse deux' }); await flush();
+  const toShop = inbox.filter((i) => i.to === ownerDevice.sub.endpoint && i.message.kind === 'chat');
+  assert.deepEqual(toShop.map((i) => i.message.title), ['Support Comptoir', 'Support Comptoir · 2 nouveaux messages']);
+  assert.ok(toShop.every((i) => i.urgency === 'high' && i.message.url === '/app/#/support'));
 });

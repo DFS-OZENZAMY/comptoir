@@ -309,3 +309,8 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
   .inbox-back { display: block; } .inbox-actions .btn { padding: 6px 10px; font-size: .78rem; }
   .inbox-msgs .chat-msg { max-width: 86%; }
 }
+
+.inbox-notify { display: flex; align-items: center; gap: 10px; padding: 10px 12px; font-size: .82rem; line-height: 1.4; border-bottom: 1px solid var(--line); background: #FFF7F3; }
+.inbox-notify:empty { display: none; }
+.inbox-notify.on { background: #EEF6F1; color: var(--ok); } .inbox-notify.denied, .inbox-notify.unsupported { background: var(--zinc); color: var(--muted); }
+.inbox-notify span { flex: 1; } .inbox-notify .btn { flex: none; }

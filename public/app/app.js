@@ -224,7 +224,7 @@
     banner.innerHTML = me.access.writable ? '' : `${esc(me.access.reason)} ${can('billing.manage') ? '<a href="#/abonnement">Voir les formules</a>' : ''}`;
     $('#userName').textContent = me.user.name;
     // Modules complémentaires (messagerie du support) : l'application leur prête l'API et l'état.
-    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
+    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
   }
   function renderLocSwitch() {
     const locs = state.me.locations || [];

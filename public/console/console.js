@@ -522,14 +522,58 @@
         <a class="btn btn-sm" href="#/commerces">Voir dans Commerces</a>`;
     },
   };
+  // Notifications de l'équipe support : abonnement de cet appareil depuis la console.
+  // La console est hors de la portée du service worker (/app/) : on utilise explicitement son enregistrement.
+  const consolePush = {
+    supported: () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window,
+    async registration() {
+      const reg = (await navigator.serviceWorker.getRegistration('/app/')) || (await navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }));
+      if (!reg.active) { const w = reg.installing || reg.waiting; if (w) await new Promise((ok) => w.addEventListener('statechange', () => { if (w.state === 'activated') ok(); })); }
+      return reg;
+    },
+    key: (b64) => { const raw = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (b64.length % 4)) % 4)); return Uint8Array.from(raw, (c) => c.charCodeAt(0)); },
+    async state() {
+      if (!consolePush.supported()) return 'unsupported';
+      if (Notification.permission === 'denied') return 'denied';
+      const reg = await navigator.serviceWorker.getRegistration('/app/'); const sub = reg && await reg.pushManager.getSubscription();
+      if (!sub) return 'off';
+      const mine = await api('/console/push/subscriptions', { fresh: true, background: true }).catch(() => []);
+      return mine.some((d) => d.endpoint === sub.endpoint) ? 'on' : 'off';
+    },
+    async enable() {
+      if (await Notification.requestPermission() !== 'granted') throw new Error('Autorisation refusée : autorisez les notifications pour ce site dans les réglages du navigateur.');
+      const { publicKey } = await api('/console/push/key', { fresh: true, background: true });
+      const reg = await consolePush.registration();
+      const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: consolePush.key(publicKey) }));
+      await api('/console/push/subscriptions', { method: 'POST', body: { subscription: sub.toJSON() } });
+      return sub;
+    },
+    async render() {
+      const el = $('#inboxNotify'); if (!el) return;
+      const st = await consolePush.state().catch(() => 'off');
+      if (!$('#inboxNotify')) return;
+      el.className = `inbox-notify ${st}`;
+      el.innerHTML = st === 'on' ? '<span>Les messages des commerçants arrivent sur cet appareil, même console fermée.</span><button type="button" class="btn btn-sm" data-push-test>Essayer</button>'
+        : st === 'denied' ? '<span>Notifications bloquées pour ce site : autorisez-les dans les réglages du navigateur pour être prévenu des messages.</span>'
+        : st === 'unsupported' ? '<span>Ce navigateur ne permet pas les notifications. Sur iPhone, installez Comptoir sur l’écran d’accueil.</span>'
+        : '<span><strong>Être prévenu de chaque message</strong>, même console fermée et téléphone verrouillé.</span><button type="button" class="btn btn-primary btn-sm" data-push-on>Activer sur cet appareil</button>';
+    },
+  };
   async function viewInbox() {
     $('#view').innerHTML = `<section class="inbox" id="inbox">
-      <aside class="inbox-col inbox-left"><div class="inbox-tools"><input type="search" id="inboxSearch" placeholder="Rechercher un commerce ou un message" value="${esc(chat.q)}"><div class="chips" id="inboxFilters"></div></div><div class="inbox-list" id="inboxList"></div></aside>
+      <aside class="inbox-col inbox-left"><div class="inbox-notify" id="inboxNotify"></div><div class="inbox-tools"><input type="search" id="inboxSearch" placeholder="Rechercher un commerce ou un message" value="${esc(chat.q)}"><div class="chips" id="inboxFilters"></div></div><div class="inbox-list" id="inboxList"></div></aside>
       <div class="inbox-col inbox-thread" id="inboxThread"><div class="inbox-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5V7a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8.5L5 18.5Z"/></svg><strong>Choisissez une conversation</strong><span>Les nouveaux messages des commerçants arrivent ici en direct.</span></div></div>
       <aside class="inbox-col inbox-context" id="inboxContext"></aside></section>`;
     chat.connect();
     await chat.reloadList();
     if (!$('#inbox')) return; // rubrique quittée pendant le chargement
+    consolePush.render();
+    $('#inboxNotify').addEventListener('click', async (e) => {
+      try {
+        if (e.target.closest('[data-push-on]')) { e.target.disabled = true; const sub = await consolePush.enable(); await consolePush.render(); await api('/console/push/test', { method: 'POST', body: { endpoint: sub.endpoint } }); toast('Notifications activées : une notification d’essai arrive'); }
+        if (e.target.closest('[data-push-test]')) { const reg = await navigator.serviceWorker.getRegistration('/app/'); const sub = await reg.pushManager.getSubscription(); await api('/console/push/test', { method: 'POST', body: { endpoint: sub.endpoint } }); toast('Notification d’essai envoyée'); }
+      } catch (ex) { fail(ex); consolePush.render(); }
+    });
     $('#inboxFilters').addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (!b) return; chat.filter = b.dataset.filter; chat.reloadList(); });
     let h; $('#inboxSearch').addEventListener('input', (e) => { clearTimeout(h); h = setTimeout(() => { chat.q = e.target.value.trim(); chat.reloadList(); }, 250); });
     $('#inboxList').addEventListener('click', (e) => { const b = e.target.closest('[data-thread]'); if (b) chat.open(Number(b.dataset.thread)); });

@@ -64,9 +64,11 @@ export async function storeSupportRoutes(ctx, id, m, body) {
     const thread = await threadOf(db, sid, true);
     const context = { page: str(b.context?.page, 120), title: str(b.context?.title, 80), device: str(ctx.request.headers.get('user-agent'), 200) };
     const r = await post(env, later, thread, { role: 'client', authorId: ctx.user.id, authorName: ctx.user.name, body: text, context });
-    // Le support est prévenu par notification ; au plus une fois par quart d'heure et par conversation.
-    later(notifyPlatform(env, { title: `Message de ${ctx.store.name}`, body: preview(text).slice(0, 120), url: `/console/#/messagerie/${thread.id}`, tag: `chat-${thread.id}` },
-      { dedupe: `chat:${thread.id}:${Math.floor(Date.now() / 900000)}` }));
+    // L'équipe support est prévenue de CHAQUE message, en priorité haute (écran verrouillé compris).
+    // Une notification par conversation : la nouvelle remplace la précédente, avec le nombre de non-lus.
+    const n = r.thread.unread_support;
+    later(notifyPlatform(env, { kind: 'chat', title: n > 1 ? `${ctx.store.name} · ${n} nouveaux messages` : ctx.store.name, body: `${firstName(ctx.user.name)} : ${preview(text).slice(0, 140)}`,
+      url: `/console/#/messagerie/${thread.id}`, tag: `chat-${thread.id}` }, { category: 'messages', urgency: 'high', topic: `chat${thread.id}`, ttl: 86400 }));
     return json(r.message, 201);
   }
   if (id === 'read' && m === 'POST') {
@@ -128,8 +130,10 @@ export async function consoleSupportRoutes(ctx, parts, m) {
     }
     const r = await post(env, later, t, { role: 'support', authorId: ctx.user.id, authorName: firstName(ctx.user.name), body: text });
     await db.prepare('UPDATE support_threads SET unread_support = 0 WHERE id = ?').bind(t.id).run();
-    later(notifyStore(env, t.store_id, 'support', { title: `${firstName(ctx.user.name)} · Support Comptoir`, body: preview(text).slice(0, 120), url: '/app/#/support', tag: 'support' },
-      { dedupe: `chat-store:${t.id}:${Math.floor(Date.now() / 300000)}` }));
+    // Le commerçant est prévenu de chaque réponse, en priorité haute, même application fermée.
+    const n = r.thread.unread_store;
+    later(notifyStore(env, t.store_id, 'support', { kind: 'chat', title: n > 1 ? `Support Comptoir · ${n} nouveaux messages` : 'Support Comptoir', body: `${firstName(ctx.user.name)} : ${preview(text).slice(0, 140)}`,
+      url: '/app/#/support', tag: 'support-chat' }, { urgency: 'high', topic: 'support', ttl: 86400 }));
     return json(r.message, 201);
   }
   if (action === 'read' && m === 'POST') {
