@@ -26,9 +26,17 @@ async function uniqueSlug(db, name) {
 export async function createStore(db, { name, type, country, phone, email, demo, previousTool }) {
   const t = BUSINESS_TYPES[type] ? type : 'autre';
   const c = COUNTRIES[country] ? country : 'XX';
-  const slug = await uniqueSlug(db, name);
-  const r = await db.prepare(`INSERT INTO stores (slug, name, business_type, country, plan, status, trial_ends_at, last_active_at)
-    VALUES (?, ?, ?, ?, 'essai', 'active', ?, ?)`).bind(slug, name, t, c, addDays(today(), PLATFORM.trialDays), nowIso()).run();
+  // Deux commerces du même nom au même instant : l'adresse de vitrine déjà prise est recalculée.
+  let slug, r;
+  for (let attempt = 0; ; attempt++) {
+    slug = await uniqueSlug(db, name);
+    if (attempt >= 2) slug = `${slug}-${Math.random().toString(36).slice(2, 6)}`;
+    try {
+      r = await db.prepare(`INSERT INTO stores (slug, name, business_type, country, plan, status, trial_ends_at, last_active_at)
+        VALUES (?, ?, ?, ?, 'essai', 'active', ?, ?)`).bind(slug, name, t, c, addDays(today(), PLATFORM.trialDays), nowIso()).run();
+      break;
+    } catch (e) { if (attempt < 4 && /UNIQUE/i.test(String(e.message)) && /slug/.test(String(e.message))) continue; throw e; }
+  }
   const storeId = r.meta.last_row_id;
   const settings = defaultSettings({ name, phone, email, country: c, type: t });
   settings.previous_tool = str(previousTool, 40);
@@ -74,8 +82,15 @@ export async function signup(db, env, b) {
   if (await db.prepare('SELECT 1 FROM users WHERE email = ?').bind(email).first()) {
     throw new HttpError(409, 'Un compte existe déjà avec cette adresse. Connectez-vous.');
   }
-  const ur = await db.prepare('INSERT INTO users (email, name, password_hash, last_login_at) VALUES (?, ?, ?, ?)')
-    .bind(email, name, await hashPassword(password), nowIso()).run();
+  // Double clic ou deux onglets : l'index unique sur l'e-mail refuse le second compte, avec un message clair.
+  let ur;
+  try {
+    ur = await db.prepare('INSERT INTO users (email, name, password_hash, last_login_at) VALUES (?, ?, ?, ?)')
+      .bind(email, name, await hashPassword(password), nowIso()).run();
+  } catch (e) {
+    if (/UNIQUE/i.test(String(e.message))) throw new HttpError(409, 'Un compte existe déjà avec cette adresse. Connectez-vous.');
+    throw e;
+  }
   const userId = ur.meta.last_row_id;
   const store = await createStore(db, {
     name: storeName, type: b.business_type, country: b.country, phone: str(b.phone, 40), email, demo: b.demo !== false, previousTool: b.previous_tool,

@@ -3,8 +3,8 @@
 import { createEnv } from '../src/adapters/node/env.js';
 import { createHandler } from '../src/adapters/node/handler.js';
 
-export async function startApp(vars = {}) {
-  const env = await createEnv({ DATABASE_URL: ':memory:', STORAGE_DRIVER: 'memory', PLATFORM_ADMIN_EMAILS: 'admin@test.dev', DISABLE_CRON: 'true', ...vars });
+export async function startApp(vars = {}, overrides = {}) {
+  const env = await createEnv({ DATABASE_URL: ':memory:', STORAGE_DRIVER: 'memory', PLATFORM_ADMIN_EMAILS: 'admin@test.dev', DISABLE_CRON: 'true', ...vars }, overrides);
   const { handle, settle } = createHandler(env);
   return { env, handle, settle, client: () => new Client(handle) };
 }

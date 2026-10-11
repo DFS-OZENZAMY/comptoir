@@ -113,15 +113,27 @@ async function createDocument(ctx, d) {
   if (!due && type === 'devis') due = addDays(date, 30);
   const client = await clientSnapshot(db, sid, d, type === 'ticket' ? 'Client comptoir' : '');
   const t = computeTotals(lines);
-  const number = await nextNumber(db, sid, type, date);
   const location = writeLocation(ctx, d.location_id);
-  const res = await db.prepare(`INSERT INTO documents (store_id, type, number, customer_id, client_name, client_email, client_phone, client_address,
-      status, date, due_date, notes, total_ht, total_tva, total_ttc, source_id, source_type, origin, created_by, location_id, client_ref, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`)
-    .bind(sid, type, number, client.customer_id, client.client_name, client.client_email, client.client_phone, client.client_address,
-      status, date, due, str(d.notes, 3000), t.total_ht, t.total_tva, t.total_ttc,
-      d.source_id || null, d.source_type || null, d.origin === 'caisse' ? 'caisse' : 'admin', ctx.user.id, location.id, d.client_ref || null, d.created_at || null)
-    .run();
+  // Numéro suivant : deux ventes simultanées (plusieurs caisses, synchronisation hors ligne) peuvent calculer
+  // le même. L'index unique (store_id, number) refuse le second : on recalcule et on réessaie.
+  // La numérotation reste continue, sans trou ni doublon.
+  let number, res;
+  for (let attempt = 0; ; attempt++) {
+    number = await nextNumber(db, sid, type, date);
+    try {
+      res = await db.prepare(`INSERT INTO documents (store_id, type, number, customer_id, client_name, client_email, client_phone, client_address,
+          status, date, due_date, notes, total_ht, total_tva, total_ttc, source_id, source_type, origin, created_by, location_id, client_ref, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`)
+        .bind(sid, type, number, client.customer_id, client.client_name, client.client_email, client.client_phone, client.client_address,
+          status, date, due, str(d.notes, 3000), t.total_ht, t.total_tva, t.total_ttc,
+          d.source_id || null, d.source_type || null, d.origin === 'caisse' ? 'caisse' : 'admin', ctx.user.id, location.id, d.client_ref || null, d.created_at || null)
+        .run();
+      break;
+    } catch (e) {
+      if (attempt < 8 && /UNIQUE/i.test(String(e.message)) && /\.number/.test(String(e.message))) { await new Promise((r) => setTimeout(r, 5 + Math.random() * 20 * (attempt + 1))); continue; }
+      throw e;
+    }
+  }
   const id = res.meta.last_row_id;
   await insertLines(db, sid, id, lines);
   await syncStock(db, sid, id);
