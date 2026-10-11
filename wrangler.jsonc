@@ -20,5 +20,8 @@
   "triggers": { "crons": ["0 6 * * *"] },
 
   "keep_vars": true,
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Messagerie en temps réel : Durable Object stocké en SQLite (disponible dans la formule gratuite de Workers)
+  "durable_objects": { "bindings": [{ "name": "CHAT_HUB", "class_name": "ChatHub" }] },
+  "migrations": [{ "tag": "messagerie-v1", "new_sqlite_classes": ["ChatHub"] }]
 }

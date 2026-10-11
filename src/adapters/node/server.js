@@ -7,6 +7,7 @@ import { loadDotEnv, createEnv } from './env.js';
 import { createHandler } from './handler.js';
 import { runDailyTasks } from '../../app.js';
 import { init } from '../../core/db.js';
+import { attachChat } from './websocket.js';
 
 loadDotEnv();
 const env = await createEnv();
@@ -42,6 +43,9 @@ const server = createServer(async (req, res) => {
     if (process.env.LOG_REQUESTS === 'true') res.on('finish', () => console.log(`${req.method} ${req.url} ${res.statusCode} ${Date.now() - started} ms`));
   }
 });
+
+// Messagerie : connexions WebSocket sur /api/chat/socket.
+attachChat(server, env, { trustProxy });
 
 const port = Number(process.env.PORT || 8080), host = process.env.HOST || '0.0.0.0';
 server.listen(port, host, () => console.log(`Comptoir prêt sur http://${host === '0.0.0.0' ? 'localhost' : host}:${port} (base : ${env.DB.kind}, fichiers : ${env.STORAGE?.driver || env.STORAGE_DRIVER})`));

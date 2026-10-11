@@ -44,6 +44,7 @@ L'application reçoit `app.fetch(request, env, ctx)` et `runDailyTasks(env)`. Ch
 | `ctx.waitUntil(promesse)` | Travail après la réponse (statistiques, journal) | natif | `adapters/node/handler.js` |
 | Tâche du matin | Appelle `runDailyTasks(env)` une fois par jour (statistiques, nettoyage, e-mails, sauvegarde) | déclencheur cron | minuterie (`CRON_HOUR_UTC`) |
 | `env.BACKUP_STORAGE` ou variables `BACKUP_DRIVER` | Destination des sauvegardes (`put / get / delete / list`) | R2 ou S3 | disque ou S3 |
+| Temps réel | `publish(canaux, événement)`, `presence()`, connexions WebSocket sur `/api/chat/socket` | Durable Object `CHAT_HUB` (`ChatHub`, src/adapters/cloudflare.js) | `env.REALTIME` + `adapters/node/websocket.js` |
 | Variables | `PLATFORM_ADMIN_EMAILS`, `APP_URL`, `LEGAL_*`, `RESEND_API_KEY`… | Variables du Worker | variables d'environnement / `.env` |
 
 L'ordre de traitement est le même partout : les adresses listées dans `run_worker_first` (`wrangler.jsonc`, **source unique**) vont à l'application ; les autres sont d'abord cherchées dans `public/`, puis données à l'application si aucun fichier ne correspond.
@@ -86,9 +87,11 @@ Les erreurs métier sont des `HttpError(statut, message)` : le message, en fran�
 | `src/features/seo.js` | Pages publiques rendues côté serveur : accueil, métiers, vitrines, pages légales, plan du site |
 | `src/features/help.js` | Centre d'aide |
 | `src/features/push.js` | Notifications push : abonnements par appareil, destinataires selon les droits, alertes de stock en temps réel, résumé du matin, alertes de plateforme |
+| `src/features/support.js` | Messagerie avec le support : conversations, messages, prise en charge, lecture, identité des connexions temps réel |
 | `src/features/backup.js` | Sauvegardes : export SQL, chiffrement, vérification, rotation, copie des photos (voir [BACKUP.md](BACKUP.md)) |
 | `src/platform/html.js` | Réécriture HTML portable (interface identique au HTMLRewriter de Cloudflare) |
 | `src/platform/geo.js` | Pays du visiteur, quel que soit l'hébergeur |
+| `src/platform/realtime.js` | Temps réel : canaux (`store:<id>`, `support`), relais de la saisie en cours, concentrateur en mémoire, accès au Durable Object |
 | `src/platform/webpush.js` | Envoi des notifications push : signature VAPID (RFC 8292) et chiffrement aes128gcm (RFC 8291), sans dépendance |
 | `src/platform/storage.js` | Stockage des photos : base, R2, S3 (signature AWS v4 en JavaScript standard), mémoire |
 
@@ -98,6 +101,7 @@ Côté navigateur :
 |---|---|
 | `public/app/app.js` | Espace commerçant : état, appels d'API (mémoire courte de 30 s, préchargement), routeur par ancre (`#/caisse`…), un `view…()` par écran |
 | `public/app/import.js` | Lecture des fichiers d'import (CSV, XLSX, bases SQLite / Access / dBase), encodages, reconnaissance des logiciels |
+| `public/app/chat.js` | Messagerie du commerçant : lanceur, panneau, connexion WebSocket, envoi instantané |
 | `public/app/sw.js` | Service worker : application installable, page hors ligne, réception et affichage des notifications |
 | `public/store/store.js` | Vitrine d'un commerce, panier WhatsApp |
 | `public/console/console.js` | Console de la plateforme |

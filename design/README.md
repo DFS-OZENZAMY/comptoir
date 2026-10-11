@@ -81,3 +81,19 @@ Figma : page **Fondations**, cadre **Composants**, section **Icônes**, composan
 - Trois états : **Calme** (aucune alerte), **Alertes** (pastille compteur, propriété texte « Nombre » ; au-delà de 9, « 9+ »), **Appuyé** (halo blanc à 14 %).
 - Pastille : 18 px de haut, `color/warn` (#B7791F), chiffre `color/ink`, anneau de 2 px `color/ink` pour la détacher de la cloche.
 - Dans le code : `public/app/index.html` (`#mobileBell`) et `public/app/app.css` (`.mobile-bell`, `.bell-badge`). Les écrans « Accueil » et « Caisse » sur téléphone de la maquette utilisent le composant.
+
+## Messagerie avec le support
+
+Figma : page **Fondations**, cadre **Composants**, section **Messagerie** :
+
+- **Bulle de message** (Auteur = Client, Support, Système ; propriétés Message et Heure). Client : couleur signal, à droite, coin bas droit resserré. Support : blanc bordé, à gauche, nom de l'agent au-dessus. Système : événement centré sur fond `color/line`.
+- **Indicateur de saisie** : trois points dans une bulle blanche.
+- **Lanceur de messagerie** (Non lus = Non, Oui) : 56 px, `color/ink`, compteur signal cerclé de blanc.
+- **Champ de message** : saisie arrondie (22 px) sur `color/canvas`, bouton d'envoi rond signal.
+- **Conversation** (État = Lue, Non lue, Sélectionnée) : élément de la boîte de réception du support.
+
+Dans la console, les réponses de l'agent sont en `color/ink` (à droite) et les messages du commerçant en blanc (à gauche).
+
+Code : `public/app/chat.js` et `public/app/app.css` (section « Messagerie »), `public/console/console.js` et `console.css` (« Boîte de réception »).
+
+Les trois écrans de composition (panneau sur ordinateur, plein écran sur téléphone, boîte de réception de la console) restent à dessiner dans Figma : la limite d'appels de l'abonnement Figma « Starter » a été atteinte pendant leur création.

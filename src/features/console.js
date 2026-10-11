@@ -1,5 +1,6 @@
 // Console du propriétaire de la plateforme : pilotage, monitoring, commerces, revenus, système.
 import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from '../core/lib.js';
+import { consoleSupportRoutes } from './support.js';
 import { backupStatus, backupConfig, listBackups, createBackup, verifyBackup, readManifest, readBackup } from './backup.js';
 import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from '../core/catalog.js';
 import { logEvent } from '../core/db.js';
@@ -130,6 +131,8 @@ async function todo(db, env) {
   const cron = await db.prepare("SELECT value FROM platform_meta WHERE key = 'last_cron'").first();
   const lastCron = cron ? JSON.parse(cron.value) : null;
   if (lastCron && new Date(lastCron.at) < new Date(Date.now() - 30 * 3600000)) items.push({ kind: 'cron', priority: 1, title: "La tâche du matin ne s'est pas exécutée", detail: `Dernière exécution : ${lastCron.at.slice(0, 16).replace('T', ' ')}`, link: '#/systeme' });
+  const chat = await db.prepare('SELECT COUNT(*) AS n FROM support_threads WHERE unread_support > 0').first().catch(() => ({ n: 0 }));
+  if (chat?.n) items.push({ kind: 'support', priority: 1, title: `${chat.n} conversation${chat.n > 1 ? 's' : ''} en attente de réponse`, detail: 'Des commerçants attendent le support dans la messagerie.', link: '#/messagerie' });
   const bk = await backupStatus(env).catch(() => null);
   if (bk?.alert) items.push({ kind: 'backup', priority: bk.config.configured ? 1 : 2, title: bk.config.configured ? 'Sauvegardes à surveiller' : 'Sauvegardes non configurées', detail: bk.alert, link: '#/sauvegardes' });
   if (!env.RESEND_API_KEY) items.push({ kind: 'config', priority: 4, title: "Envoi d'e-mails non configuré", detail: 'Les commerçants ne reçoivent pas leurs alertes du matin', link: '#/systeme' });
@@ -415,6 +418,7 @@ export async function consoleRoutes(ctx, parts) {
   const { db, request, env, url } = ctx;
   const m = request.method;
   const [res, id, action] = parts;
+  if (res === 'support') return await consoleSupportRoutes(ctx, parts.slice(1), m);
   if (res === 'overview' && m === 'GET') return json(await overview(db, env));
   if (res === 'todo' && m === 'GET') return json(await todo(db, env));
   if (res === 'activity' && m === 'GET') return json(await activityMap(db));

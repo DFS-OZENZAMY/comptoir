@@ -11,6 +11,7 @@ import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, 
 import { bump, logEvent } from '../core/db.js';
 import { saveProductImage, deleteProductImage, fromBase64 } from '../platform/storage.js';
 import { pushRoutes, stockAlerts, notifyPlatform } from './push.js';
+import { storeSupportRoutes } from './support.js';
 import { storeAccess } from './auth.js';
 
 /* ------------------------------------------------------------------ */
@@ -713,6 +714,7 @@ function guard(ctx, res, id, action, m, url) {
     case 'payments': return ctx.need('payments.manage');
     case 'pos': if (id === 'journal') ctx.need('pos.journal'); return;
     case 'push': return; // chacun gère les notifications de ses propres appareils
+    case 'support': return; // tout membre peut écrire au support
     case 'alerts': if (id === 'test-email') return ctx.need('settings.manage'); if (id === 'email-status') return; return ctx.need('alerts.view');
     case 'team': case 'roles': return ctx.need('team.manage');
     case 'subscription': return ctx.need('billing.manage');
@@ -837,6 +839,9 @@ export async function storeRoutes(ctx, parts) {
 
     case 'push':
       return await pushRoutes(ctx, id, m, body);
+
+    case 'support':
+      return await storeSupportRoutes(ctx, id, m, body);
 
     case 'import':
       if (id === 'products' && m === 'POST') return json(await importProducts(ctx, await body()));

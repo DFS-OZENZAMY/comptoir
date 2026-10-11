@@ -59,7 +59,7 @@ const flush = () => app.settle();
 test('abonnement d’un appareil, préférences et notification d’essai lisible par l’appareil seul', async () => {
   const key = (await owner.get('/api/store/push/key')).data;
   assert.match(key.publicKey, /^[\w-]{87}$/);
-  assert.deepEqual(key.categories.map((c) => c.key), ['stock', 'paiements', 'abonnement'], 'pas de catégorie « plateforme » pour un commerçant');
+  assert.deepEqual(key.categories.map((c) => c.key), ['stock', 'paiements', 'abonnement', 'support'], 'pas de catégorie « plateforme » pour un commerçant');
   assert.equal((await owner.post('/api/store/push/subscriptions', { subscription: ownerDevice.sub })).status, 201);
   assert.equal((await owner.post('/api/store/push/subscriptions', { subscription: { ...ownerDevice.sub, endpoint: 'https://evil.example.com/x' } })).status, 400, 'service inconnu refusé');
   assert.equal((await owner.post('/api/store/push/test', { endpoint: ownerDevice.sub.endpoint })).status, 200);
@@ -86,7 +86,7 @@ test('droits : un caissier ne reçoit pas les alertes de stock', async () => {
   const roles = Object.fromEntries((await owner.get('/api/store/roles')).data.roles.map((r) => [r.name, r.id]));
   const added = (await owner.post('/api/store/team', { name: 'Nadia', email: 'nadia@test.dev', role_id: roles.Caissier })).data;
   const cashier = app.client(); await cashier.post('/api/auth/login', { email: 'nadia@test.dev', password: added.temp_password });
-  assert.deepEqual((await cashier.get('/api/store/push/key')).data.categories, []);
+  assert.deepEqual((await cashier.get('/api/store/push/key')).data.categories.map((c) => c.key), ['support'], 'un caissier ne reçoit que les messages du support');
   const dev = await newDevice('caissier'); devices[dev.sub.endpoint] = dev;
   await cashier.post('/api/store/push/subscriptions', { subscription: dev.sub, prefs: { stock: true } });
   const p = (await owner.post('/api/store/products', { name: 'Cadenas', price_ht: 10, stock: 1, stock_min: 2 })).data;

@@ -329,3 +329,12 @@ Chaque personne peut être prévenue sur son téléphone ou son ordinateur, **m�
 - Une même alerte au plus **une fois par jour** ; les appareils désinstallés sont retirés automatiquement.
 - Le contenu est **chiffré pour l'appareil** (RFC 8291) : le service de notification (Google, Apple, Mozilla, Microsoft) ne peut pas le lire. Seuls ces services sont acceptés comme destination.
 - Fonctionne sur Android, Windows, Mac, Chromebook (Chrome, Edge, Firefox) et sur iPhone ou iPad (iOS 16.4 ou plus) **une fois Comptoir installé sur l'écran d'accueil**.
+
+## Messagerie avec le support
+
+Les commerçants écrivent au support **depuis leur espace** ; les employés de Comptoir répondent **depuis la console**, en direct.
+
+- **Côté commerçant** : bulle en bas à droite (ordinateur) ou icône dans l'en-tête (téléphone, plein écran). Message de bienvenue, sujets rapides, présence du support (« En ligne »), « … est en train d'écrire », accusé « Lu », envoi instantané avec « Réessayer » en cas d'échec, Entrée pour envoyer et Maj + Entrée pour aller à la ligne. Une conversation par commerce, visible par toute l'équipe.
+- **Côté support** (console, rubrique **Messagerie**) : boîte de réception en direct (Ouvertes, Non lues, Les miennes, Résolues, recherche), prise en charge automatique à la première réponse, libération, résolution et réouverture (un nouveau message rouvre la conversation), réponses rapides, fiche du commerce (propriétaire, formule, équipe, ancienneté, dernière activité, **page où se trouvait le client** quand il a écrit).
+- **Notifications** : réponse du support sur les appareils du commerçant (catégorie « Messages du support ») ; nouveau message sur les appareils des administrateurs (au plus une fois par quart d'heure et par conversation). Rappel dans « À traiter » de la console.
+- **Technique** : messages enregistrés en base, diffusion par WebSocket (Durable Object sur Cloudflare, serveur intégré sur Node.js), actualisation régulière si le temps réel est indisponible. Identité de chaque connexion vérifiée côté serveur ; un commerce ne reçoit que ses propres messages.

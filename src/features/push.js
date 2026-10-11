@@ -10,9 +10,10 @@ export const CATEGORIES = {
   stock: { label: 'Stock bas et ruptures', detail: 'dès qu’un produit passe sous son seuil', perms: ['alerts.view', 'stock.manage'] },
   paiements: { label: 'Factures en retard et échéances', detail: 'chaque matin', perms: ['alerts.view', 'payments.manage'] },
   abonnement: { label: 'Essai et abonnement', detail: 'fin d’essai, formule', perms: ['billing.manage'] },
+  support: { label: 'Messages du support', detail: 'réponses de l’équipe Comptoir', all: true },
   plateforme: { label: 'Plateforme (administrateur)', detail: 'inscriptions, demandes de formule, sauvegardes', admin: true },
 };
-const DEFAULT_PREFS = { stock: true, paiements: true, abonnement: true, plateforme: true };
+const DEFAULT_PREFS = { stock: true, paiements: true, abonnement: true, support: true, plateforme: true };
 
 /* ------------------------------------------------------------------ */
 /* Clés VAPID : fournies par l'environnement, sinon créées une fois    */
@@ -45,7 +46,7 @@ const deviceName = (ua = '') => {
 };
 // Catégories auxquelles un membre a droit.
 function allowedCategories(ctx) {
-  return Object.entries(CATEGORIES).filter(([, c]) => (c.admin ? ctx.platformAdmin : c.perms.some((p) => ctx.permissions.includes(p)))).map(([k]) => k);
+  return Object.entries(CATEGORIES).filter(([, c]) => (c.admin ? ctx.platformAdmin : c.all || c.perms.some((p) => ctx.permissions.includes(p)))).map(([k]) => k);
 }
 
 /* ------------------------------------------------------------------ */
@@ -132,7 +133,7 @@ async function storeRecipients(env, storeId, category, locationId = null) {
       WHERE p.store_id = ?`).bind(storeId).all()).results;
   return rows.filter((s) => {
     if (!parsePrefs(s.prefs)[category]) return false;
-    if (s.role === 'owner') return true;
+    if (s.role === 'owner' || cat.all) return true;
     let perms = []; try { perms = JSON.parse(s.permissions || '[]'); } catch { /* rôle sans droits */ }
     if (!cat.perms.some((p) => perms.includes(p))) return false;
     let locs = []; try { locs = JSON.parse(s.locations || '[]').map(Number).filter(Boolean); } catch { /* toutes */ }

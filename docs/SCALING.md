@@ -21,6 +21,12 @@ Comptoir est conçu pour grandir par étapes, sans réécriture. Ce document dit
 
 Ces ordres de grandeur dépendent surtout du nombre de ventes par jour. Surveillez dans la console la taille de la base et le temps de réponse des routes avant de changer d'étape.
 
+## Messagerie en temps réel
+
+- **Cloudflare** : un Durable Object unique tient toutes les connexions, avec l'API de mise en veille (une connexion inactive ne coûte rien ; les « ping » reçoivent leur réponse sans réveiller l'objet). Il convient jusqu'à plusieurs milliers de connexions simultanées ; au-delà, répartir les commerces sur plusieurs objets (`idFromName('hub-' + groupe)`).
+- **Node.js** : le concentrateur est en mémoire, propre à chaque serveur. Avec plusieurs serveurs, un message reçu par l'un n'est diffusé en direct qu'aux navigateurs connectés à ce serveur ; les autres le voient à l'actualisation suivante (8 s quand la conversation est ouverte). Pour du direct sur plusieurs serveurs, relier les concentrateurs par une diffusion partagée (Redis, NATS…) dans `src/platform/realtime.js`.
+- Les messages sont toujours enregistrés en base avant d'être diffusés : aucune perte, quel que soit l'état du temps réel.
+
 ## Les limites à connaître
 
 - **Écritures SQLite.** SQLite (et donc D1 et libSQL) accepte une écriture à la fois par base. Les écritures de Comptoir sont courtes (une vente = un lot de quelques instructions), ce qui laisse beaucoup de marge, mais c'est la limite qui finira par compter.

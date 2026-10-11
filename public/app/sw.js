@@ -1,6 +1,6 @@
 // Service worker de l'espace commerçant : rend Comptoir installable et démarre plus vite.
 // Règle : les données (/api/) viennent TOUJOURS du serveur, jamais d'une copie ancienne.
-const VERSION = 'comptoir-2026-10-11b';
+const VERSION = 'comptoir-2026-10-11c';
 const SHELL = [
   '/app/', '/app/app.js', '/app/app.css', '/app/offline', '/assets/fonts.css',
   '/assets/fonts/archivo.woff2', '/assets/fonts/archivo-narrow.woff2', '/assets/fonts/plex-mono-400.woff2', '/assets/fonts/plex-mono-600.woff2',

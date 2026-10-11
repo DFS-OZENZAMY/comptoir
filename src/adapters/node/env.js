@@ -6,6 +6,7 @@ import { openDatabase } from './d1.js';
 import { createAssets } from './assets.js';
 import { fsStorage } from './fs-storage.js';
 import { memoryStorage } from '../../platform/storage.js';
+import { memoryHub } from '../../platform/realtime.js';
 
 export const ROOT = resolve(new URL('../../..', import.meta.url).pathname);
 
@@ -40,5 +41,7 @@ export async function createEnv(vars = process.env, overrides = {}) {
   else if (bdriver === 'fs') env.BACKUP_STORAGE = fsStorage(vars.BACKUP_DIR || join(ROOT, 'data', 'backups'));
   else if (bdriver === 'memory') env.BACKUP_STORAGE = memoryStorage();
   env.BACKUP_DRIVER = bdriver;
+  // Messagerie : concentrateur temps réel en mémoire (un serveur ; voir docs/SCALING.md pour plusieurs).
+  env.REALTIME = overrides.REALTIME || memoryHub();
   return env;
 }

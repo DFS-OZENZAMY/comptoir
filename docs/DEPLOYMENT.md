@@ -41,6 +41,8 @@ comptoir.example.com {
 }
 ```
 
+La messagerie utilise des WebSockets (`/api/chat/socket`) : Caddy les transmet sans réglage. Avec Nginx, ajoutez dans le bloc `location` : `proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 1h;`.
+
 Mise à jour : `git pull && docker compose up -d --build`. Sauvegarde : copiez le volume, ou utilisez `sqlite3 data/comptoir.db ".backup sauvegarde.db"`.
 
 Sans Docker : Node.js 22.5 ou plus, puis `npm ci --omit=dev && npm start`, lancé par systemd ou pm2.

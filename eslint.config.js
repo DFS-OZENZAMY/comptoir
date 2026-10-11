@@ -15,6 +15,8 @@ export default [
     languageOptions: { ecmaVersion: 2023, sourceType: 'script', globals: { ...globals.browser } },
   },
   { files: ['public/app/sw.js'], languageOptions: { globals: { ...globals.serviceworker } } },
+  // Objets fournis par Cloudflare Workers (Durable Objects, WebSockets en veille).
+  { files: ['src/adapters/cloudflare.js'], languageOptions: { globals: { WebSocketPair: 'readonly', WebSocketRequestResponsePair: 'readonly' } } },
   {
     rules: {
       'no-unused-vars': ['warn', { args: 'none', caughtErrors: 'none', varsIgnorePattern: '^_' }],

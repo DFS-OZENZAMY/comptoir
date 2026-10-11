@@ -11,6 +11,8 @@ import { signup, login, logout, getContext, me, changePassword, touchStore } fro
 import { storeRoutes, runDailyDigests, sendEmail } from './features/store.js';
 import { dailyBackup } from './features/backup.js';
 import { notifyPlatform, dailyPushes } from './features/push.js';
+import { chatIdentity } from './features/support.js';
+import { getRealtime } from './platform/realtime.js';
 import { resolveAccess } from './features/access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './features/console.js';
 import { renderHelpIndex, renderHelpGuide } from './features/help.js';
@@ -50,6 +52,15 @@ async function handleApi(request, env, info, exec) {
     const db = env.DB;
     await init(db);
     const [a, b, c] = parts;
+
+    // Messagerie : ouverture de la connexion temps réel (WebSocket), après vérification de l'identité.
+    if (a === 'chat' && b === 'socket' && m === 'GET') {
+      if (request.headers.get('upgrade') !== 'websocket') throw new HttpError(426, 'Connexion WebSocket attendue.');
+      const identity = await chatIdentity(env, request);
+      const rt = getRealtime(env);
+      if (!rt.connect) throw new HttpError(503, 'Temps réel indisponible : les messages arrivent par actualisation régulière.');
+      return rt.connect(request, identity);
+    }
 
     // Santé de l'application : pour les hébergeurs, répartiteurs de charge et sondes Kubernetes.
     if (a === 'health' && m === 'GET') {
@@ -95,7 +106,7 @@ async function handleApi(request, env, info, exec) {
     }
     if (a === 'console') {
       if (!ctx.platformAdmin) throw new HttpError(403, 'Accès réservé à l’administrateur de la plateforme.');
-      return await consoleRoutes({ ...ctx, db, env, request, url }, parts.slice(1));
+      return await consoleRoutes({ ...ctx, db, env, request, url, later }, parts.slice(1));
     }
     throw new HttpError(404, 'Route inconnue.');
   } catch (e) {

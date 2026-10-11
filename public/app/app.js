@@ -223,6 +223,8 @@
     banner.hidden = me.access.writable;
     banner.innerHTML = me.access.writable ? '' : `${esc(me.access.reason)} ${can('billing.manage') ? '<a href="#/abonnement">Voir les formules</a>' : ''}`;
     $('#userName').textContent = me.user.name;
+    // Modules complémentaires (messagerie du support) : l'application leur prête l'API et l'état.
+    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
   }
   function renderLocSwitch() {
     const locs = state.me.locations || [];
@@ -382,6 +384,8 @@
   function route() {
     let key = (location.hash.replace(/^#\//, '') || 'tableau-de-bord').split('?')[0];
     if (!state.me) return;
+    // « #/support » (lien des notifications) : la messagerie s'ouvre par-dessus la rubrique en cours.
+    if (key === 'support') { window.ComptoirChat?.open(); history.replaceState(null, '', '#/' + (current.key || 'tableau-de-bord')); if (current.key) return; key = 'tableau-de-bord'; }
     if (GROUPS[key]) key = (GROUPS[key].find(([k]) => allowedView(k)) || GROUPS[key][0])[0];
     if (!allowedView(key)) key = ['tableau-de-bord', 'caisse', 'produits'].find(allowedView);
     const [title, fn] = VIEWS[key];

@@ -380,6 +380,164 @@
     const [cls, label] = sysStatus(s);
     const d = $('#sysDot'); d.className = `status-dot ${cls}`; d.title = label;
   }
+  /* ================= Messagerie du support ================= */
+  // Boîte de réception en temps réel : conversations des commerçants, réponse, prise en charge, résolution.
+  const QUICK = ['Bonjour, je regarde cela tout de suite.', 'Pouvez-vous m’envoyer une capture d’écran ?', 'C’est corrigé de notre côté : pouvez-vous réessayer ?', 'Avec plaisir, bonne journée !'];
+  const chat = {
+    filter: 'ouvertes', q: '', threads: [], counts: {}, current: null, detail: null, typing: {}, ws: null, retry: 0, lastTyping: 0,
+    async summary() { try { const r = await api('/console/support/summary', { fresh: true }); const b = $('#chatNavBadge'); if (b) { b.hidden = !r.unread; b.textContent = r.unread; } } catch { /* silencieux */ } },
+    connect() {
+      if (chat.ws && chat.ws.readyState <= 1) return;
+      let ws; try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/socket?as=support`); } catch { return; }
+      chat.ws = ws;
+      ws.onopen = () => { chat.retry = 0; };
+      ws.onmessage = (e) => { let d; try { d = JSON.parse(e.data); } catch { return; } chat.onEvent(d); };
+      ws.onclose = () => { chat.ws = null; setTimeout(() => chat.connect(), Math.min(30000, 1000 * 2 ** chat.retry++)); };
+      ws.onerror = () => ws.close();
+      clearInterval(chat.ping); chat.ping = setInterval(() => { if (ws.readyState === 1) ws.send('{"type":"ping"}'); }, 25000);
+    },
+    onEvent(d) {
+      const here = location.hash.startsWith('#/messagerie');
+      if (d.type === 'message') {
+        const t = chat.threads.find((x) => x.id === d.thread.id);
+        if (t) Object.assign(t, d.thread); else if (here) return chat.reloadList();
+        if (chat.current === d.thread.id && chat.detail) {
+          if (!chat.detail.messages.some((m) => m.id === d.message.id)) chat.detail.messages.push(d.message);
+          Object.assign(chat.detail.thread, d.thread);
+          if (d.message.author_role === 'client') { delete chat.typing[d.thread.store_id]; if (!document.hidden) chat.markRead(); }
+          chat.renderThread(true);
+        }
+        if (d.message.author_role === 'client' && (!here || chat.current !== d.thread.id)) toast(`Nouveau message : ${chat.threads.find((x) => x.id === d.thread.id)?.store_name || 'un commerce'}`);
+        if (here) chat.renderList();
+        chat.summary();
+      }
+      if (d.type === 'typing' && d.side === 'client') {
+        chat.typing[d.storeId] = { name: d.name, until: Date.now() + 4500 };
+        if (here) { chat.renderList(); if (chat.detail?.thread.store_id === d.storeId) chat.renderTyping(); }
+        setTimeout(() => { if (here) { chat.renderList(); chat.renderTyping(); } }, 4600);
+      }
+      if (d.type === 'read' && d.side === 'client' && chat.detail?.thread.id === d.thread_id) { chat.detail.thread.store_read_at = d.at; chat.renderThread(false); }
+    },
+    async reloadList() {
+      const r = await api(`/console/support/threads?filtre=${chat.filter}&q=${encodeURIComponent(chat.q)}`, { fresh: true });
+      chat.threads = r.threads; chat.counts = r.counts || {}; chat.me = r.me; chat.renderList();
+    },
+    async open(id) {
+      chat.current = id; history.replaceState(null, '', `#/messagerie/${id}`);
+      $('#inbox')?.classList.add('has-thread');
+      chat.renderList();
+      $('#inboxThread').innerHTML = '<div class="skeleton inbox-skel"><span></span><span></span><span class="short"></span></div>';
+      try { chat.detail = await api(`/console/support/threads/${id}`, { fresh: true }); } catch (e) { return fail(e); }
+      if (chat.current !== id) return;
+      chat.renderThread(true); chat.renderContext(); chat.markRead();
+    },
+    async markRead() {
+      const t = chat.detail?.thread; if (!t || !t.unread_support) return;
+      t.unread_support = 0; const l = chat.threads.find((x) => x.id === t.id); if (l) l.unread_support = 0;
+      if (chat.counts.non_lues) chat.counts.non_lues -= 1;
+      chat.renderList(); chat.summary();
+      try { await api(`/console/support/threads/${t.id}/read`, { method: 'POST', body: {} }); } catch { /* sans gravité */ }
+    },
+    initials: (n) => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase(),
+    when(iso) {
+      if (!iso) return ''; const d = new Date(iso), now = new Date();
+      if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      return (now - d) < 6 * 86400000 ? d.toLocaleDateString('fr-FR', { weekday: 'short' }) : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    },
+    renderList() {
+      const el = $('#inboxList'); if (!el) return;
+      const c = chat.counts || {};
+      $('#inboxFilters').innerHTML = [['ouvertes', 'Ouvertes', c.ouvertes], ['non-lues', 'Non lues', c.non_lues], ['miennes', 'Les miennes', c.miennes], ['resolues', 'Résolues', c.resolues]]
+        .map(([k, l, n]) => `<button type="button" class="chip" data-filter="${k}" aria-pressed="${chat.filter === k}">${l}${n ? ` <span class="count">${n}</span>` : ''}</button>`).join('');
+      el.innerHTML = chat.threads.length ? chat.threads.map((t) => {
+        const ty = chat.typing[t.store_id]; const typing = ty && ty.until > Date.now();
+        return `<button type="button" class="inbox-item${t.unread_support ? ' unread' : ''}${chat.current === t.id ? ' selected' : ''}" data-thread="${t.id}">
+          <span class="inbox-avatar">${esc(chat.initials(t.store_name))}</span>
+          <span class="inbox-text"><span class="inbox-line"><strong>${esc(t.store_name)}</strong><time>${esc(chat.when(t.last_message_at))}</time></span>
+            <span class="inbox-line"><span class="inbox-preview">${typing ? `<em>${esc(ty.name)} écrit…</em>` : `${t.last_author === 'support' ? 'Vous : ' : ''}${esc(t.last_preview || '')}`}</span>${t.unread_support ? '<i class="inbox-dot" aria-label="Non lu"></i>' : ''}</span>
+            <span class="inbox-tags">${t.status === 'résolue' ? '<span class="tag ok">Résolue</span>' : ''}${t.assigned_name ? `<span class="tag">${esc(t.assigned_name.split(' ')[0])}</span>` : '<span class="tag warn">Sans agent</span>'}<span class="tag">${esc(t.plan || '')}</span></span></span>
+        </button>`;
+      }).join('') : `<p class="inbox-empty">${chat.filter === 'non-lues' ? 'Aucun message en attente. Tout le monde a sa réponse.' : 'Aucune conversation ici.'}</p>`;
+    },
+    renderTyping() {
+      const el = $('#inboxTyping'); if (!el || !chat.detail) return;
+      const ty = chat.typing[chat.detail.thread.store_id]; const on = ty && ty.until > Date.now();
+      el.hidden = !on; if (on) { el.querySelector('span').textContent = `${ty.name} est en train d’écrire`; const b = $('#inboxMsgs'); b.scrollTop = b.scrollHeight; }
+    },
+    renderThread(toBottom) {
+      const d = chat.detail; const el = $('#inboxThread'); if (!d || !el) return;
+      const t = d.thread, st = d.store || {};
+      const mine = t.assigned_to === chat.me;
+      const msgs = d.messages; const lastSupport = [...msgs].reverse().find((m) => m.author_role === 'support');
+      let day = '';
+      const body = msgs.map((m) => {
+        const dl = new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+        const sep = dl !== day ? `<div class="chat-day">${esc(dl)}</div>` : ''; day = dl;
+        if (m.kind === 'evenement') return `${sep}<div class="chat-event">${esc(m.body)}</div>`;
+        const side = m.author_role === 'support' ? 'me' : 'them';
+        const meta = new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) + (m === lastSupport && t.store_read_at && t.store_read_at >= m.created_at ? ' · Lu' : '');
+        return `${sep}<div class="chat-msg ${side}"><span class="chat-author">${esc(m.author_role === 'support' ? `${m.author_name} · Support` : m.author_name)}</span><div class="chat-bubble">${esc(m.body).replace(/\n/g, '<br>')}</div><span class="chat-meta">${meta}</span></div>`;
+      }).join('');
+      const keep = $('#inboxInput')?.value || '';
+      el.innerHTML = `
+        <header class="inbox-head"><button type="button" class="inbox-back" data-back aria-label="Retour aux conversations">‹</button>
+          <div><strong>${esc(st.name || '')}</strong><span>${esc([st.owner_name, st.country, st.plan].filter(Boolean).join(' · '))}</span></div>
+          <div class="inbox-actions"><button type="button" class="btn btn-sm" data-assign>${mine ? 'Libérer' : 'Prendre en charge'}</button>
+          <button type="button" class="btn btn-sm ${t.status === 'résolue' ? '' : 'btn-dark'}" data-resolve>${t.status === 'résolue' ? 'Rouvrir' : 'Marquer comme résolue'}</button></div></header>
+        <div class="inbox-msgs" id="inboxMsgs"><div class="chat-list">${body}</div><div class="chat-typing" id="inboxTyping" hidden><span></span><div class="chat-dots"><i></i><i></i><i></i></div></div></div>
+        <div class="inbox-quick">${QUICK.map((q) => `<button type="button" class="chip" data-quick="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+        <form class="chat-compose" id="inboxForm"><textarea id="inboxInput" rows="1" maxlength="4000" placeholder="Répondre à ${esc(st.name || 'ce commerce')}…" aria-label="Votre réponse"></textarea>
+          <button type="submit" class="chat-send" aria-label="Envoyer" disabled><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 16V4M4.5 9.5 10 4l5.5 5.5"/></svg></button></form>`;
+      const ta = $('#inboxInput'); ta.value = keep;
+      const sync = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 160)}px`; $('#inboxForm .chat-send').disabled = !ta.value.trim(); };
+      sync();
+      ta.addEventListener('input', () => { sync(); if (chat.ws?.readyState === 1 && Date.now() - chat.lastTyping > 2500 && ta.value.trim()) { chat.lastTyping = Date.now(); chat.ws.send(JSON.stringify({ type: 'typing', storeId: t.store_id })); } });
+      ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#inboxForm').requestSubmit(); } });
+      $('#inboxForm').addEventListener('submit', async (e) => {
+        e.preventDefault(); const v = ta.value.trim(); if (!v) return;
+        ta.value = ''; sync();
+        try { const m = await api(`/console/support/threads/${t.id}/messages`, { method: 'POST', body: { body: v } }); if (!d.messages.some((x) => x.id === m.id)) d.messages.push(m); chat.open(t.id); }
+        catch (ex) { ta.value = v; sync(); fail(ex); }
+      });
+      if (toBottom) { const b = $('#inboxMsgs'); b.scrollTop = b.scrollHeight; }
+      chat.renderTyping();
+      if (matchMedia('(min-width: 901px)').matches && toBottom) ta.focus();
+    },
+    renderContext() {
+      const d = chat.detail; const el = $('#inboxContext'); if (!d || !el) return;
+      const s = d.store || {}, cx = d.context || {};
+      const dt = (iso) => (iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—');
+      const device = /iPhone|iPad/.test(cx.device || '') ? 'iPhone / iPad' : /Android/.test(cx.device || '') ? 'Android' : /Windows/.test(cx.device || '') ? 'Windows' : /Mac/.test(cx.device || '') ? 'Mac' : cx.device ? 'Autre' : '—';
+      const rows = [['Propriétaire', s.owner_name], ['E-mail', s.owner_email ? `<a href="mailto:${esc(s.owner_email)}">${esc(s.owner_email)}</a>` : '—', true], ['Formule', s.plan], ['Pays', s.country], ['Équipe', `${s.members || 0} membre${s.members > 1 ? 's' : ''}`],
+        ['Produits', String(s.products ?? '—')], ['Inscrit le', dt(s.created_at)], ['Dernière activité', dt(s.last_active_at)], ['Page en cours', cx.title ? `${esc(cx.title)} <small>${esc(cx.page || '')}</small>` : '—', true], ['Appareil', device]];
+      el.innerHTML = `<div class="inbox-card"><span class="inbox-avatar big">${esc(chat.initials(s.name))}</span><strong>${esc(s.name || '')}</strong><span class="muted">/s/${esc(s.slug || '')}</span></div>
+        <dl class="inbox-facts">${rows.map(([k, v, raw]) => `<dt>${k}</dt><dd>${raw ? v : esc(v || '—')}</dd>`).join('')}</dl>
+        <a class="btn btn-sm" href="#/commerces">Voir dans Commerces</a>`;
+    },
+  };
+  async function viewInbox() {
+    $('#view').innerHTML = `<section class="inbox" id="inbox">
+      <aside class="inbox-col inbox-left"><div class="inbox-tools"><input type="search" id="inboxSearch" placeholder="Rechercher un commerce ou un message" value="${esc(chat.q)}"><div class="chips" id="inboxFilters"></div></div><div class="inbox-list" id="inboxList"></div></aside>
+      <div class="inbox-col inbox-thread" id="inboxThread"><div class="inbox-placeholder"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5V7a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8.5L5 18.5Z"/></svg><strong>Choisissez une conversation</strong><span>Les nouveaux messages des commerçants arrivent ici en direct.</span></div></div>
+      <aside class="inbox-col inbox-context" id="inboxContext"></aside></section>`;
+    chat.connect();
+    await chat.reloadList();
+    $('#inboxFilters').addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (!b) return; chat.filter = b.dataset.filter; chat.reloadList(); });
+    let h; $('#inboxSearch').addEventListener('input', (e) => { clearTimeout(h); h = setTimeout(() => { chat.q = e.target.value.trim(); chat.reloadList(); }, 250); });
+    $('#inboxList').addEventListener('click', (e) => { const b = e.target.closest('[data-thread]'); if (b) chat.open(Number(b.dataset.thread)); });
+    $('#inboxThread').addEventListener('click', async (e) => {
+      const t = chat.detail?.thread; if (!t) return;
+      if (e.target.closest('[data-back]')) { $('#inbox').classList.remove('has-thread'); chat.current = null; history.replaceState(null, '', '#/messagerie'); chat.renderList(); return; }
+      const q = e.target.closest('[data-quick]'); if (q) { const ta = $('#inboxInput'); ta.value = (ta.value ? ta.value + ' ' : '') + q.dataset.quick; ta.dispatchEvent(new Event('input')); ta.focus(); return; }
+      try {
+        if (e.target.closest('[data-assign]')) { await api(`/console/support/threads/${t.id}`, { method: 'PUT', body: { assigned_to: t.assigned_to === chat.me ? null : 'moi' } }); chat.open(t.id); chat.reloadList(); }
+        if (e.target.closest('[data-resolve]')) { await api(`/console/support/threads/${t.id}`, { method: 'PUT', body: { status: t.status === 'résolue' ? 'ouverte' : 'résolue' } }); toast(t.status === 'résolue' ? 'Conversation rouverte' : 'Conversation résolue'); chat.open(t.id); chat.reloadList(); }
+      } catch (ex) { fail(ex); }
+    });
+    const target = Number(state.routeArg) || (matchMedia('(min-width: 901px)').matches && chat.threads[0]?.id);
+    if (target) chat.open(target);
+  }
+
   /* ================= Sauvegardes ================= */
   async function viewBackups() {
     const { status: st, backups } = await api('/console/backups');
@@ -642,12 +800,13 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
   }
   const VIEWS = {
     'vue-d-ensemble': ["Vue d'ensemble", viewOverview, true], 'a-traiter': ['À traiter', viewTodo, true], commerces: ['Commerces', viewStores, false],
-    activite: ['Activité des commerces', viewActivity, false], revenus: ['Revenus', viewRevenue, false], systeme: ['Système', viewSystem, true], sauvegardes: ['Sauvegardes', viewBackups, true],
+    activite: ['Activité des commerces', viewActivity, false], revenus: ['Revenus', viewRevenue, false], systeme: ['Système', viewSystem, true], sauvegardes: ['Sauvegardes', viewBackups, true], messagerie: ['Messagerie', viewInbox, false],
     journal: ['Journal', () => viewEvents(false), false], utilisateurs: ['Utilisateurs', viewUsers, false],
   };
   let lastRefresh = null;
   function route() {
-    const key = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0];
+    const [key, arg] = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0].split('/');
+    state.routeArg = arg || null;
     const [title, fn, auto] = VIEWS[key] || VIEWS['vue-d-ensemble'];
     $$('.side-nav a, .console-mnav a').forEach((a) => a.classList.toggle('active', a.dataset.view === key));
     $('.console-mnav a.active')?.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -691,6 +850,7 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
       $('#app').hidden = false;
       route();
       api('/console/todo').then(updateTodoBadge).catch(() => {});
+      chat.connect(); chat.summary();
       setTimeout(() => ['commerces', 'a-traiter', 'systeme'].forEach(prefetch), 1500);
     } catch (e) { $('#gate').hidden = false; }
   })();
