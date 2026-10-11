@@ -190,7 +190,7 @@ async function overview(db, env) {
     by_type: byType.map((t) => ({ label: (BUSINESS_TYPES[t.business_type] || BUSINESS_TYPES.autre).label, n: t.n })),
     by_country: byCountry.map((t) => ({ label: (COUNTRIES[t.country] || COUNTRIES.XX).name, n: t.n })),
     funnel: fun, adoption: adopt, todo: todos, events,
-    system: { requests_24h: sys.r, errors_24h: sys.e, avg_ms: sys.r ? Math.round(sys.ms / sys.r) : 0 },
+    system: { requests_24h: sys.r, errors_24h: sys.e, errors_open: (await openErrors(db)).open, avg_ms: sys.r ? Math.round(sys.ms / sys.r) : 0 },
   };
 }
 
@@ -349,6 +349,16 @@ async function revenue(db) {
 
 const TABLES = ['stores', 'users', 'memberships', 'sessions', 'products', 'images', 'customers', 'documents', 'document_lines', 'payments', 'stock_movements', 'events', 'daily_stats', 'api_stats', 'error_log'];
 
+// Erreurs serveur « non traitées » : celles des dernières 24 h, survenues après le dernier marquage.
+// Le voyant de la console ne s'allume que pour elles : une erreur corrigée ne le laisse pas orange 24 h.
+async function openErrors(db) {
+  const ack = (await db.prepare("SELECT value FROM platform_meta WHERE key = 'errors_ack_at'").first())?.value || null;
+  const day = new Date(Date.now() - 86400000).toISOString().slice(0, 19).replace('T', ' ');
+  const since = ack && ack > day ? ack : day;
+  const r = await db.prepare('SELECT COUNT(*) AS n, MAX(created_at) AS last FROM error_log WHERE created_at > ?').bind(since).first();
+  return { open: r.n || 0, last_at: r.last || null, ack_at: ack };
+}
+
 async function system(db, env) {
   const since48 = new Date(Date.now() - 47 * 3600000).toISOString().slice(0, 13);
   const since24 = new Date(Date.now() - 23 * 3600000).toISOString().slice(0, 13);
@@ -372,7 +382,7 @@ async function system(db, env) {
     hourly: hours.map((h) => ({ hour: h, requests: hmap[h]?.requests || 0, errors: hmap[h]?.errors || 0, avg_ms: hmap[h]?.requests ? Math.round(hmap[h].total_ms / hmap[h].requests) : 0, max_ms: hmap[h]?.max_ms || 0 })),
     daily: lastDays(30).map((d) => ({ day: d, requests: dmap[d]?.requests || 0, errors: dmap[d]?.errors || 0, avg_ms: dmap[d]?.requests ? Math.round(dmap[d].total_ms / dmap[d].requests) : 0 })),
     routes: routes.map((r) => ({ route: r.route, requests: r.requests, errors: r.errors, client_errors: r.client_errors, avg_ms: Math.round(r.total_ms / r.requests), max_ms: r.max_ms })),
-    errors, tables: counts, db_size: sizeRes.meta?.size_after ?? null, db_limit: 10 * 1024 ** 3,
+    errors, errors_state: await openErrors(db), tables: counts, db_size: sizeRes.meta?.size_after ?? null, db_limit: 10 * 1024 ** 3,
     sessions: { active: sessions.n, users: sessions.u },
     cron: cron ? JSON.parse(cron.value) : null,
     config: [
@@ -460,6 +470,14 @@ export async function consoleRoutes(ctx, parts) {
   if (res === 'todo' && m === 'GET') return json(await todo(db, env));
   if (res === 'activity' && m === 'GET') return json(await activityMap(db));
   if (res === 'revenue' && m === 'GET') return json(await revenue(db));
+  // « Marquer comme traitées » : le voyant repasse au vert ; toute nouvelle erreur le rallume.
+  if (res === 'system' && id === 'ack' && m === 'POST') {
+    platformNeed(ctx, 'platform.system.view');
+    const at = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    await db.prepare("INSERT OR REPLACE INTO platform_meta (key, value) VALUES ('errors_ack_at', ?)").bind(at).run();
+    await logEvent(db, null, ctx.user.id, 'system', 'Erreurs serveur marquées comme traitées');
+    return json(await openErrors(db));
+  }
   if (res === 'system' && m === 'GET') return json(await system(db, env));
   if (res === 'events' && m === 'GET') return json(await eventsList(db, url));
   if (res === 'users' && !id && m === 'GET') return json(await usersList(db, env));

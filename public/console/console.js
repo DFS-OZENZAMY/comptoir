@@ -377,14 +377,19 @@
   }
 
   /* ---------------- Système ---------------- */
+  // Le voyant ne compte que les erreurs non traitées (dernières 24 h, après le dernier « Marquer comme traitées »).
   function sysStatus(s) {
-    if (s.errors_24h > 20 || (s.requests_24h && s.errors_24h / s.requests_24h > 0.02)) return ['bad', 'Incidents en cours'];
-    if (s.errors_24h > 0) return ['warn', 'Quelques erreurs'];
+    const open = s.errors_open ?? s.errors_24h;
+    // Rouge : beaucoup d'erreurs, ou une part notable des appels (au moins 3, pour qu'une erreur isolée ne soit pas alarmante).
+    if (open > 20 || (open >= 3 && s.requests_24h && open / s.requests_24h > 0.02)) return ['bad', 'Incidents en cours'];
+    if (open > 0) return ['warn', `${open} erreur${open > 1 ? 's' : ''} serveur à examiner`];
     return ['ok', 'Opérationnel'];
   }
   function setSysDot(s) {
     const [cls, label] = sysStatus(s);
-    const d = $('#sysDot'); d.className = `status-dot ${cls}`; d.title = label;
+    const d = $('#sysDot'); d.className = `status-dot ${cls}`;
+    const open = s.errors_open ?? s.errors_24h;
+    d.title = open ? `${label} (dernières 24 h). Ouvrez Système pour les voir et les marquer comme traitées.` : 'Opérationnel : aucune erreur serveur à examiner';
   }
   /* ================= Messagerie du support ================= */
   // Boîte de réception en temps réel : conversations des commerçants, réponse, prise en charge, résolution.
@@ -637,12 +642,15 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
 
   async function viewSystem() {
     const s = await api('/console/system');
-    const [cls, label] = sysStatus({ requests_24h: s.last24.requests, errors_24h: s.last24.errors });
-    setSysDot({ requests_24h: s.last24.requests, errors_24h: s.last24.errors });
+    const st = { requests_24h: s.last24.requests, errors_24h: s.last24.errors, errors_open: s.errors_state?.open };
+    const [cls, label] = sysStatus(st);
+    setSysDot(st);
+    const ackAt = s.errors_state?.ack_at || '';
     const hours = s.hourly.map((h) => `${h.hour.slice(11, 13)} h`);
     const dbPct = s.db_size ? (s.db_size / s.db_limit) * 100 : 0;
     $('#view').innerHTML = `
-      <section class="status-banner ${cls}"><span class="status-dot ${cls}"></span><div><strong>${label}</strong><span>${nf0.format(s.last24.requests)} appels sur 24 h, ${s.last24.errors} erreur${s.last24.errors > 1 ? 's' : ''} serveur, temps de réponse moyen ${s.last24.avg_ms} ms</span></div></section>
+      <section class="status-banner ${cls}"><span class="status-dot ${cls}"></span><div><strong>${label}</strong><span>${nf0.format(s.last24.requests)} appels sur 24 h, ${s.last24.errors} erreur${s.last24.errors > 1 ? 's' : ''} serveur${s.last24.errors && !st.errors_open ? ' (toutes traitées)' : ''}, temps de réponse moyen ${s.last24.avg_ms} ms</span></div>
+        ${st.errors_open ? '<button class="btn btn-sm" id="ackErrors" type="button">Marquer comme traitées</button>' : ''}</section>
       <section class="kpis kpis-console">
         <div class="kpi"><span class="kpi-label">Appels sur 24 h</span><span class="kpi-value">${nf0.format(s.last24.requests)}</span><span class="kpi-sub">${s.last24.client_errors} refusés (session, droits, saisie)</span></div>
         <div class="kpi"><span class="kpi-label">Taux d'erreur serveur</span><span class="kpi-value ${s.last24.errors ? 'stock-out' : ''}">${nf2.format(s.last24.error_rate)} %</span><span class="kpi-sub">${s.last24.errors} erreur${s.last24.errors > 1 ? 's' : ''}</span></div>
@@ -676,8 +684,13 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
       </div>
       <section class="panel"><div class="panel-head"><h2>Dernières erreurs serveur</h2><span class="muted">conservées 90 jours</span></div>
         ${s.errors.length ? `<div class="table-wrap"><table><thead><tr><th>Quand</th><th>Fonction</th><th>Commerce</th><th>Message</th></tr></thead><tbody>
-          ${s.errors.map((e) => `<tr><td class="muted">${since(e.created_at)}</td><td><code>${esc(e.method)} ${esc(e.path)}</code></td><td>${e.store_id ? `<button class="link" data-store="${e.store_id}">${esc(e.store_name || '#' + e.store_id)}</button>` : '<span class="muted">aucun</span>'}</td><td class="err-msg">${esc(e.message)}</td></tr>`).join('')}
+          ${s.errors.map((e) => { const done = ackAt && e.created_at <= ackAt; return `<tr class="${done ? 'err-done' : ''}"><td class="muted">${since(e.created_at)}${done ? ' <span class="badge ok">traitée</span>' : ''}</td><td><code>${esc(e.method)} ${esc(e.path)}</code></td><td>${e.store_id ? `<button class="link" data-store="${e.store_id}">${esc(e.store_name || '#' + e.store_id)}</button>` : '<span class="muted">aucun</span>'}</td><td class="err-msg">${esc(e.message)}</td></tr>`; }).join('')}
         </tbody></table></div>` : '<div class="empty-state"><strong>Aucune erreur serveur enregistrée.</strong></div>'}</section>`;
+    $('#ackErrors')?.addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try { await api('/console/system/ack', { method: 'POST', body: {} }); cache.clear(); toast('Erreurs marquées comme traitées : le voyant repasse au vert'); refreshCurrent(); }
+      catch (ex) { fail(ex); e.currentTarget.disabled = false; }
+    });
   }
 
   /* ---------------- Journal ---------------- */

@@ -344,3 +344,6 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 .perm-group legend { font-weight: 700; padding: 0 6px; }
 .perm-item { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; font-size: .9rem; cursor: pointer; }
 .perm-item input { margin-top: 3px; }
+
+.err-done td { opacity: .55; } .err-done .badge { opacity: 1; }
+.status-banner #ackErrors { margin-left: auto; flex: none; }
