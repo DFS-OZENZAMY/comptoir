@@ -882,16 +882,68 @@ a, button, label, select, [role="button"] { touch-action: manipulation; -webkit-
 /* Téléphone : conversation en plein écran, ouverte depuis l'icône de l'en-tête */
 .mobile-chat { display: none; }
 @media (max-width: 900px) {
-  .chat-launcher { display: none; }
-  .mobile-chat { position: relative; flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; color: #fff; padding: 0; margin-left: auto; }
+  .chat-launcher { display: none !important; }
+  .mobile-chat {
+    position: relative; flex: none; display: grid; place-items: center;
+    width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; color: #fff;
+    padding: 0; margin-left: auto; -webkit-tap-highlight-color: transparent;
+  }
   .mobile-chat:active { background: rgba(255,255,255,.14); }
   .mobile-chat + .mobile-bell { margin-left: -4px; }
-  .chat-panel { inset: 0; width: auto; height: auto; border-radius: 0; z-index: 70; transform: translateY(24px); transform-origin: bottom center; }
-  .chat-head { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-left: 6px; }
-  .chat-back { display: grid; } .chat-x { display: none; }
-  .chat-compose { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
-  .chat-msg { max-width: 86%; }
-  body.chat-open { overflow: hidden; }
+  .mobile-chat .bell-badge {
+    position: absolute; top: 4px; right: 2px; min-width: 18px; height: 18px; padding: 0 5px;
+    box-sizing: border-box; border-radius: 9px; background: var(--signal); color: #fff;
+    box-shadow: 0 0 0 2px var(--steel); font-size: 10px; font-weight: 750; line-height: 18px; text-align: center;
+  }
+  .mobile-chat .bell-badge[hidden] { display: none; }
+
+  /* Plein écran : au-dessus de la tabbar, animation depuis le bas */
+  .chat-panel {
+    top: 0; right: 0; bottom: 0; left: 0;
+    width: 100%; height: 100%;
+    height: 100dvh; max-height: 100dvh;
+    border-radius: 0; z-index: 80; box-shadow: none;
+    transform: translate3d(0, 100%, 0); transform-origin: bottom center;
+    /* Hauteur visible au-dessus du clavier (réglée en JS via visualViewport) */
+    max-height: var(--chat-vvh, 100dvh);
+    bottom: auto; top: var(--chat-vvt, 0px);
+  }
+  .chat-panel.in { transform: translate3d(0, 0, 0); }
+  .chat-head {
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-left: 4px; padding-right: 8px; gap: 8px; min-height: 52px;
+  }
+  .chat-title strong { font-size: 1.05rem; }
+  .chat-status { font-size: .75rem; }
+  .chat-back { display: grid; width: 44px; height: 44px; } .chat-x { display: none; }
+  .chat-team span { width: 32px; height: 32px; font-size: .75rem; }
+  .chat-body { padding: 12px 12px 8px; -webkit-overflow-scrolling: touch; }
+  .chat-compose {
+    gap: 10px; padding: 10px 12px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    /* Quand le clavier est ouvert, on retire le safe-area bas (déjà absorbé par le clavier) */
+    padding-bottom: calc(10px + var(--chat-kb-safe, env(safe-area-inset-bottom, 0px)));
+  }
+  .chat-compose textarea {
+    min-height: 44px; font-size: 16px; /* 16px évite le zoom iOS au focus */
+    border-radius: 22px; padding: 11px 14px;
+  }
+  .chat-send { width: 48px; height: 48px; }
+  .chat-msg { max-width: 88%; }
+  .chat-bubble { font-size: 1rem; padding: 11px 14px; }
+  .chat-topics { gap: 8px; }
+  .chat-topics .chip { padding: 10px 14px; font-size: .9rem; }
+
+  body.chat-open {
+    overflow: hidden !important;
+    position: fixed; inset: 0; width: 100%;
+    /* Empêche le scroll de fond sur iOS */
+    touch-action: none;
+  }
+  body.chat-open .tabbar,
+  body.chat-open .pos-mbar,
+  body.chat-open .more-sheet { display: none !important; }
+  body.chat-open .mobile-top { visibility: hidden; pointer-events: none; }
 }
 
 .chat-notify { align-self: stretch; display: grid; gap: 6px; margin-top: 4px; padding: 12px 14px; border-radius: 14px; background: #fff; border: 1px solid var(--line); font-size: .86rem; }

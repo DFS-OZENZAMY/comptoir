@@ -60,6 +60,12 @@
       ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 132)}px`;
       $('.chat-send', panel).disabled = !ta.value.trim();
       if (S.ws?.readyState === 1 && Date.now() - S.lastTyping > 2500 && ta.value.trim()) { S.lastTyping = Date.now(); S.ws.send('{"type":"typing"}'); }
+      if (matchMedia('(max-width: 900px)').matches) { layoutViewport(); scroll(); }
+    });
+    ta.addEventListener('focus', () => {
+      if (!matchMedia('(max-width: 900px)').matches) return;
+      setTimeout(() => { layoutViewport(); scroll(); }, 100);
+      setTimeout(() => { layoutViewport(); scroll(); }, 350);
     });
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
     form.addEventListener('submit', (e) => { e.preventDefault(); const v = ta.value.trim(); if (!v) return; ta.value = ''; ta.dispatchEvent(new Event('input')); send(v); });
@@ -72,17 +78,65 @@
   }
 
   /* ---------------- Ouverture ---------------- */
+  // Clavier mobile : caler le panneau sur la zone visible (visualViewport).
+  function layoutViewport() {
+    const root = document.documentElement;
+    if (!S.open || !matchMedia('(max-width: 900px)').matches) {
+      root.style.removeProperty('--chat-vvh');
+      root.style.removeProperty('--chat-vvt');
+      root.style.removeProperty('--chat-kb-safe');
+      return;
+    }
+    const vv = window.visualViewport;
+    if (!vv) {
+      root.style.setProperty('--chat-vvh', '100dvh');
+      root.style.setProperty('--chat-vvt', '0px');
+      root.style.setProperty('--chat-kb-safe', 'env(safe-area-inset-bottom, 0px)');
+      return;
+    }
+    // Hauteur et décalage de la zone visible (clavier ouvert → vv.height réduit).
+    const h = Math.round(vv.height);
+    const top = Math.round(vv.offsetTop);
+    const kbOpen = window.innerHeight - vv.height - vv.offsetTop > 40;
+    root.style.setProperty('--chat-vvh', `${h}px`);
+    root.style.setProperty('--chat-vvt', `${top}px`);
+    root.style.setProperty('--chat-kb-safe', kbOpen ? '0px' : 'env(safe-area-inset-bottom, 0px)');
+  }
+  function bindViewport() {
+    if (S._vvBound) return;
+    S._vvBound = true;
+    const run = () => layoutViewport();
+    window.visualViewport?.addEventListener('resize', run);
+    window.visualViewport?.addEventListener('scroll', run);
+    window.addEventListener('resize', run);
+  }
   function toggle(open) {
     S.open = open;
     const panel = $('#chatPanel');
+    const scrollY = open ? window.scrollY : (S._scrollY || 0);
+    if (open) S._scrollY = window.scrollY;
     panel.hidden = !open; document.body.classList.toggle('chat-open', open);
     $('#chatLauncher').classList.toggle('is-open', open);
     $('#chatLauncher').innerHTML = open ? `${ICON.close}<span class="chat-count" hidden></span>` : `${ICON.chat}<span class="chat-count" hidden></span>`;
     if (open) {
+      bindViewport(); layoutViewport();
       requestAnimationFrame(() => panel.classList.add('in'));
       render(true); load().then(() => { render(true); markRead(); });
-      if (matchMedia('(min-width: 901px)').matches) setTimeout(() => $('textarea', panel).focus(), 60);
-    } else panel.classList.remove('in');
+      // Mobile : focus après l'animation pour ouvrir le clavier sans saut brutal.
+      setTimeout(() => {
+        const ta = $('textarea', panel);
+        if (matchMedia('(max-width: 900px)').matches) { ta?.focus({ preventScroll: true }); scroll(); layoutViewport(); }
+        else ta?.focus();
+      }, matchMedia('(max-width: 900px)').matches ? 280 : 60);
+    } else {
+      panel.classList.remove('in');
+      layoutViewport();
+      // Restaurer le scroll de la page (body fixed sur mobile).
+      if (matchMedia('(max-width: 900px)').matches) {
+        document.body.style.top = '';
+        window.scrollTo(0, scrollY);
+      }
+    }
     badge(); poll();
   }
 
@@ -165,7 +219,10 @@
     const p = $('#chatPanel'); if (!p) return;
     const on = S.online > 0;
     p.classList.toggle('online', on);
-    $('.chat-status em', p).textContent = on ? 'En ligne · répond en quelques minutes' : 'Hors ligne · réponse dès que possible, par notification';
+    const mobile = matchMedia('(max-width: 900px)').matches;
+    $('.chat-status em', p).textContent = on
+      ? (mobile ? 'En ligne · réponse rapide' : 'En ligne · répond en quelques minutes')
+      : (mobile ? 'Hors ligne · notifié dès la réponse' : 'Hors ligne · réponse dès que possible, par notification');
   }
   function typing() {
     const el = $('#chatPanel .chat-typing'); if (!el) return;
