@@ -696,8 +696,7 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
     $('#moreEvents')?.addEventListener('click', () => viewEvents(true).catch(fail));
   }
 
-  /* ---------------- Utilisateurs ---------------- */
-  async 
+  /* ---------------- Équipe plateforme (RBAC) ---------------- */
   async function viewTeam() {
     const canManage = can('platform.staff.manage');
     const canRoles = can('platform.roles.manage');
@@ -852,7 +851,7 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
     }));
   }
 
-function viewUsers() {
+async function viewUsers() {
     const users = await api('/console/users');
     const render = (q) => {
       const n = norm(q);
