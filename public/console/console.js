@@ -38,19 +38,25 @@
   /* ---------------- Outils ---------------- */
   const CACHE_TTL = 30000;
   const cache = new Map(), inflight = new Map();
+  // Chaque changement de rubrique reçoit un numéro : une lecture lancée pour une rubrique quittée est
+  // abandonnée (sans message d'erreur) au lieu d'écrire dans l'écran d'une autre rubrique.
+  let routeToken = 0;
+  class Cancelled extends Error { constructor() { super('Rubrique quittée'); this.name = 'Cancelled'; } }
   async function api(path, opts = {}) {
-    const { method = 'GET', fresh = false } = opts;
+    const { method = 'GET', fresh = false, background = false } = opts;
+    const token = routeToken;
+    const guard = (data) => { if (method === 'GET' && !background && token !== routeToken) throw new Cancelled(); return data; };
     if (method === 'GET' && !fresh) {
       const c = cache.get(path);
       if (c && Date.now() - c.t < CACHE_TTL) return c.data;
-      if (inflight.has(path)) return inflight.get(path);
+      if (inflight.has(path)) return guard(await inflight.get(path));
     }
     const run = rawApi(path, opts).then((data) => { if (method === 'GET') cache.set(path, { t: Date.now(), data }); else cache.clear(); return data; });
     if (method === 'GET') { inflight.set(path, run); run.finally(() => inflight.delete(path)).catch(() => {}); }
-    return run;
+    return guard(await run);
   }
   const PREFETCH = { 'vue-d-ensemble': ['/console/overview'], 'a-traiter': ['/console/todo'], commerces: ['/console/stores'], activite: ['/console/activity'], revenus: ['/console/revenue'], systeme: ['/console/system'], sauvegardes: ['/console/backups'], journal: ['/console/events?'], utilisateurs: ['/console/users'] };
-  const prefetch = (key) => { for (const p of PREFETCH[key] || []) { const c = cache.get(p); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(p)) api(p).catch(() => {}); } };
+  const prefetch = (key) => { for (const p of PREFETCH[key] || []) { const c = cache.get(p); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(p)) api(p, { background: true }).catch(() => {}); } };
   const onIntent = (e) => { const a = e.target.closest && e.target.closest('a[href^="#/"]'); if (a) prefetch(a.getAttribute('href').slice(2).split('?')[0]); };
   document.addEventListener('mouseover', onIntent, { passive: true });
   document.addEventListener('touchstart', onIntent, { passive: true });
@@ -71,7 +77,7 @@
     t.textContent = msg; t.classList.toggle('error', error); t.classList.add('show');
     clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), error ? 4500 : 2400);
   }
-  const fail = (e) => toast(e.message, true);
+  const fail = (e) => { if (e && e.name === 'Cancelled') return; toast(e.message, true); };
   const modal = $('#modal');
   function openModal(title, html) { $('#modalTitle').textContent = title; $('#modalBody').innerHTML = html; if (!modal.open) modal.showModal(); return $('#modalBody'); }
   const closeModal = () => modal.open && modal.close();
@@ -385,7 +391,7 @@
   const QUICK = ['Bonjour, je regarde cela tout de suite.', 'Pouvez-vous m’envoyer une capture d’écran ?', 'C’est corrigé de notre côté : pouvez-vous réessayer ?', 'Avec plaisir, bonne journée !'];
   const chat = {
     filter: 'ouvertes', q: '', threads: [], counts: {}, current: null, detail: null, typing: {}, ws: null, retry: 0, lastTyping: 0,
-    async summary() { try { const r = await api('/console/support/summary', { fresh: true }); const b = $('#chatNavBadge'); if (b) { b.hidden = !r.unread; b.textContent = r.unread; } } catch { /* silencieux */ } },
+    async summary() { try { const r = await api('/console/support/summary', { fresh: true, background: true }); const b = $('#chatNavBadge'); if (b) { b.hidden = !r.unread; b.textContent = r.unread; } } catch { /* silencieux */ } },
     connect() {
       if (chat.ws && chat.ws.readyState <= 1) return;
       let ws; try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/socket?as=support`); } catch { return; }
@@ -419,16 +425,17 @@
       if (d.type === 'read' && d.side === 'client' && chat.detail?.thread.id === d.thread_id) { chat.detail.thread.store_read_at = d.at; chat.renderThread(false); }
     },
     async reloadList() {
-      const r = await api(`/console/support/threads?filtre=${chat.filter}&q=${encodeURIComponent(chat.q)}`, { fresh: true });
+      const r = await api(`/console/support/threads?filtre=${chat.filter}&q=${encodeURIComponent(chat.q)}`, { fresh: true, background: !location.hash.startsWith('#/messagerie') });
       chat.threads = r.threads; chat.counts = r.counts || {}; chat.me = r.me; chat.renderList();
     },
     async open(id) {
       chat.current = id; history.replaceState(null, '', `#/messagerie/${id}`);
       $('#inbox')?.classList.add('has-thread');
       chat.renderList();
+      if (!$('#inboxThread')) return;
       $('#inboxThread').innerHTML = '<div class="skeleton inbox-skel"><span></span><span></span><span class="short"></span></div>';
       try { chat.detail = await api(`/console/support/threads/${id}`, { fresh: true }); } catch (e) { return fail(e); }
-      if (chat.current !== id) return;
+      if (chat.current !== id || !$('#inboxThread')) return;
       chat.renderThread(true); chat.renderContext(); chat.markRead();
     },
     async markRead() {
@@ -522,6 +529,7 @@
       <aside class="inbox-col inbox-context" id="inboxContext"></aside></section>`;
     chat.connect();
     await chat.reloadList();
+    if (!$('#inbox')) return; // rubrique quittée pendant le chargement
     $('#inboxFilters').addEventListener('click', (e) => { const b = e.target.closest('[data-filter]'); if (!b) return; chat.filter = b.dataset.filter; chat.reloadList(); });
     let h; $('#inboxSearch').addEventListener('input', (e) => { clearTimeout(h); h = setTimeout(() => { chat.q = e.target.value.trim(); chat.reloadList(); }, 250); });
     $('#inboxList').addEventListener('click', (e) => { const b = e.target.closest('[data-thread]'); if (b) chat.open(Number(b.dataset.thread)); });
@@ -820,8 +828,9 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
   function load(fn, silent = false) {
     const y = window.scrollY;
     if (silent) cache.clear(); // la mise à jour automatique va toujours chercher des chiffres frais
-    const slow = silent ? null : setTimeout(() => { $('#view').innerHTML = '<p class="loading">Chargement…</p>'; }, 180);
-    Promise.resolve(fn()).finally(() => clearTimeout(slow)).then(() => { lastRefresh = Date.now(); renderRefreshed(); if (silent) window.scrollTo(0, y); }).catch(fail);
+    else { routeToken++; $('#view').innerHTML = '<div class="skeleton" aria-busy="true" aria-label="Chargement"><span></span><span></span><span></span><span class="short"></span></div>'; }
+    const token = routeToken;
+    Promise.resolve(fn()).then(() => { if (token !== routeToken) return; lastRefresh = Date.now(); renderRefreshed(); if (silent) window.scrollTo(0, y); }).catch(fail);
   }
   function refreshCurrent() { const key = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0]; if (VIEWS[key]) load(VIEWS[key][1], true); state.stores = null; }
   function renderRefreshed() { $('#refreshed').textContent = lastRefresh ? `Mis à jour ${since(new Date(lastRefresh).toISOString())}` : ''; }
@@ -849,7 +858,7 @@ npx wrangler d1 execute comptoir-data --remote --file=comptoir.sql   # vers Clou
       state.plans = await api('/console/plans');
       $('#app').hidden = false;
       route();
-      api('/console/todo').then(updateTodoBadge).catch(() => {});
+      api('/console/todo', { background: true }).then(updateTodoBadge).catch(() => {});
       chat.connect(); chat.summary();
       setTimeout(() => ['commerces', 'a-traiter', 'systeme'].forEach(prefetch), 1500);
     } catch (e) { $('#gate').hidden = false; }
