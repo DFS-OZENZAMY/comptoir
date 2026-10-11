@@ -76,3 +76,20 @@ test('une opération refusée n’empêche pas les suivantes ; autre commerce ga
   const old = (await shop.get(`/api/store/documents/${res[3].result.id}`)).data;
   assert.equal(old.date, new Date().toISOString().slice(0, 10), 'au-delà de 30 jours, la vente est datée du jour');
 });
+
+test('un produit créé hors ligne est rejouable sans doublon', async () => {
+  const r = ref('p');
+  const body = { name: 'Tournevis cruciforme', price_ht: 8.5, tva_rate: 20, stock: 12, unit: 'pièce', track_stock: 1, visible: 1 };
+  const res = (await shop.post('/api/store/sync', { ops: [{ ref: r, type: 'product', at: day(0), body }] })).data.results;
+  assert.equal(res[0].status, 'ok');
+  assert.ok(res[0].result.id);
+  const products = (await shop.get('/api/store/products')).data;
+  const p = products.find((x) => x.id === res[0].result.id);
+  assert.equal(p.name, 'Tournevis cruciforme');
+  assert.equal(p.stock, 12);
+  // Rejeu : pas de doublon
+  const again = (await shop.post('/api/store/sync', { ops: [{ ref: r, type: 'product', body }] })).data.results[0];
+  assert.equal(again.result.duplicate, true);
+  assert.equal(again.result.id, res[0].result.id);
+  assert.equal(products.filter((x) => x.name === 'Tournevis cruciforme').length, 1);
+});

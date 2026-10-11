@@ -109,7 +109,7 @@ Côté navigateur :
 
 ## Le mode hors ligne
 
-Les opérations qui doivent marcher sans connexion (vente, client, mouvement de stock, message au support) passent par la file d'attente quand le réseau manque, puis par `POST /api/store/sync`. Pour en ajouter une :
+Les opérations qui doivent marcher sans connexion (vente, client, produit, mouvement de stock, message au support) passent par la file d'attente quand le réseau manque, puis par `POST /api/store/sync`. Pour en ajouter une :
 
 1. côté serveur, la rendre **rejouable** : colonne `client_ref` avec index unique `(store_id, client_ref)` (migration), et renvoi de l'existant si l'identifiant est déjà connu ; accepter `occurred_at` si la date compte ;
 2. l'ajouter au `switch` de `syncOps` (`src/features/store.js`) avec sa permission ;

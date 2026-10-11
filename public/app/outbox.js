@@ -1,6 +1,6 @@
 // Mode hors ligne de l'espace commerçant : données gardées sur l'appareil et file d'attente des opérations.
 // Script partagé par l'application (page) et le service worker (synchronisation même application fermée).
-//   « outbox » : opérations faites hors ligne (ventes, clients, mouvements de stock, messages au support),
+//   « outbox » : opérations faites hors ligne (ventes, clients, produits, mouvements de stock, messages au support),
 //                rejouées dans l'ordre par POST /api/store/sync dès que la connexion revient ;
 //   « cache »  : dernière copie de chaque donnée consultée, affichée quand le réseau manque.
 // Chaque opération porte un identifiant unique : le serveur ne l'enregistre jamais deux fois.

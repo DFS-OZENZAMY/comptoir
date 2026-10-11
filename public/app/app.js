@@ -847,6 +847,7 @@
     const b = o.body || {};
     if (o.type === 'sale') { const t = (b.lines || []).reduce((s, l) => s + l.qty * l.unit_price_ht * (1 + l.tva_rate / 100), 0); return `${b.mode === 'reserve' ? 'Mise de côté' : b.mode === 'credit' ? 'Vente à crédit' : 'Vente'} de ${money(t)}${b.client_name ? ` · ${b.client_name}` : ''}`; }
     if (o.type === 'customer') return b.name || 'Client';
+    if (o.type === 'product') return b.name || 'Produit';
     if (o.type === 'stock') return `${b.type || ''} · ${state.products.find((p) => p.id === Number(b.product_id))?.name || 'produit'} · ${b.qty}`;
     if (o.type === 'support') return String(b.body || '').slice(0, 80);
     return '';
@@ -1262,8 +1263,31 @@
       btn.disabled = true;
       try {
         let id = p.id;
-        if (isNew) id = (await api('/store/products', { method: 'POST', body: data })).id;
-        else await api(`/store/products/${id}`, { method: 'PUT', body: data });
+        if (isNew) {
+          data.client_ref = window.ComptoirOutbox.uuid();
+          try {
+            if (!navigator.onLine) throw offlineError('POST');
+            id = (await api('/store/products', { method: 'POST', body: data })).id;
+          } catch (ex) {
+            if (ex.name !== 'Offline') throw ex;
+            // Produit créé hors ligne : visible tout de suite dans le catalogue, envoyé au retour d'internet.
+            // La photo sera ajoutée une fois en ligne (elle demande un envoi de fichier).
+            if (newImage) toast('Produit enregistré hors ligne. Ajoutez la photo dès que vous serez reconnecté.');
+            await enqueue({ ref: data.client_ref, type: 'product', body: data });
+            id = `tmp-${data.client_ref}`;
+            const stock = data.track_stock ? Math.max(0, Number(data.stock) || 0) : 0;
+            state.products.push({
+              id, ...data, stock, stock_min: Number(data.stock_min) || 0,
+              price_ht: Number(data.price_ht) || 0, purchase_price: Number(data.purchase_price) || 0,
+              tva_rate: Number(data.tva_rate) || 0, category_id: data.category_id ? Number(data.category_id) : null,
+              image_v: 0, pending: true,
+            });
+            state.products.sort((x, y) => x.name.localeCompare(y.name, 'fr'));
+            keep('/store/products', state.products);
+            closeModal(); toast('Produit ajouté (hors ligne)'); route();
+            return;
+          }
+        } else await api(`/store/products/${id}`, { method: 'PUT', body: data });
         if (newImage) await api(`/store/products/${id}/image`, { method: 'PUT', body: { data: newImage } });
         else if (removeImage) await api(`/store/products/${id}/image`, { method: 'DELETE' });
         await refresh('products');

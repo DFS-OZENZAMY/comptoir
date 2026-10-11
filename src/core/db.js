@@ -144,6 +144,11 @@ const MIGRATIONS = [
     'CREATE UNIQUE INDEX IF NOT EXISTS uq_stock_movements_client_ref ON stock_movements(store_id, client_ref) WHERE client_ref IS NOT NULL',
     'CREATE UNIQUE INDEX IF NOT EXISTS uq_support_messages_client_ref ON support_messages(store_id, client_ref) WHERE client_ref IS NOT NULL',
   ]],
+  [6, [
+    // Produits créés hors ligne : même mécanisme d'identifiant unique pour éviter les doublons.
+    'ALTER TABLE products ADD COLUMN client_ref TEXT',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_products_client_ref ON products(store_id, client_ref) WHERE client_ref IS NOT NULL',
+  ]],
 ];
 
 // Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).

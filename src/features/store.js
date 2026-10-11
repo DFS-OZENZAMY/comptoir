@@ -558,6 +558,11 @@ async function ownedCategory(db, sid, id) {
 
 async function createProduct(ctx, b) {
   const { db } = ctx; const sid = ctx.store.id;
+  const ref = clientRef(b.client_ref);
+  if (ref) {
+    const ex = await db.prepare('SELECT id FROM products WHERE store_id = ? AND client_ref = ?').bind(sid, ref).first();
+    if (ex) return { id: ex.id, duplicate: true };
+  }
   const limit = (PLANS[ctx.store.plan] || PLANS.essai).products;
   if (limit !== null) {
     const n = await db.prepare('SELECT COUNT(*) AS n FROM products WHERE store_id = ?').bind(sid).first();
@@ -566,9 +571,9 @@ async function createProduct(ctx, b) {
   const f = productFields(b);
   const category_id = await ownedCategory(db, sid, b.category_id);
   const stock = f.track_stock ? Math.max(0, num(b.stock)) : 0;
-  const r = await db.prepare(`INSERT INTO products (store_id, ref, barcode, name, description, category_id, price_ht, purchase_price, tva_rate, stock, stock_min, unit, visible, track_stock)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-    .bind(sid, f.ref, f.barcode, f.name, f.description, category_id, f.price_ht, f.purchase_price, f.tva_rate, stock, f.stock_min, f.unit, f.visible, f.track_stock).run();
+  const r = await db.prepare(`INSERT INTO products (store_id, ref, barcode, name, description, category_id, price_ht, purchase_price, tva_rate, stock, stock_min, unit, visible, track_stock, client_ref)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(sid, f.ref, f.barcode, f.name, f.description, category_id, f.price_ht, f.purchase_price, f.tva_rate, stock, f.stock_min, f.unit, f.visible, f.track_stock, ref).run();
   const id = r.meta.last_row_id;
   const loc = ctx.location || ctx.locations[0];
   if (loc) await db.prepare('INSERT OR IGNORE INTO location_stock (store_id, location_id, product_id, qty) VALUES (?, ?, ?, ?)').bind(sid, loc.id, id, stock).run();
@@ -664,6 +669,7 @@ async function syncOps(ctx, b) {
         result = { id: d.id, number: d.number, total_ttc: d.total_ttc, duplicate: !!d.duplicate };
         if (!d.duplicate) ctx.later?.(stockAlerts(ctx.env, ctx.store.id, (body.lines || []).map((l) => l.product_id), loc?.id));
       } else if (op.type === 'customer') { ctx.need('customers.manage'); result = await createCustomer(ctx, body); }
+      else if (op.type === 'product') { ctx.need('products.edit'); result = await createProduct(ctx, body); }
       else if (op.type === 'stock') { ctx.need('stock.manage'); result = await addStockMovement(ctx, body); if (!result.duplicate) ctx.later?.(stockAlerts(ctx.env, ctx.store.id, [body.product_id], loc?.id)); }
       else if (op.type === 'support') result = await postClientMessage(ctx, body);
       else throw new HttpError(400, 'Type d’opération inconnu.');

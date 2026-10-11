@@ -350,7 +350,8 @@ Sans connexion, le commerce continue de tourner ; tout est envoyé au serveur d�
 |---|---|
 | Caisse : ventes (espèces, carte, chèque…), vente à crédit, mise de côté, ticket provisoire imprimable | Devis, factures, commandes en dehors de la caisse |
 | Nouveaux clients (utilisables aussitôt en caisse) | Réglages, équipe, rôles, boutiques, abonnement |
-| Mouvements de stock (entrée, sortie, inventaire) | Import de produits, connexion aux anciens outils |
+| Nouveaux produits (visibles tout de suite dans le catalogue ; la photo s’ajoute une fois en ligne) | Modification d’un produit existant, import de produits, connexion aux anciens outils |
+| Mouvements de stock (entrée, sortie, inventaire) | |
 | Messages au support (envoyés au retour du réseau) | Récompense fidélité (le solde exact est sur le serveur) |
 | Consultation des rubriques déjà ouvertes sur l'appareil (dernières données connues) | |
 
