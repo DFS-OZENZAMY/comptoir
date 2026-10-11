@@ -96,17 +96,28 @@
   }
   async function send(body) {
     const tmp = `tmp-${Date.now()}`;
+    const ref = window.ComptoirOutbox ? window.ComptoirOutbox.uuid() : null;   // envoi rejouable sans doublon
     const ctx = { page: location.hash || '#/', title: (document.getElementById('viewTitle')?.textContent || '').slice(0, 80) };
-    S.pending.push({ tmp, body, state: 'envoi', created_at: new Date().toISOString() }); render(true);
+    S.pending.push({ tmp, ref, body, state: 'envoi', created_at: new Date().toISOString() }); render(true);
     try {
-      const m = await App.api('/store/support/messages', { method: 'POST', body: { body, context: ctx } });
+      if (!navigator.onLine) { const e = new Error('Hors ligne'); e.name = 'Offline'; throw e; }
+      const m = await App.api('/store/support/messages', { method: 'POST', body: { body, context: ctx, client_ref: ref } });
       S.pending = S.pending.filter((p) => p.tmp !== tmp);
       if (!S.messages.some((x) => x.id === m.id)) S.messages.push(m);
       if (S.thread) S.thread.status = 'ouverte';
       render(true);
-    } catch {
-      const p = S.pending.find((x) => x.tmp === tmp); if (p) p.state = 'échec'; render(true);
+    } catch (e) {
+      const p = S.pending.find((x) => x.tmp === tmp);
+      // Hors ligne : le message part dans la file d'attente et sera envoyé automatiquement.
+      if (e.name === 'Offline' && App.enqueue && ref) { await App.enqueue({ ref, type: 'support', body: { body, context: ctx } }); if (p) p.state = 'attente'; render(true); return; }
+      if (p) p.state = 'échec'; render(true);
     }
+  }
+  // Messages écrits hors ligne et pas encore envoyés (même après fermeture de l'application).
+  async function queued() {
+    if (!window.ComptoirOutbox) return;
+    const ops = (await window.ComptoirOutbox.all().catch(() => [])).filter((o) => o.type === 'support' && o.status !== 'failed' && o.store_id === App.state.me?.store?.id);
+    for (const o of ops) if (!S.pending.some((p) => p.ref === o.ref)) S.pending.push({ tmp: `q-${o.ref}`, ref: o.ref, body: o.body.body, state: 'attente', created_at: o.at });
   }
   async function markRead() {
     if (!S.open || !S.thread?.unread_store) return;
@@ -187,7 +198,7 @@
       prev = m;
     }
     for (const p of S.pending) {
-      html += `<div class="chat-msg me pending${p.state === 'échec' ? ' failed' : ''}"><div class="chat-bubble">${text(p.body)}</div><span class="chat-meta">${p.state === 'échec' ? `Non envoyé · <button type="button" class="chat-retry" data-retry="${p.tmp}">Réessayer</button>` : 'Envoi…'}</span></div>`;
+      html += `<div class="chat-msg me pending${p.state === 'échec' ? ' failed' : ''}"><div class="chat-bubble">${text(p.body)}</div><span class="chat-meta">${p.state === 'échec' ? `Non envoyé · <button type="button" class="chat-retry" data-retry="${p.tmp}">Réessayer</button>` : p.state === 'attente' ? 'En attente de connexion · envoi automatique' : 'Envoi…'}</span></div>`;
     }
     if (S.thread?.status === 'résolue' && S.messages.length) html += '<div class="chat-event">Conversation résolue. Écrivez un message pour la rouvrir.</div>';
     if (S.notify && (S.messages.length || S.pending.length)) html += S.notify === 'ios'
@@ -213,7 +224,11 @@
   /* ---------------- Démarrage ---------------- */
   function start(app) {
     if (App) return;
-    App = app; build(); load().then(() => { badge(); render(false); }); connect();
+    App = app; build(); queued().then(load).then(() => { badge(); render(false); }); connect();
+    // Message envoyé par la synchronisation (application ou arrière-plan) : il quitte « en attente ».
+    if (typeof BroadcastChannel === 'function') new BroadcastChannel('comptoir-sync').addEventListener('message', (e) => {
+      if (e.data?.type === 'synced' && e.data.op?.type === 'support') { S.pending = S.pending.filter((p) => p.ref !== e.data.op.ref); load().then(() => render(false)); }
+    });
     checkNotify().then(() => render(false));
     // Notification reçue alors que l'application est ouverte : affichée ici plutôt qu'en double.
     navigator.serviceWorker?.addEventListener('message', (e) => {

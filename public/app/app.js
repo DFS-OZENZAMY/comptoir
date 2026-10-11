@@ -62,21 +62,42 @@
     const run = (async () => {
       const headers = { 'x-location': String(state.scope ?? savedScope()) };
       if (body !== undefined) headers['content-type'] = 'application/json';
-      const res = await fetch('/api' + path, {
-        method, credentials: 'same-origin', headers,
-        body: body !== undefined ? JSON.stringify(body) : undefined,
-      });
+      let res;
+      try {
+        res = await fetch('/api' + path, {
+          method, credentials: 'same-origin', headers,
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+      } catch { throw offlineError(method); }
+      if (res.headers.get('x-comptoir-offline')) throw offlineError(method);
+      net.set(true);
       const data = await res.json().catch(() => ({}));
       if (res.status === 401 && path.startsWith('/store')) { cache.clear(); showLogin(); throw new Error(data.error || 'Session expirée.'); }
       if (!res.ok) throw new Error(data.error || `Erreur ${res.status}`);
-      if (method === 'GET') cache.set(key, { t: Date.now(), data }); else cache.clear();
+      if (method === 'GET') { cache.set(key, { t: Date.now(), data }); window.ComptoirOutbox?.cacheSet(key, data); } else cache.clear();
       return data;
     })();
     if (method === 'GET') { inflight.set(key, run); run.finally(() => inflight.delete(key)).catch(() => {}); }
-    const data = await run;
+    let data;
+    try { data = await run; }
+    catch (e) {
+      // Hors ligne : on affiche la dernière copie connue (mémoire, puis appareil).
+      if (method !== 'GET' || e.name !== 'Offline') throw e;
+      const mem = cache.get(key); const stored = mem ? null : await window.ComptoirOutbox?.cacheGet(key);
+      if (!mem && !stored) throw new Error('Hors ligne : cette rubrique n’a pas encore été ouverte sur cet appareil.');
+      data = mem ? mem.data : stored.data;
+      net.dataAt = Math.min(net.dataAt || Infinity, mem ? mem.t : stored.t);
+    }
     if (method === 'GET' && !fresh && !background && token !== routeToken) throw new Cancelled();
     return data;
   }
+  function offlineError(method) {
+    net.set(false);
+    const e = new Error(method === 'GET' ? 'Hors ligne' : 'Hors ligne : cette action sera possible une fois la connexion revenue.');
+    e.name = 'Offline'; return e;
+  }
+  // Remplace la copie d'une lecture (mémoire et appareil) après une modification faite hors ligne.
+  function keep(path, data) { const key = `${state.scope ?? ''}|${path}`; cache.set(key, { t: Date.now(), data }); window.ComptoirOutbox?.cacheSet(key, data); }
   // Rafraîchissement en arrière-plan : si les données ont changé et que l'utilisateur est toujours
   // sur la même rubrique (sans saisie en cours), l'écran est redessiné discrètement.
   function revalidate(path, key, old) {
@@ -224,7 +245,12 @@
     banner.innerHTML = me.access.writable ? '' : `${esc(me.access.reason)} ${can('billing.manage') ? '<a href="#/abonnement">Voir les formules</a>' : ''}`;
     $('#userName').textContent = me.user.name;
     // Modules complémentaires (messagerie du support) : l'application leur prête l'API et l'état.
-    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
+    // Mode hors ligne : opérations gardées de côté pour ce commerce remises en file, puis envoi.
+    if (window.ComptoirOutbox && !net.started) {
+      net.started = true;
+      window.ComptoirOutbox.all().then(async (all) => { for (const o of all) if (o.status === 'later' && o.store_id === me.store.id) await window.ComptoirOutbox.put({ ...o, status: 'pending' }); await net.refresh(); syncNow(); }).catch(() => {});
+    }
+    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push, enqueue, net }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
   }
   function renderLocSwitch() {
     const locs = state.me.locations || [];
@@ -314,7 +340,10 @@
     } catch (ex) { $('#signupError').textContent = ex.message; } finally { btn.disabled = false; }
   });
   $('#logout').addEventListener('click', async () => {
+    const waiting = window.ComptoirOutbox ? (await window.ComptoirOutbox.counts().catch(() => ({ pending: 0 }))).pending : 0;
+    if (waiting && !confirm(`${waiting} opération${waiting > 1 ? 's' : ''} faite${waiting > 1 ? 's' : ''} hors ligne n’${waiting > 1 ? 'ont' : 'a'} pas encore été envoyée${waiting > 1 ? 's' : ''}. Elle${waiting > 1 ? 's' : ''} le ser${waiting > 1 ? 'ont' : 'a'} à votre prochaine connexion sur cet appareil. Se déconnecter quand même ?`)) return;
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
+    window.ComptoirOutbox?.clearCache();
     state.me = null; location.hash = '#/'; showLogin('login');
   });
   $('#accountBtn').addEventListener('click', () => passwordModal(false));
@@ -767,6 +796,108 @@
       loyalty_redeem: !!pos.loyalty || undefined, loyalty_pct: pos.loyalty ? t.loyaltyPct : undefined };
   }
 
+  /* ---------------- Mode hors ligne ---------------- */
+  // État du réseau, bandeau, file d'attente et synchronisation.
+  const net = {
+    online: navigator.onLine, dataAt: null, counts: { pending: 0, failed: 0 }, syncing: false,
+    set(on) { if (on === net.online) return; net.online = on; if (on) net.dataAt = null; net.render(); if (on) syncNow(); },
+    async refresh() { if (window.ComptoirOutbox) net.counts = await window.ComptoirOutbox.counts().catch(() => net.counts); net.render(); },
+    render() {
+      const bar = $('#netBar'); if (!bar) return;
+      const { pending, failed } = net.counts;
+      const n = (k, s, p) => `${k} ${k > 1 ? p : s}`;
+      let html = '', tone = '';
+      if (!net.online) {
+        tone = 'off';
+        html = `<strong>Hors ligne</strong><span>Ventes, clients et mouvements de stock sont enregistrés sur cet appareil${pending ? ` (${n(pending, 'opération en attente', 'opérations en attente')})` : ''} et seront envoyés dès le retour d’internet.</span>`;
+      } else if (net.syncing && pending) { tone = 'sync'; html = `<strong>Synchronisation</strong><span>Envoi de ${n(pending, 'opération', 'opérations')} faites hors ligne…</span>`; }
+      else if (pending) { tone = 'sync'; html = `<strong>${n(pending, 'opération en attente', 'opérations en attente')}</strong><span>Envoi automatique en cours.</span>`; }
+      if (failed) { tone = tone || 'bad'; html += `<button type="button" class="net-link" data-sync-panel>${n(failed, 'opération refusée', 'opérations refusées')} : voir</button>`; }
+      else if (pending || !net.online) html += '<button type="button" class="net-link" data-sync-panel>Détail</button>';
+      bar.className = `net-bar ${tone}`; bar.hidden = !html; bar.innerHTML = html;
+    },
+  };
+  const OP_LABEL = { sale: 'Vente', customer: 'Nouveau client', stock: 'Mouvement de stock', support: 'Message au support' };
+  async function syncNow() {
+    const O = window.ComptoirOutbox; if (!O || !navigator.onLine || net.syncing) return;
+    await net.refresh(); if (!net.counts.pending) return;
+    net.syncing = true; net.render();
+    try {
+      const r = await O.flush();
+      if (r.sent) {
+        cache.clear();
+        const sales = r.byType.sale || 0;
+        toast(sales ? `${sales} vente${sales > 1 ? 's' : ''} hors ligne synchronisée${sales > 1 ? 's' : ''}` : `${r.sent} opération${r.sent > 1 ? 's' : ''} synchronisée${r.sent > 1 ? 's' : ''}`);
+        await refresh('products', 'customers').catch(() => {});
+        if (current.key !== 'caisse' && !$('#modal').open) rerender();
+      }
+      if (r.failed) toast(`${r.failed} opération${r.failed > 1 ? 's' : ''} refusée${r.failed > 1 ? 's' : ''} par le serveur : voir le détail`, true);
+      if (r.auth) toast('Reconnectez-vous pour envoyer les opérations faites hors ligne.', true);
+    } finally { net.syncing = false; await net.refresh(); }
+  }
+  // Demande au système de synchroniser dès le retour du réseau, même application fermée (Android).
+  function backgroundSync() { navigator.serviceWorker?.ready.then((r) => r.sync?.register('comptoir-outbox')).catch(() => {}); }
+  async function enqueue(op) {
+    const saved = await window.ComptoirOutbox.add({ store_id: state.me.store.id, ...op });
+    backgroundSync(); await net.refresh();
+    if (navigator.onLine) setTimeout(syncNow, 1500);
+    return saved;
+  }
+  function describeOp(o) {
+    const b = o.body || {};
+    if (o.type === 'sale') { const t = (b.lines || []).reduce((s, l) => s + l.qty * l.unit_price_ht * (1 + l.tva_rate / 100), 0); return `${b.mode === 'reserve' ? 'Mise de côté' : b.mode === 'credit' ? 'Vente à crédit' : 'Vente'} de ${money(t)}${b.client_name ? ` · ${b.client_name}` : ''}`; }
+    if (o.type === 'customer') return b.name || 'Client';
+    if (o.type === 'stock') return `${b.type || ''} · ${state.products.find((p) => p.id === Number(b.product_id))?.name || 'produit'} · ${b.qty}`;
+    if (o.type === 'support') return String(b.body || '').slice(0, 80);
+    return '';
+  }
+  async function syncPanel() {
+    const list = await window.ComptoirOutbox.all();
+    const mine = list.filter((o) => !o.store_id || o.store_id === state.me.store.id);
+    const body = openModal('Opérations faites hors ligne', mine.length ? `
+      <p class="muted">Elles sont gardées sur cet appareil et envoyées dans l’ordre dès que la connexion revient. Une opération refusée par le serveur (droits modifiés, produit supprimé…) attend votre décision.</p>
+      <ul class="sync-list">${mine.map((o) => `<li class="${o.status}"><div><strong>${esc(OP_LABEL[o.type] || o.type)}</strong><span>${esc(describeOp(o))}</span>
+        <small>${new Date(o.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · ${o.status === 'failed' ? `<b>refusée</b> : ${esc(o.error || '')}` : o.status === 'later' ? 'autre commerce' : 'en attente'}</small></div>
+        ${o.status === 'failed' ? `<div class="sync-actions"><button class="btn btn-sm" data-op-retry="${o.ref}">Réessayer</button><button class="btn btn-sm" data-op-drop="${o.ref}">Supprimer</button></div>` : ''}</li>`).join('')}</ul>
+      <div class="modal-foot"><div class="right">${navigator.onLine ? '<button class="btn btn-primary" id="syncGo">Envoyer maintenant</button>' : ''}<button class="btn" id="syncClose">Fermer</button></div></div>`
+      : '<p>Aucune opération en attente : tout est synchronisé.</p><div class="modal-foot"><div class="right"><button class="btn" id="syncClose">Fermer</button></div></div>');
+    $('#syncClose', body).addEventListener('click', closeModal);
+    $('#syncGo', body)?.addEventListener('click', async () => { closeModal(); await syncNow(); });
+    $$('[data-op-retry]', body).forEach((b) => b.addEventListener('click', async () => { const o = mine.find((x) => x.ref === b.dataset.opRetry); await window.ComptoirOutbox.put({ ...o, status: 'pending' }); closeModal(); syncNow(); }));
+    $$('[data-op-drop]', body).forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('Supprimer définitivement cette opération ? Elle ne sera jamais envoyée.')) return;
+      await window.ComptoirOutbox.remove(b.dataset.opDrop); await net.refresh(); closeModal(); syncPanel();
+    }));
+  }
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-sync-panel]')) syncPanel(); });
+  window.addEventListener('online', () => net.set(true));
+  window.addEventListener('offline', () => net.set(false));
+  setInterval(() => { if (net.counts.pending && navigator.onLine) syncNow(); }, 45000);
+  // Synchronisation faite par le service worker (application en arrière-plan) : on met l'écran à jour.
+  if (typeof BroadcastChannel === 'function') new BroadcastChannel('comptoir-sync').addEventListener('message', (e) => { if (e.data?.type === 'flushed' && e.data.summary?.sent && !net.syncing) { cache.clear(); refresh('products', 'customers').catch(() => {}); } net.refresh(); });
+
+  // Vente : envoyée tout de suite si possible, sinon mise dans la file avec un ticket provisoire.
+  // L'identifiant d'opération rend l'envoi rejouable : une vente n'est jamais enregistrée deux fois.
+  async function posSubmit(body) {
+    body.client_ref ||= window.ComptoirOutbox.uuid();
+    if (String(body.customer_id || '').startsWith('tmp-')) { body.customer_client_ref = String(body.customer_id).slice(4); body.customer_id = null; }
+    if (navigator.onLine) {
+      try { return await api('/store/pos/checkout', { method: 'POST', body }); }
+      catch (e) { if (e.name !== 'Offline') throw e; }
+    }
+    if (body.loyalty_redeem) throw new Error('La récompense fidélité demande une connexion : retirez-la pour encaisser hors ligne.');
+    const location_id = body.location_id || (state.scope !== 'all' ? state.scope : null);
+    const op = await enqueue({ ref: body.client_ref, type: 'sale', body, location_id });
+    if (body.mode !== 'reserve') {
+      for (const l of body.lines) { const p = state.products.find((x) => x.id === l.product_id); if (p && p.track_stock) { p.stock = Math.round((p.stock - l.qty) * 1000) / 1000; if (p.stock_by_location && location_id) p.stock_by_location[location_id] = (p.stock_by_location[location_id] || 0) - l.qty; } }
+      keep('/store/products', state.products);
+    }
+    const ht = body.lines.reduce((s, l) => s + l.qty * l.unit_price_ht, 0), ttc = body.lines.reduce((s, l) => s + l.qty * l.unit_price_ht * (1 + l.tva_rate / 100), 0);
+    const customer = state.customers.find((c) => String(c.id) === String(body.customer_id || (body.customer_client_ref ? 'tmp-' + body.customer_client_ref : '')));
+    return { offline: true, id: null, number: `provisoire ${op.ref.slice(0, 6).toUpperCase()}`, lines: body.lines, payments: body.payments,
+      total_ht: r2(ht), total_tva: r2(ttc - ht), total_ttc: r2(ttc), client_name: body.client_name || customer?.name || '', status: body.mode === 'ticket' ? 'payé' : 'émise', created_at: null };
+  }
+
   function payModal() {
     const total = posPayload().ttc;
     const payments = [];
@@ -811,7 +942,7 @@
       if (rest() > 0) { amount.value = rest().toFixed(2); refresh(); amount.focus(); return; }
       e.currentTarget.disabled = true;
       try {
-        const doc = await api('/store/pos/checkout', { method: 'POST', body: posBody('ticket', payments) });
+        const doc = await posSubmit(posBody('ticket', payments));
         saleDone(doc, change);
       } catch (ex) { payments.pop(); $('#payErr').textContent = ex.message; e.currentTarget.disabled = false; refresh(); }
     });
@@ -824,7 +955,8 @@
     await refresh('products', 'customers').catch(() => {});
     const body = openModal('Vente enregistrée', `
       <div class="sale-done">
-        <p class="sale-number">${esc(doc.number)} : ${money(doc.total_ttc)}</p>
+        <p class="sale-number">${doc.offline ? 'Ticket provisoire' : esc(doc.number)} : ${money(doc.total_ttc)}</p>
+        ${doc.offline ? '<p class="sale-offline">Hors ligne : la vente est enregistrée sur cet appareil et sera envoyée dès le retour d’internet. Son numéro définitif sera attribué à ce moment-là.</p>' : ''}
         ${change ? `<p class="sale-change">À rendre <strong>${money(change)}</strong></p>` : ''}
         ${doc.loyalty ? `<p class="sale-loyalty">${doc.loyalty.used ? `${qtyFmt(doc.loyalty.used)} points utilisés. ` : ''}${doc.loyalty.earned ? `+${qtyFmt(doc.loyalty.earned)} points gagnés. ` : ''}Nouveau solde : <strong>${qtyFmt(doc.loyalty.balance)} points</strong></p>` : ''}
       </div>
@@ -833,6 +965,7 @@
         <div class="right"><button class="btn btn-primary" id="sdNext">Nouvelle vente</button></div>
       </div>`);
     $('#sdPrint', body).addEventListener('click', () => printTicket(doc, change));
+    if (doc.offline) $('#sdInvoice', body).hidden = true;
     $('#sdInvoice', body).addEventListener('click', async () => {
       try { const f = await api(`/store/documents/${doc.id}/convert`, { method: 'POST', body: { to: 'facture' } }); toast(`${f.number} créée`); showDoc(f.id); } catch (e) { fail(e); }
     });
@@ -867,8 +1000,8 @@
       if (d.client_name !== undefined) { pos.client_name = d.client_name.trim(); pos.client_phone = (d.client_phone || '').trim(); }
       e.currentTarget.disabled = true;
       try {
-        const doc = await api('/store/pos/checkout', { method: 'POST', body: posBody('reserve', [], d.notes) });
-        posReset(); closeModal(); toast(`${doc.number} mise de côté pour ${doc.client_name}`); updateBadges(); route();
+        const doc = await posSubmit(posBody('reserve', [], d.notes));
+        posReset(); closeModal(); toast(doc.offline ? `Mise de côté enregistrée sur cet appareil : elle sera envoyée au retour d’internet` : `${doc.number} mise de côté pour ${doc.client_name}`); updateBadges(); route();
       } catch (ex) { $('#resErr').textContent = ex.message; e.currentTarget.disabled = false; }
     });
   }
@@ -894,8 +1027,9 @@
       e.currentTarget.disabled = true;
       try {
         const pay = Number(d.amount) > 0 ? [{ method: d.method, amount: Number(d.amount), note: 'Acompte' }] : [];
-        const doc = await api('/store/pos/checkout', { method: 'POST', body: posBody('credit', pay) });
-        posReset(); await refresh('products', 'customers'); toast(`${doc.number} créée`); updateBadges(); route(); showDoc(doc.id);
+        const doc = await posSubmit(posBody('credit', pay));
+        posReset(); await refresh('products', 'customers'); updateBadges(); route();
+        if (doc.offline) toast('Vente à crédit enregistrée sur cet appareil : la facture sera créée au retour d’internet'); else { toast(`${doc.number} créée`); showDoc(doc.id); }
       } catch (ex) { $('#credErr').textContent = ex.message; e.currentTarget.disabled = false; }
     });
   }
@@ -1246,8 +1380,17 @@
       if (data.qty === '') { $('#sError').textContent = 'Indiquez une quantité.'; return; }
       e.currentTarget.disabled = true;
       try {
-        const r = await api('/store/stock', { method: 'POST', body: data });
-        await refresh('products'); closeModal(); toast(`Stock mis à jour : ${qtyFmt(r.stock)}`); route();
+        data.client_ref = window.ComptoirOutbox.uuid();
+        let r;
+        try { if (!navigator.onLine) throw offlineError('POST'); r = await api('/store/stock', { method: 'POST', body: data }); }
+        catch (ex) {
+          if (ex.name !== 'Offline') throw ex;
+          const p = state.products.find((x) => x.id === Number(data.product_id)); const q = Number(data.qty) || 0;
+          await enqueue({ ref: data.client_ref, type: 'stock', body: data, location_id: data.location_id || (state.scope !== 'all' ? state.scope : null) });
+          if (p) { p.stock = data.type === 'entrée' ? p.stock + q : data.type === 'sortie' ? p.stock - q : q; keep('/store/products', state.products); }
+          r = { stock: p ? p.stock : q, offline: true };
+        }
+        await refresh('products'); closeModal(); toast(r.offline ? `Hors ligne : mouvement enregistré sur cet appareil (stock ${qtyFmt(r.stock)})` : `Stock mis à jour : ${qtyFmt(r.stock)}`); route();
       } catch (ex) { $('#sError').textContent = ex.message; e.currentTarget.disabled = false; }
     });
   }
@@ -1321,7 +1464,18 @@
       e.currentTarget.disabled = true;
       try {
         let id = c.id;
-        if (isNew) id = (await api('/store/customers', { method: 'POST', body: data })).id;
+        if (isNew) {
+          data.client_ref = window.ComptoirOutbox.uuid();
+          try { if (!navigator.onLine) throw offlineError('POST'); id = (await api('/store/customers', { method: 'POST', body: data })).id; }
+          catch (ex) {
+            if (ex.name !== 'Offline') throw ex;
+            // Client créé hors ligne : utilisable tout de suite (en caisse aussi), envoyé au retour d'internet.
+            await enqueue({ ref: data.client_ref, type: 'customer', body: data });
+            id = `tmp-${data.client_ref}`;
+            state.customers.push({ id, ...data, loyalty_points: 0, invoiced: 0, documents: 0, due: 0, pending: true });
+            state.customers.sort((x, y) => x.name.localeCompare(y.name, 'fr')); keep('/store/customers', state.customers);
+          }
+        }
         else await api(`/store/customers/${c.id}`, { method: 'PUT', body: data });
         await refresh('customers');
         if (onSaved) return onSaved(id);
@@ -2395,7 +2549,7 @@
     if (el.dataset.new) docForm(el.dataset.new);
     else if (el.dataset.doc) showDoc(Number(el.dataset.doc));
     else if (el.dataset.product) productForm(state.products.find((p) => p.id === Number(el.dataset.product)));
-    else if (el.dataset.customer) customerForm(state.customers.find((c) => c.id === Number(el.dataset.customer)));
+    else if (el.dataset.customer) customerForm(state.customers.find((c) => String(c.id) === el.dataset.customer));
     else if (el.dataset.stock) stockModal(el.dataset.stock);
     else if (el.dataset.restock) stockModal('entrée', el.dataset.restock);
     else if (el.dataset.act === 'new-product') productForm();

@@ -31,10 +31,10 @@ async function threadOf(db, storeId, create = false) {
 }
 
 // Ajoute un message, met à jour la conversation et prévient tout le monde.
-async function post(env, later, thread, { role, authorId, authorName, body, kind = 'texte', context }) {
-  const db = env.DB; const at = now();
-  const r = await db.prepare('INSERT INTO support_messages (thread_id, store_id, author_id, author_name, author_role, body, kind, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *')
-    .bind(thread.id, thread.store_id, authorId || null, authorName, role, body, kind, at).first();
+async function post(env, later, thread, { role, authorId, authorName, body, kind = 'texte', context, clientRef = null, at: when = null }) {
+  const db = env.DB; const at = when || now();
+  const r = await db.prepare('INSERT INTO support_messages (thread_id, store_id, author_id, author_name, author_role, body, kind, created_at, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *')
+    .bind(thread.id, thread.store_id, authorId || null, authorName, role, body, kind, at, clientRef).first();
   const counts = role === 'client' ? 'unread_support = unread_support + 1, store_read_at = ?' : role === 'support' ? 'unread_store = unread_store + 1, support_read_at = ?' : 'updated_at = ?';
   await db.prepare(`UPDATE support_threads SET ${counts}, last_message_at = ?, last_preview = ?, last_author = ?, updated_at = ?${role === 'client' ? ", status = 'ouverte'" : ''}${context ? ', context = ?' : ''} WHERE id = ?`)
     .bind(at, at, kind === 'texte' ? preview(body) : thread.last_preview, role, at, ...(context ? [JSON.stringify(context)] : []), thread.id).run();
@@ -56,21 +56,7 @@ export async function storeSupportRoutes(ctx, id, m, body) {
     const rt = getRealtime(env);
     return json({ thread: t ? shapeThread(t) : null, messages, realtime: !!rt.available, support_online: (await rt.presence().catch(() => ({ support: 0 }))).support });
   }
-  if (id === 'messages' && m === 'POST') {
-    const b = await body();
-    const text = clean(b.body);
-    if (!text) throw new HttpError(400, 'Écrivez votre message.');
-    if (text.length > 4000) throw new HttpError(400, 'Message trop long (4 000 caractères au plus).');
-    const thread = await threadOf(db, sid, true);
-    const context = { page: str(b.context?.page, 120), title: str(b.context?.title, 80), device: str(ctx.request.headers.get('user-agent'), 200) };
-    const r = await post(env, later, thread, { role: 'client', authorId: ctx.user.id, authorName: ctx.user.name, body: text, context });
-    // L'équipe support est prévenue de CHAQUE message, en priorité haute (écran verrouillé compris).
-    // Une notification par conversation : la nouvelle remplace la précédente, avec le nombre de non-lus.
-    const n = r.thread.unread_support;
-    later(notifyPlatform(env, { kind: 'chat', title: n > 1 ? `${ctx.store.name} · ${n} nouveaux messages` : ctx.store.name, body: `${firstName(ctx.user.name)} : ${preview(text).slice(0, 140)}`,
-      url: `/console/#/messagerie/${thread.id}`, tag: `chat-${thread.id}` }, { category: 'messages', urgency: 'high', topic: `chat${thread.id}`, ttl: 86400 }));
-    return json(r.message, 201);
-  }
+  if (id === 'messages' && m === 'POST') return json(await postClientMessage(ctx, await body()), 201);
   if (id === 'read' && m === 'POST') {
     const t = await threadOf(db, sid);
     if (t && t.unread_store) {
@@ -81,6 +67,26 @@ export async function storeSupportRoutes(ctx, id, m, body) {
     return json({ ok: true });
   }
   throw new HttpError(404, 'Route inconnue.');
+}
+
+// Message du commerçant (envoyé en direct, ou plus tard par la synchronisation du mode hors ligne).
+export async function postClientMessage(ctx, b) {
+  const { db, env } = ctx; const sid = ctx.store.id; const later = ctx.later || ((p) => p);
+  const text = clean(b.body);
+  if (!text) throw new HttpError(400, 'Écrivez votre message.');
+  if (text.length > 4000) throw new HttpError(400, 'Message trop long (4 000 caractères au plus).');
+  const ref = typeof b.client_ref === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(b.client_ref) ? b.client_ref : null;
+  if (ref) { const ex = await db.prepare('SELECT * FROM support_messages WHERE store_id = ? AND client_ref = ?').bind(sid, ref).first(); if (ex) return { ...shapeMessage(ex), duplicate: true }; }
+  const t0 = Date.parse(b.occurred_at); const at = Number.isFinite(t0) && t0 < Date.now() + 300000 && t0 > Date.now() - 30 * 86400000 ? new Date(t0).toISOString() : null;
+  const thread = await threadOf(db, sid, true);
+  const context = { page: str(b.context?.page, 120), title: str(b.context?.title, 80), device: str(ctx.request.headers.get('user-agent'), 200) };
+  const r = await post(env, later, thread, { role: 'client', authorId: ctx.user.id, authorName: ctx.user.name, body: text, context, clientRef: ref, at });
+  // L'équipe support est prévenue de CHAQUE message, en priorité haute (écran verrouillé compris).
+  // Une notification par conversation : la nouvelle remplace la précédente, avec le nombre de non-lus.
+  const n = r.thread.unread_support;
+  later(notifyPlatform(env, { kind: 'chat', title: n > 1 ? `${ctx.store.name} · ${n} nouveaux messages` : ctx.store.name, body: `${firstName(ctx.user.name)} : ${preview(text).slice(0, 140)}`,
+    url: `/console/#/messagerie/${thread.id}`, tag: `chat-${thread.id}` }, { category: 'messages', urgency: 'high', topic: `chat${thread.id}`, ttl: 86400 }));
+  return r.message;
 }
 
 /* ------------------------------------------------------------------ */

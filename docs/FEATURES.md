@@ -133,7 +133,7 @@ L'espace commerçant s'installe comme une application : icône sur l'écran d'ac
   - **raccourcis** Caisse, Produits et Rapports (appui long ou clic droit sur l'icône) ;
   - captures d'écran pour la fenêtre d'installation (`assets/install/`).
 - **Service worker** (`public/app/sw.js`) :
-  - les données (`/api/`) viennent **toujours du serveur**, sans copie ; hors ligne, elles renvoient un message clair ;
+  - les données (`/api/`) viennent **toujours du serveur** quand il répond ; hors ligne, l'application se sert de ses copies (voir « Mode hors ligne ») ;
   - le code de l'application vient du réseau d'abord, et se met donc à jour à chaque déploiement ;
   - les polices et icônes sont gardées en mémoire ;
   - sans connexion, la page `/app/offline` s'affiche et se recharge seule au retour d'internet.
@@ -148,7 +148,7 @@ L'espace commerçant s'installe comme une application : icône sur l'écran d'ac
   Rien ne s'affiche une fois l'application installée.
 - **Diagnostic** : Chrome ne signale aucun obstacle à l'installation (`Page.getInstallabilityErrors` vide).
 
-Comptoir ne fonctionne pas hors ligne : les ventes et le stock sont enregistrés en direct pour rester justes sur tous les appareils.
+L'application fonctionne aussi hors ligne : voir « Mode hors ligne » ci-dessous.
 
 ## Centre d'aide
 
@@ -341,3 +341,23 @@ Les commerçants écrivent au support **depuis leur espace** ; les employés de 
   - Équipe Comptoir : catégorie « Messages des commerçants », activée depuis la console (bandeau en haut de la Messagerie, avec notification d'essai), même pour un administrateur sans commerce.
   - Rappel dans « À traiter » de la console.
 - **Technique** : messages enregistrés en base, diffusion par WebSocket (Durable Object sur Cloudflare, serveur intégré sur Node.js), actualisation régulière si le temps réel est indisponible. Identité de chaque connexion vérifiée côté serveur ; un commerce ne reçoit que ses propres messages.
+
+## Mode hors ligne
+
+Sans connexion, le commerce continue de tourner ; tout est envoyé au serveur dès le retour d'internet.
+
+| Disponible hors ligne | Demande une connexion |
+|---|---|
+| Caisse : ventes (espèces, carte, chèque…), vente à crédit, mise de côté, ticket provisoire imprimable | Devis, factures, commandes en dehors de la caisse |
+| Nouveaux clients (utilisables aussitôt en caisse) | Réglages, équipe, rôles, boutiques, abonnement |
+| Mouvements de stock (entrée, sortie, inventaire) | Import de produits, connexion aux anciens outils |
+| Messages au support (envoyés au retour du réseau) | Récompense fidélité (le solde exact est sur le serveur) |
+| Consultation des rubriques déjà ouvertes sur l'appareil (dernières données connues) | |
+
+- **Sur l'appareil** (IndexedDB, `public/app/outbox.js`) : une copie de chaque lecture, et la **file d'attente** des opérations faites hors ligne, dans l'ordre. L'application elle-même (pages, code, polices, photos des produits) est gardée par le service worker : elle s'ouvre sans connexion, même après un redémarrage du téléphone.
+- **Synchronisation** (`POST /api/store/sync`) : automatique au retour d'internet, au démarrage, toutes les 45 secondes s'il reste des opérations, et **en arrière-plan application fermée** (synchronisation d'arrière-plan du navigateur, Android et ordinateurs avec Chrome ou Edge).
+- **Aucune vente perdue ni comptée deux fois** : chaque opération porte un identifiant unique, protégé par un index unique en base ; un envoi rejoué (connexion coupée au mauvais moment, deux envois simultanés) renvoie la vente déjà enregistrée. Même en ligne, chaque vente porte cet identifiant.
+- **Date réelle** : une vente faite hors ligne garde sa date et son heure (jusqu'à 30 jours), dans le journal de caisse et les rapports. Le numéro définitif du ticket est attribué à la synchronisation (numérotation continue).
+- **Droits** : chaque opération est vérifiée au moment de la synchronisation. Refusée (rôle modifié, produit supprimé…) : elle est mise de côté avec la raison, sans bloquer les suivantes ; le commerçant peut la réessayer ou la supprimer. Panne du serveur : nouvel essai automatique.
+- **Stock** : déduit sur l'appareil au moment de la vente, puis recalculé par le serveur ; plusieurs caisses hors ligne en même temps peuvent mener à un stock négatif, signalé dans les alertes.
+- **Bandeau** : « Hors ligne », opérations en attente, synchronisation en cours, opérations refusées, avec le détail. Avant une déconnexion, Comptoir prévient s'il reste des opérations à envoyer.

@@ -132,6 +132,18 @@ const MIGRATIONS = [
     // Photos : emplacement dans le stockage externe (R2, S3, disque) quand il y en a un.
     'ALTER TABLE images ADD COLUMN storage_key TEXT',
   ]],
+  [5, [
+    // Mode hors ligne : identifiant de chaque opération faite sur l'appareil, pour qu'un envoi rejoué
+    // (connexion coupée pendant la synchronisation) ne soit jamais enregistré deux fois.
+    'ALTER TABLE documents ADD COLUMN client_ref TEXT',
+    'ALTER TABLE customers ADD COLUMN client_ref TEXT',
+    'ALTER TABLE stock_movements ADD COLUMN client_ref TEXT',
+    'ALTER TABLE support_messages ADD COLUMN client_ref TEXT',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_documents_client_ref ON documents(store_id, client_ref) WHERE client_ref IS NOT NULL',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_customers_client_ref ON customers(store_id, client_ref) WHERE client_ref IS NOT NULL',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_stock_movements_client_ref ON stock_movements(store_id, client_ref) WHERE client_ref IS NOT NULL',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_support_messages_client_ref ON support_messages(store_id, client_ref) WHERE client_ref IS NOT NULL',
+  ]],
 ];
 
 // Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).

@@ -102,9 +102,20 @@ Côté navigateur :
 | `public/app/app.js` | Espace commerçant : état, appels d'API (mémoire courte de 30 s, préchargement), routeur par ancre (`#/caisse`…), un `view…()` par écran |
 | `public/app/import.js` | Lecture des fichiers d'import (CSV, XLSX, bases SQLite / Access / dBase), encodages, reconnaissance des logiciels |
 | `public/app/chat.js` | Messagerie du commerçant : lanceur, panneau, connexion WebSocket, envoi instantané |
-| `public/app/sw.js` | Service worker : application installable, page hors ligne, réception et affichage des notifications |
+| `public/app/sw.js` | Service worker : application installable et utilisable hors ligne, synchronisation en arrière-plan, notifications |
+| `public/app/outbox.js` | Mode hors ligne : copies des lectures et file d'attente des opérations (IndexedDB), envoi vers `/api/store/sync` ; partagé par l'application et le service worker |
 | `public/store/store.js` | Vitrine d'un commerce, panier WhatsApp |
 | `public/console/console.js` | Console de la plateforme |
+
+## Le mode hors ligne
+
+Les opérations qui doivent marcher sans connexion (vente, client, mouvement de stock, message au support) passent par la file d'attente quand le réseau manque, puis par `POST /api/store/sync`. Pour en ajouter une :
+
+1. côté serveur, la rendre **rejouable** : colonne `client_ref` avec index unique `(store_id, client_ref)` (migration), et renvoi de l'existant si l'identifiant est déjà connu ; accepter `occurred_at` si la date compte ;
+2. l'ajouter au `switch` de `syncOps` (`src/features/store.js`) avec sa permission ;
+3. côté application, l'envoyer avec `client_ref` en ligne, et appeler `enqueue({ type, body })` sur une erreur `Offline` ; mettre à jour les copies locales avec `keep(chemin, données)`.
+
+Les opérations à numérotation légale (factures, devis) restent volontairement en ligne.
 
 ## Les données
 

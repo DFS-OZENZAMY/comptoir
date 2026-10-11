@@ -11,7 +11,7 @@ import { resolveAccess, scopeWhere, writeLocation, stockDelta, stockByLocation, 
 import { bump, logEvent } from '../core/db.js';
 import { saveProductImage, deleteProductImage, fromBase64 } from '../platform/storage.js';
 import { pushRoutes, stockAlerts, notifyPlatform } from './push.js';
-import { storeSupportRoutes } from './support.js';
+import { storeSupportRoutes, postClientMessage } from './support.js';
 import { storeAccess } from './auth.js';
 
 /* ------------------------------------------------------------------ */
@@ -114,11 +114,11 @@ async function createDocument(ctx, d) {
   const number = await nextNumber(db, sid, type, date);
   const location = writeLocation(ctx, d.location_id);
   const res = await db.prepare(`INSERT INTO documents (store_id, type, number, customer_id, client_name, client_email, client_phone, client_address,
-      status, date, due_date, notes, total_ht, total_tva, total_ttc, source_id, source_type, origin, created_by, location_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      status, date, due_date, notes, total_ht, total_tva, total_ttc, source_id, source_type, origin, created_by, location_id, client_ref, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))`)
     .bind(sid, type, number, client.customer_id, client.client_name, client.client_email, client.client_phone, client.client_address,
       status, date, due, str(d.notes, 3000), t.total_ht, t.total_tva, t.total_ttc,
-      d.source_id || null, d.source_type || null, d.origin === 'caisse' ? 'caisse' : 'admin', ctx.user.id, location.id)
+      d.source_id || null, d.source_type || null, d.origin === 'caisse' ? 'caisse' : 'admin', ctx.user.id, location.id, d.client_ref || null, d.created_at || null)
     .run();
   const id = res.meta.last_row_id;
   await insertLines(db, sid, id, lines);
@@ -345,6 +345,14 @@ async function posCheckout(ctx, b) {
   ctx.need('pos.sell');
   if (mode !== 'ticket') ctx.need('pos.credit');
   if (num(b.discount_pct) > 0) ctx.need('pos.discount');
+  // Vente faite hors ligne puis synchronisée : déjà reçue ? On renvoie la même, sans rien recréer.
+  const ref = clientRef(b.client_ref);
+  if (ref) { const ex = await db.prepare('SELECT id FROM documents WHERE store_id = ? AND client_ref = ?').bind(sid, ref).first(); if (ex) return { ...(await getDocument(db, sid, ex.id)), duplicate: true }; }
+  const at = occurredAt(b.occurred_at);
+  if (!b.customer_id && b.customer_client_ref) {
+    const c = await db.prepare('SELECT id FROM customers WHERE store_id = ? AND client_ref = ?').bind(sid, clientRef(b.customer_client_ref)).first();
+    if (c) b.customer_id = c.id;
+  }
   const location = writeLocation(ctx, b.location_id);
   const base = cleanLines(b.lines);
   if (!base.length) throw new HttpError(400, 'Le ticket est vide.');
@@ -394,7 +402,7 @@ async function posCheckout(ctx, b) {
     if (!client.customer_id && !client.client_name) Object.assign(client, { customer_id: source.customer_id, client_name: source.client_name, client_phone: source.client_phone });
   }
   if (mode === 'reserve') {
-    const data = { type: 'commande', ...client, status: 'confirmée', origin: 'caisse', notes: str(b.notes, 2000), lines, location_id: location.id };
+    const data = { type: 'commande', ...client, status: 'confirmée', origin: 'caisse', notes: str(b.notes, 2000), lines, location_id: location.id, date: at.date, client_ref: ref, created_at: at.iso };
     return source ? updateDocument(ctx, source.id, { ...data, date: source.date }) : createDocument(ctx, data);
   }
   if (source) {
@@ -402,16 +410,25 @@ async function posCheckout(ctx, b) {
     await db.prepare("UPDATE documents SET status = 'livrée' WHERE id = ? AND store_id = ?").bind(source.id, sid).run();
     await syncStock(db, sid, source.id);
   }
-  const doc = await createDocument(ctx, {
-    type: mode === 'ticket' ? 'ticket' : 'facture', ...client, origin: 'caisse', notes: str(b.notes, 2000), lines,
-    source_id: source ? source.id : null, source_type: source ? 'commande' : null, location_id: location.id,
-  });
+  let doc;
+  try {
+    doc = await createDocument(ctx, {
+      type: mode === 'ticket' ? 'ticket' : 'facture', ...client, origin: 'caisse', notes: str(b.notes, 2000), lines,
+      source_id: source ? source.id : null, source_type: source ? 'commande' : null, location_id: location.id,
+      date: at.date, client_ref: ref, created_at: at.iso,
+    });
+  } catch (e) {
+    // Deux envois simultanés de la même vente : l'index unique n'en garde qu'une.
+    const ex = ref && /UNIQUE/i.test(String(e.message)) && await db.prepare('SELECT id FROM documents WHERE store_id = ? AND client_ref = ?').bind(sid, ref).first();
+    if (ex) return { ...(await getDocument(db, sid, ex.id)), duplicate: true };
+    throw e;
+  }
   if (payments.length) {
     await db.batch(payments.map((p) => db.prepare('INSERT INTO payments (store_id, document_id, amount, method, date, note) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(sid, doc.id, p.amount, p.method, today(), p.note)));
+      .bind(sid, doc.id, p.amount, p.method, at.date, p.note)));
   }
   if (mode === 'ticket') {
-    await db.prepare('UPDATE documents SET amount_paid = ?, paid_at = ? WHERE id = ? AND store_id = ?').bind(paid, today(), doc.id, sid).run();
+    await db.prepare('UPDATE documents SET amount_paid = ?, paid_at = ? WHERE id = ? AND store_id = ?').bind(paid, at.date, doc.id, sid).run();
     await bump(db, sid, 'tickets');
     await bump(db, sid, 'sales_amount', total);
     // Fidélité : points dépensés puis points gagnés sur le montant payé.
@@ -584,6 +601,9 @@ async function setProductImage(ctx, id, b) {
 
 async function addStockMovement(ctx, b) {
   const { db } = ctx; const sid = ctx.store.id;
+  const ref = clientRef(b.client_ref);
+  if (ref && await db.prepare('SELECT id FROM stock_movements WHERE store_id = ? AND client_ref = ?').bind(sid, ref).first()) return { ok: true, duplicate: true };
+  const at = occurredAt(b.occurred_at);
   const p = await db.prepare('SELECT id, stock, track_stock FROM products WHERE id = ? AND store_id = ?').bind(num(b.product_id), sid).first();
   if (!p) throw new HttpError(404, 'Choisissez un produit.');
   if (!p.track_stock) throw new HttpError(400, "Le suivi de stock est désactivé pour ce produit.");
@@ -597,9 +617,64 @@ async function addStockMovement(ctx, b) {
   const reason = str(b.reason, 200) || (type === 'inventaire' ? 'Inventaire' : type === 'entrée' ? 'Réception fournisseur' : 'Sortie manuelle');
   await db.batch([
     ...stockDelta(db, sid, loc.id, p.id, delta),
-    db.prepare('INSERT INTO stock_movements (store_id, product_id, qty, type, reason, location_id) VALUES (?, ?, ?, ?, ?, ?)').bind(sid, p.id, delta, type, reason, loc.id),
+    db.prepare('INSERT INTO stock_movements (store_id, product_id, qty, type, reason, location_id, client_ref, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))').bind(sid, p.id, delta, type, reason, loc.id, ref, at.iso),
   ]);
   return { ok: true, stock: p.stock + delta, stock_here: here + delta };
+}
+
+async function createCustomer(ctx, b) {
+  const { db } = ctx; const sid = ctx.store.id;
+  const f = customerFields(b);
+  const ref = clientRef(b.client_ref);
+  if (ref) { const ex = await db.prepare('SELECT id FROM customers WHERE store_id = ? AND client_ref = ?').bind(sid, ref).first(); if (ex) return { id: ex.id, duplicate: true }; }
+  const r = await db.prepare('INSERT INTO customers (store_id, name, company, email, phone, address, notes, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(sid, ...f, ref).run();
+  return { id: r.meta.last_row_id };
+}
+
+/* ------------------------------------------------------------------ */
+/* Mode hors ligne : synchronisation des opérations faites sur l'appareil */
+/* ------------------------------------------------------------------ */
+// Identifiant d'opération fourni par l'appareil (UUID ou équivalent).
+const clientRef = (v) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
+// Date réelle de l'opération : acceptée jusqu'à 30 jours en arrière (et 5 minutes d'avance d'horloge).
+function occurredAt(v) {
+  const t = Date.parse(v); const now = Date.now();
+  if (!v || !Number.isFinite(t) || t > now + 5 * 60000 || t < now - 30 * 86400000) return { date: today(), iso: null };
+  const d = new Date(t).toISOString();
+  return { date: d.slice(0, 10), iso: d.slice(0, 19).replace('T', ' ') };
+}
+// Rejoue dans l'ordre les opérations faites hors ligne. Chacune garde ses propres droits et sa boutique.
+// Refusée (4xx) : signalée, les suivantes continuent. Panne (5xx) : arrêt, nouvel essai plus tard.
+async function syncOps(ctx, b) {
+  const ops = Array.isArray(b.ops) ? b.ops.slice(0, 50) : [];
+  const base = { location: ctx.location, scope: ctx.scope };
+  const results = [];
+  for (const op of ops) {
+    const ref = clientRef(op?.ref);
+    if (!ref) { results.push({ ref: op?.ref ?? null, status: 'error', error: 'Opération illisible.' }); continue; }
+    // Opération faite pour un autre commerce sur cet appareil : gardée de côté, envoyée à la bonne session.
+    if (op.store_id && num(op.store_id) !== ctx.store.id) { results.push({ ref, status: 'later' }); continue; }
+    const loc = op.location_id ? ctx.locations.find((l) => l.id === num(op.location_id)) : null;
+    Object.assign(ctx, loc ? { location: loc, scope: loc.id } : base);
+    const body = { ...(op.body || {}), client_ref: ref, occurred_at: op.at, location_id: loc ? loc.id : undefined };
+    try {
+      let result;
+      if (op.type === 'sale') {
+        const d = await posCheckout(ctx, body);
+        result = { id: d.id, number: d.number, total_ttc: d.total_ttc, duplicate: !!d.duplicate };
+        if (!d.duplicate) ctx.later?.(stockAlerts(ctx.env, ctx.store.id, (body.lines || []).map((l) => l.product_id), loc?.id));
+      } else if (op.type === 'customer') { ctx.need('customers.manage'); result = await createCustomer(ctx, body); }
+      else if (op.type === 'stock') { ctx.need('stock.manage'); result = await addStockMovement(ctx, body); if (!result.duplicate) ctx.later?.(stockAlerts(ctx.env, ctx.store.id, [body.product_id], loc?.id)); }
+      else if (op.type === 'support') result = await postClientMessage(ctx, body);
+      else throw new HttpError(400, 'Type d’opération inconnu.');
+      results.push({ ref, status: 'ok', result });
+    } catch (e) {
+      if (e instanceof HttpError && e.status < 500) results.push({ ref, status: 'error', code: e.status, error: e.message });
+      else { console.error('Synchronisation', ref, e.message); results.push({ ref, status: 'retry', error: 'Erreur du serveur : nouvel essai automatique.' }); break; }
+    }
+  }
+  Object.assign(ctx, base);
+  return { results };
 }
 
 function customerFields(b) {
@@ -715,6 +790,7 @@ function guard(ctx, res, id, action, m, url) {
     case 'pos': if (id === 'journal') ctx.need('pos.journal'); return;
     case 'push': return; // chacun gère les notifications de ses propres appareils
     case 'support': return; // tout membre peut écrire au support
+    case 'sync': return;    // chaque opération vérifie ses propres droits
     case 'alerts': if (id === 'test-email') return ctx.need('settings.manage'); if (id === 'email-status') return; return ctx.need('alerts.view');
     case 'team': case 'roles': return ctx.need('team.manage');
     case 'subscription': return ctx.need('billing.manage');
@@ -843,6 +919,10 @@ export async function storeRoutes(ctx, parts) {
     case 'support':
       return await storeSupportRoutes(ctx, id, m, body);
 
+    case 'sync':
+      if (!id && m === 'POST') return json(await syncOps(ctx, await body()));
+      break;
+
     case 'import':
       if (id === 'products' && m === 'POST') return json(await importProducts(ctx, await body()));
       if (id === 'images' && m === 'POST') return json(await importImages(ctx, await body()));
@@ -876,11 +956,7 @@ export async function storeRoutes(ctx, parts) {
             (SELECT COALESCE(SUM(total_ttc - amount_paid), 0) FROM documents d WHERE d.customer_id = c.id AND d.store_id = c.store_id AND d.type = 'facture' AND d.status = 'émise') AS due
           FROM customers c WHERE c.store_id = ? ORDER BY c.name COLLATE NOCASE`).bind(sid).all()).results);
       }
-      if (!id && m === 'POST') {
-        const f = customerFields(await body());
-        const r = await db.prepare('INSERT INTO customers (store_id, name, company, email, phone, address, notes) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(sid, ...f).run();
-        return json({ id: r.meta.last_row_id }, 201);
-      }
+      if (!id && m === 'POST') return json(await createCustomer(ctx, await body()), 201);
       if (id && action === 'loyalty' && m === 'GET') {
         const c = await db.prepare('SELECT id, loyalty_points FROM customers WHERE id = ? AND store_id = ?').bind(num(id), sid).first();
         if (!c) throw new HttpError(404, 'Client introuvable.');
