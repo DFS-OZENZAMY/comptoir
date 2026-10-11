@@ -118,7 +118,10 @@
 
     <header class="mobile-top">
       <a href="#/tableau-de-bord" class="mobile-store"><span id="storeNameM"></span><small id="locNameM"></small></a>
-      <a href="#/alertes" class="mobile-bell" aria-label="Alertes">Alertes <span class="nav-badge alert" id="badgeAlertsM" hidden></span></a>
+      <a href="#/alertes" class="mobile-bell" id="mobileBell" aria-label="Alertes" data-nav="alertes">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z"/><path d="M10 20.6a2.2 2.2 0 0 0 4 0"/><path d="M12 3v2"/></svg>
+        <span class="bell-badge" id="badgeAlertsM" hidden></span>
+      </a>
     </header>
 
     <main class="main">

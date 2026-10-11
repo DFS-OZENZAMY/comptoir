@@ -72,3 +72,12 @@ Ces jetons sont repris dans le code, en tête de `public/app/app.css`, `public/a
 ## Correspondance avec le site
 
 Le site en ligne suit l'ordre des sections de la maquette : accroche, « Prêt en trois étapes », « Tout ce qu'il faut derrière le comptoir », tarifs, questions fréquentes, appel final.
+
+## Icône alertes (en-tête mobile)
+
+Figma : page **Fondations**, cadre **Composants**, section **Icônes**, composant **Icône alertes**.
+
+- Cloche au trait (1,8 px, extrémités arrondies), 24 px, dans une zone de toucher de **44 × 44 px**.
+- Trois états : **Calme** (aucune alerte), **Alertes** (pastille compteur, propriété texte « Nombre » ; au-delà de 9, « 9+ »), **Appuyé** (halo blanc à 14 %).
+- Pastille : 18 px de haut, `color/warn` (#B7791F), chiffre `color/ink`, anneau de 2 px `color/ink` pour la détacher de la cloche.
+- Dans le code : `public/app/index.html` (`#mobileBell`) et `public/app/app.css` (`.mobile-bell`, `.bell-badge`). Les écrans « Accueil » et « Caisse » sur téléphone de la maquette utilisent le composant.

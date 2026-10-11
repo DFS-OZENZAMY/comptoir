@@ -43,14 +43,21 @@
   /* ---------------- API ---------------- */
   // Mémoire courte des lectures : une rubrique déjà visitée s'affiche instantanément.
   // Toute modification (vente, produit, réglage…) vide la mémoire pour ne jamais montrer de données périmées.
-  const CACHE_TTL = 30000;
+  const CACHE_TTL = 30000, MAX_STALE = 5 * 60000;
   const cache = new Map(), inflight = new Map();
-  async function api(path, { method = 'GET', body, fresh = false } = {}) {
+  // Navigation : chaque changement de rubrique reçoit un numéro. Une lecture lancée pour une rubrique
+  // que l'utilisateur a déjà quittée est abandonnée : l'écran affiché est toujours celui qu'il a choisi.
+  let routeToken = 0;
+  class Cancelled extends Error { constructor() { super('Rubrique quittée'); this.name = 'Cancelled'; } }
+  async function api(path, { method = 'GET', body, fresh = false, background = false } = {}) {
     const key = `${state.scope ?? ''}|${path}`;
+    const token = routeToken;
     if (method === 'GET' && !fresh) {
       const c = cache.get(key);
       if (c && Date.now() - c.t < CACHE_TTL) return c.data;
-      if (inflight.has(key)) return inflight.get(key);
+      // Données de moins de 5 minutes : affichées tout de suite, puis rafraîchies en arrière-plan.
+      if (c && Date.now() - c.t < MAX_STALE && !background) { revalidate(path, key, c); return c.data; }
+      if (inflight.has(key)) { const data = await inflight.get(key); if (!background && token !== routeToken) throw new Cancelled(); return data; }
     }
     const run = (async () => {
       const headers = { 'x-location': String(state.scope ?? savedScope()) };
@@ -66,7 +73,21 @@
       return data;
     })();
     if (method === 'GET') { inflight.set(key, run); run.finally(() => inflight.delete(key)).catch(() => {}); }
-    return run;
+    const data = await run;
+    if (method === 'GET' && !fresh && !background && token !== routeToken) throw new Cancelled();
+    return data;
+  }
+  // Rafraîchissement en arrière-plan : si les données ont changé et que l'utilisateur est toujours
+  // sur la même rubrique (sans saisie en cours), l'écran est redessiné discrètement.
+  function revalidate(path, key, old) {
+    if (inflight.has(key)) return;
+    const token = routeToken;
+    api(path, { fresh: true, background: true }).then((data) => {
+      if (token !== routeToken || JSON.stringify(data) === JSON.stringify(old.data)) return;
+      const busy = document.activeElement && document.activeElement.closest('#view, #modal') && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+      if (busy || $('#modal')?.open) return;   // saisie en cours ou fenêtre ouverte : on ne touche à rien
+      clearTimeout(revalidate.h); revalidate.h = setTimeout(() => { if (token === routeToken) rerender(); }, 60);
+    }).catch(() => {});
   }
   // Préchargement : les données d'une rubrique sont demandées dès que la souris la survole.
   const PREFETCH = {
@@ -77,8 +98,10 @@
     rapports: ['/store/locations/report?period=30'], boutiques: ['/store/locations'],
   };
   function prefetch(key) {
-    for (const p of PREFETCH[key] || []) { const k = `${state.scope ?? ''}|${p}`; const c = cache.get(k); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(k)) api(p).catch(() => {}); }
+    for (const p of PREFETCH[key] || []) { const k = `${state.scope ?? ''}|${p}`; const c = cache.get(k); if ((!c || Date.now() - c.t > CACHE_TTL / 2) && !inflight.has(k)) api(p, { fresh: true, background: true }).catch(() => {}); }
   }
+  // Une rubrique est « prête » si toutes ses données sont déjà en mémoire (même un peu anciennes).
+  const warm = (key) => (PREFETCH[key] || []).every((p) => { const c = cache.get(`${state.scope ?? ''}|${p}`); return c && Date.now() - c.t < MAX_STALE; });
   const onIntent = (e) => {
     const a = e.target.closest && e.target.closest('a[href^="#/"]'); if (!a) return;
     prefetch(a.getAttribute('href').slice(2).split('?')[0]);
@@ -93,7 +116,7 @@
     t.textContent = msg; t.classList.toggle('error', error); t.classList.add('show');
     clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), error ? 4500 : 2400);
   }
-  const fail = (e) => toast(e.message, true);
+  const fail = (e) => { if (e && e.name === 'Cancelled') return; toast(e.message, true); };
 
   /* ---------------- Modale ---------------- */
   const modal = $('#modal');
@@ -127,10 +150,12 @@
   }
   async function updateBadges() {
     try {
-      const c = await api('/store/badges');
+      const c = await api('/store/badges', { background: true });
       const set = (id, n) => { const el = $(id); if (el) { el.hidden = !n; el.textContent = n; } };
       set('#badgeStock', c.out_of_stock + c.low_stock);
-      set('#badgeAlerts', c.alerts); set('#badgeAlertsM', c.alerts);
+      set('#badgeAlerts', c.alerts);
+      const bm = $('#badgeAlertsM'); if (bm) { bm.hidden = !c.alerts; bm.textContent = c.alerts > 9 ? '9+' : c.alerts; }
+      $('#mobileBell')?.setAttribute('aria-label', c.alerts ? `Alertes : ${c.alerts}` : 'Alertes');
       $('#badgeAlerts').classList.toggle('urgent', c.urgent > 0);
       set('#badgeOrders', c.orders);
     } catch { /* silencieux */ }
@@ -370,8 +395,18 @@
     closeMore();
     document.title = `${title} : ${state.settings.shop_name || ''} | Comptoir`;
     window.scrollTo(0, 0);
-    const slow = setTimeout(() => { $('#view').innerHTML = '<p class="loading">Chargement…</p>'; }, 180);
-    Promise.resolve(fn()).catch(fail).finally(() => clearTimeout(slow));
+    const token = ++routeToken;
+    current.key = key;
+    // Retour visuel immédiat : sans données en mémoire, un squelette remplace aussitôt l'ancienne rubrique.
+    if (!warm(key) && PREFETCH[key]) $('#view').innerHTML = SKELETON;
+    Promise.resolve(fn()).catch((e) => { if (token === routeToken) fail(e); });
+  }
+  const current = { key: null };
+  const SKELETON = '<div class="skeleton" aria-busy="true" aria-label="Chargement"><span></span><span></span><span></span><span class="short"></span></div>';
+  // Redessine la rubrique affichée (après un rafraîchissement en arrière-plan), sans bouger le défilement.
+  function rerender() {
+    const y = window.scrollY; const fn = current.key && VIEWS[current.key]?.[1];
+    if (fn) Promise.resolve(fn()).then(() => window.scrollTo(0, y)).catch(() => {});
   }
   window.addEventListener('hashchange', route);
   const setActions = (html) => { $('#viewActions').innerHTML = html; };

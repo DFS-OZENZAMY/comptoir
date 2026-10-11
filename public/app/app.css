@@ -12,7 +12,7 @@
   --signal-strong: #C9461F;
   --on-signal: #FFFFFF;
   --signal-soft: #FCE8E1;
-  --ok: #2E7D4F;
+  --ok: #2E7D4F; --warn: #B7791F;
   --low: #B7791F;
   --out: #B3261E;
   --info: #2D5F8A;
@@ -421,14 +421,27 @@ a.kpi:hover { background: #FAFAFB; }
 .mobile-top, .tabbar, .more-sheet { display: none; }
 
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
+  /* La grille ne répartit plus l'espace libre : l'en-tête garde toujours la même hauteur. */
+  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; align-content: start; min-height: 100vh; min-height: 100dvh; }
   .app > .side { display: none; }
   .mobile-top {
-    display: flex; position: sticky; top: 0; z-index: 30; align-items: center; justify-content: space-between; gap: 12px;
-    padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px; background: var(--steel); color: #fff;
+    display: flex; position: sticky; top: 0; z-index: 30; align-items: center; justify-content: space-between; gap: 8px;
+    box-sizing: border-box; height: calc(56px + env(safe-area-inset-top, 0px));
+    padding: env(safe-area-inset-top, 0px) 6px 0 16px; background: var(--steel); color: #fff;
+    contain: layout paint; transform: translateZ(0);   /* calque dédié : défilement fluide sur iPhone */
   }
-  .mobile-store { color: #fff; text-decoration: none; font-weight: 800; font-stretch: 75%; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mobile-bell { color: #C5CAD3; text-decoration: none; font-size: .92rem; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+  .mobile-store { display: flex; flex-direction: column; justify-content: center; min-width: 0; color: #fff; text-decoration: none; font-weight: 800; font-stretch: 75%; font-size: 1.2rem; line-height: 1.15; }
+  .mobile-store span, .mobile-store small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mobile-store small { font-size: .74rem; font-weight: 500; font-stretch: 100%; color: #AEB3BC; }
+  .mobile-store small:empty { display: none; }
+  /* Icône Alertes (Figma : Fondations › Composants › Icônes › Icône alertes) */
+  .mobile-bell { position: relative; flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; transition: background-color .12s; }
+  .mobile-bell svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .mobile-bell:active { background: rgba(255,255,255,.14); }
+  .mobile-bell.active { background: rgba(255,255,255,.08); }
+  .bell-badge { position: absolute; top: 3px; left: 23px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+    background: var(--warn); color: var(--ink); box-shadow: 0 0 0 2px var(--steel); font-size: 11px; font-weight: 750; line-height: 18px; text-align: center; }
+  .bell-badge[hidden] { display: none; }
   .main { padding: 18px 16px calc(96px + env(safe-area-inset-bottom, 0px)); }
   .main-head h1 { font-size: 1.7rem; }
   .tabbar {
@@ -790,3 +803,16 @@ a.kpi:hover { background: #FAFAFB; }
 .push-cats small { display: block; color: var(--muted); }
 .push-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .push-bell { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 12px; background: var(--signal); color: #fff; }
+
+/* Toucher immédiat : pas d'attente de double-toucher, pas de surbrillance grise, retour visuel sous le doigt */
+a, button, label, select, [role="button"] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+@media (max-width: 900px) {
+  .tabbar a:active, .tabbar button:active { transform: scale(.92); }
+  .tabbar a, .tabbar button { transition: transform .08s ease-out, color .12s; }
+}
+/* Squelette de chargement : affiché aussitôt, à la place de l'ancienne rubrique */
+.skeleton { display: grid; gap: 12px; padding-top: 4px; }
+.skeleton span { display: block; height: 64px; border-radius: var(--r-card, 12px); background: linear-gradient(90deg, #ECECE8 25%, #F6F6F3 50%, #ECECE8 75%); background-size: 200% 100%; animation: skel 1.1s linear infinite; }
+.skeleton span.short { width: 60%; height: 18px; }
+@keyframes skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton span { animation: none; } }
