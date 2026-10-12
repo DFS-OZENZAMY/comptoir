@@ -22,6 +22,7 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 ## Fait
 - Ticket et facture numériques par WhatsApp, SMS, e-mail (octobre 2026).
 - Scan des codes-barres avec la caméra du téléphone (#1, octobre 2026).
+- Menus latéraux regroupés, compte toujours visible, tout tient sur un portable 1280 × 720 (#21, octobre 2026).
 - Mode hors ligne avec synchronisation, messagerie support en direct, notifications push, import depuis les anciens logiciels, multi-boutiques, fidélité, vitrine en ligne.
 
 ## Priorités

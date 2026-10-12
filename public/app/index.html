@@ -98,21 +98,32 @@
       <a class="side-sell" href="#/caisse" data-nav="caisse">Caisse</a>
       <nav class="side-nav" aria-label="Navigation principale">
         <a href="#/tableau-de-bord" data-nav="tableau-de-bord" data-perm="reports.view">Accueil</a>
-        <a href="#/ventes" data-nav="ventes" data-perm="documents.view">Ventes <span class="nav-badge" id="badgeOrders" hidden></span></a>
-        <a href="#/produits" data-nav="produits">Produits <span class="nav-badge warn" id="badgeStock" hidden></span></a>
-        <a href="#/clients" data-nav="clients">Clients</a>
-        <a href="#/alertes" data-nav="alertes" data-perm="alerts.view">Alertes <span class="nav-badge alert" id="badgeAlerts" hidden></span></a>
-        <a href="#/rapports" data-nav="rapports" data-perm="reports.view">Rapports</a>
-        <a href="#/reglages" data-nav="reglages" data-perm-any="settings.manage team.manage billing.manage locations.manage">Réglages</a>
+        <div class="nav-group" role="group" aria-label="Vendre"><span class="nav-group-title">Vendre</span>
+          <a href="#/ventes" data-nav="ventes" data-perm="documents.view">Ventes <span class="nav-badge" id="badgeOrders" hidden></span></a>
+          <a href="#/clients" data-nav="clients">Clients</a>
+        </div>
+        <div class="nav-group" role="group" aria-label="Stock"><span class="nav-group-title">Stock</span>
+          <a href="#/produits" data-nav="produits">Produits <span class="nav-badge warn" id="badgeStock" hidden></span></a>
+          <a href="#/alertes" data-nav="alertes" data-perm="alerts.view">Alertes <span class="nav-badge alert" id="badgeAlerts" hidden></span></a>
+        </div>
+        <div class="nav-group" role="group" aria-label="Pilotage"><span class="nav-group-title">Pilotage</span>
+          <a href="#/rapports" data-nav="rapports" data-perm="reports.view">Rapports</a>
+          <a href="#/reglages" data-nav="reglages" data-perm-any="settings.manage team.manage billing.manage locations.manage">Réglages</a>
+        </div>
       </nav>
       <div class="side-foot">
         <button type="button" class="install-link" id="installBtn" hidden>Installer l’application</button>
-        <a href="#/notifications">Notifications</a>
-        <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
-        <a href="#" id="storeLink" target="_blank" rel="noopener">Voir ma vitrine</a>
-        <a href="/console/" id="consoleLink" hidden>Console plateforme</a>
-        <button type="button" id="accountBtn"><span id="userName"></span></button>
-        <button type="button" id="logout">Se déconnecter</button>
+        <details class="side-account" id="sideAccount">
+          <summary><span class="side-avatar" id="userInitials" aria-hidden="true"></span><span class="side-who"><strong id="userName"></strong><small>Mon compte</small></span><svg class="side-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></summary>
+          <div class="side-menu">
+            <a href="#/notifications">Notifications</a>
+            <a href="#" id="storeLink" target="_blank" rel="noopener">Voir ma vitrine</a>
+            <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
+            <a href="/console/" id="consoleLink" hidden>Console plateforme</a>
+            <button type="button" id="accountBtn">Changer le mot de passe</button>
+            <button type="button" id="logout" class="danger">Se déconnecter</button>
+          </div>
+        </details>
       </div>
     </aside>
 

@@ -350,3 +350,11 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 
 /* Conversation sélectionnée : texte secondaire plus foncé sur le fond orange pâle (contraste AA) */
 .inbox-item.selected .inbox-line time, .inbox-item.selected .inbox-preview { color: #4F535B; }
+
+/* Menu de la console : recherche sur une ligne ; « Mis à jour » masqué sur les écrans peu hauts (portables) */
+.side-search { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; min-width: 0; box-sizing: border-box; max-width: calc(100% - 28px); }
+.side-search .ss-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+@media (max-height: 820px) and (min-width: 901px) {
+  .side-search { margin-bottom: 4px; padding-top: 7px; padding-bottom: 7px; }
+  .side-foot .refreshed { display: none; }
+}

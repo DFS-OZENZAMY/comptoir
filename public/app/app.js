@@ -258,6 +258,8 @@
     $('#consoleLink').hidden = !me.platform_admin;
     $$('[data-perm]').forEach((el) => { el.hidden = !can(el.dataset.perm); });
     $$('[data-perm-any]').forEach((el) => { el.hidden = !canAny(el.dataset.permAny); });
+    // Groupe du menu sans aucune rubrique autorisée : masqué entièrement.
+    $$('.nav-group').forEach((g) => { g.hidden = !g.querySelector('a:not([hidden])'); });
     renderLocSwitch();
     const days = st.trial_ends_at ? Math.round((new Date(st.trial_ends_at + 'T00:00:00Z') - new Date(today() + 'T00:00:00Z')) / 86400000) : -1;
     $('#planBadge').textContent = st.plan === 'essai' ? (days > 0 ? `Essai : ${days} j restant${days > 1 ? 's' : ''}` : days === 0 ? "Dernier jour d'essai" : 'Essai terminé') : st.plan_name;
@@ -266,6 +268,7 @@
     banner.hidden = me.access.writable;
     banner.innerHTML = me.access.writable ? '' : `${esc(me.access.reason)} ${can('billing.manage') ? '<a href="#/abonnement">Voir les formules</a>' : ''}`;
     $('#userName').textContent = me.user.name;
+    $('#userInitials').textContent = String(me.user.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
     // Modules complémentaires (messagerie du support) : l'application leur prête l'API et l'état.
     // Mode hors ligne : opérations gardées de côté pour ce commerce remises en file, puis envoi.
     if (window.ComptoirOutbox && !net.started) {
@@ -367,6 +370,9 @@
       toast('Bienvenue ! Votre espace est prêt.');
     } catch (ex) { $('#signupError').textContent = ex.message; } finally { btn.disabled = false; }
   });
+  // Menu du compte (bas du menu latéral) : se ferme au clic ailleurs, avec Échap ou après un choix.
+  document.addEventListener('click', (e) => { const d = document.getElementById('sideAccount'); if (!d || !d.open) return; if (!d.contains(e.target) || e.target.closest('.side-menu a, .side-menu button')) d.open = false; });
+  document.addEventListener('keydown', (e) => { const d = document.getElementById('sideAccount'); if (e.key === 'Escape' && d?.open) { d.open = false; d.querySelector('summary').focus(); } });
   $('#logout').addEventListener('click', async () => {
     const waiting = window.ComptoirOutbox ? (await window.ComptoirOutbox.counts().catch(() => ({ pending: 0 }))).pending : 0;
     if (waiting && !confirm(`${waiting} opération${waiting > 1 ? 's' : ''} faite${waiting > 1 ? 's' : ''} hors ligne n’${waiting > 1 ? 'ont' : 'a'} pas encore été envoyée${waiting > 1 ? 's' : ''}. Elle${waiting > 1 ? 's' : ''} le ser${waiting > 1 ? 'ont' : 'a'} à votre prochaine connexion sur cet appareil. Se déconnecter quand même ?`)) return;

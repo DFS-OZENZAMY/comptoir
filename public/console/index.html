@@ -27,25 +27,37 @@
         <span class="side-platform">Console</span>
         <a href="#/vue-d-ensemble">Comptoir</a>
       </div>
-      <button class="side-search" type="button" id="openSearch">Rechercher un commerce <kbd>Ctrl K</kbd></button>
+      <button class="side-search" type="button" id="openSearch"><span class="ss-label">Rechercher un commerce</span><kbd>Ctrl K</kbd></button>
       <nav class="side-nav" aria-label="Navigation de la console">
-        <a href="#/vue-d-ensemble" data-view="vue-d-ensemble">Vue d'ensemble</a>
-        <a href="#/a-traiter" data-view="a-traiter">À traiter <span class="nav-badge" id="badgeTodo" hidden></span></a>
-        <a href="#/commerces" data-view="commerces">Commerces</a>
-        <a href="#/activite" data-view="activite">Activité</a>
-        <a href="#/revenus" data-view="revenus">Revenus</a>
-        <a href="#/systeme" data-view="systeme">Système <span class="status-dot" id="sysDot" title="État de la plateforme"></span></a>
-        <a href="#/messagerie" data-view="messagerie">Messagerie <span class="nav-badge" id="chatNavBadge" hidden></span></a>
-      <a href="#/sauvegardes" data-view="sauvegardes">Sauvegardes</a>
-        <a href="#/journal" data-view="journal">Journal</a>
-        <a href="#/utilisateurs" data-view="utilisateurs">Utilisateurs</a>
-        <a href="#/equipe" data-view="equipe">Équipe</a>
+        <div class="nav-group" role="group" aria-label="Pilotage"><span class="nav-group-title">Pilotage</span>
+          <a href="#/vue-d-ensemble" data-view="vue-d-ensemble">Vue d'ensemble</a>
+          <a href="#/a-traiter" data-view="a-traiter">À traiter <span class="nav-badge" id="badgeTodo" hidden></span></a>
+          <a href="#/activite" data-view="activite">Activité</a>
+          <a href="#/revenus" data-view="revenus">Revenus</a>
+        </div>
+        <div class="nav-group" role="group" aria-label="Commerçants"><span class="nav-group-title">Commerçants</span>
+          <a href="#/commerces" data-view="commerces">Commerces</a>
+          <a href="#/messagerie" data-view="messagerie">Messagerie <span class="nav-badge" id="chatNavBadge" hidden></span></a>
+          <a href="#/utilisateurs" data-view="utilisateurs">Utilisateurs</a>
+        </div>
+        <div class="nav-group" role="group" aria-label="Plateforme"><span class="nav-group-title">Plateforme</span>
+          <a href="#/systeme" data-view="systeme">Système <span class="status-dot" id="sysDot" title="État de la plateforme"></span></a>
+          <a href="#/sauvegardes" data-view="sauvegardes">Sauvegardes</a>
+          <a href="#/journal" data-view="journal">Journal</a>
+          <a href="#/equipe" data-view="equipe">Équipe</a>
+        </div>
       </nav>
       <div class="side-foot">
         <span class="refreshed" id="refreshed"></span>
-        <a href="/app/" id="myStore">Mon commerce</a>
-        <a href="/" target="_blank" rel="noopener">Site Comptoir</a>
-        <button type="button" id="logout">Se déconnecter</button>
+        <details class="side-account" id="sideAccount">
+          <summary><span class="side-avatar" id="meInitials" aria-hidden="true"></span><span class="side-who"><strong id="meName">Console</strong><small id="meRole">Équipe Comptoir</small></span><svg class="side-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 10l4-4 4 4"/></svg></summary>
+          <div class="side-menu">
+            <a href="/app/" id="myStore">Mon commerce</a>
+            <a href="/" target="_blank" rel="noopener">Site Comptoir</a>
+            <a href="/aide" target="_blank" rel="noopener">Centre d’aide</a>
+            <button type="button" id="logout" class="danger">Se déconnecter</button>
+          </div>
+        </details>
       </div>
     </aside>
     <header class="mobile-top console-top">

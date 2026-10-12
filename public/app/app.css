@@ -1041,3 +1041,36 @@ body.scanning { overflow: hidden; }
 .scan-btn { min-height: 44px; padding: 0 18px; border: 1px solid rgba(255,255,255,.4); border-radius: 999px; background: rgba(0,0,0,.35); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
 .scan-btn.primary { background: #fff; color: #17181C; border-color: #fff; } .scan-btn.on { background: #FFD54A; color: #17181C; border-color: #FFD54A; }
 @media (prefers-reduced-motion: reduce) { .scan-frame i { animation: none; } }
+
+/* ================= Menu latéral : groupes, compact, compte toujours visible ================= */
+.side { overflow: hidden; }
+.side-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #3A3D45 transparent; padding-bottom: 8px; }
+.side-nav a { padding: 8px 22px; min-height: 38px; box-sizing: border-box; }
+.nav-group { display: flex; flex-direction: column; margin-top: 10px; }
+.nav-group[hidden] { display: none; }
+.nav-group-title { padding: 6px 22px 4px; font-size: .68rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: #7E8794; }
+.side-foot { margin-top: 0; flex: none; gap: 2px; padding: 10px 12px 0; border-top: 1px solid var(--steel-2); }
+.side-foot .refreshed { padding: 0 10px 4px; }
+.side-foot .install-link { padding: 6px 10px; }
+.side-account { position: relative; }
+.side-account > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer; color: #C5D0DA; }
+.side-account > summary::-webkit-details-marker { display: none; }
+.side-account > summary:hover, .side-account[open] > summary { background: var(--steel-2); color: var(--paper); }
+.side-avatar { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--signal-strong); color: #fff; font-size: .78rem; font-weight: 750; }
+.side-who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.2; }
+.side-who strong { color: var(--paper); font-size: .9rem; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-who small { color: #8E99A6; font-size: .76rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-chev { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s; }
+.side-account:not([open]) .side-chev { transform: rotate(180deg); }
+.side-menu { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 5; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; background: #24262C; border: 1px solid #33363E; box-shadow: 0 -12px 28px rgba(0,0,0,.35); }
+.side-foot .side-menu a, .side-foot .side-menu button { padding: 9px 12px; border-radius: 8px; color: #D5DCE3; font-size: .9rem; }
+.side-foot .side-menu a:hover, .side-foot .side-menu button:hover { background: var(--steel-2); color: var(--paper); }
+.side-foot .side-menu .danger { color: #F1A795; border-top: 1px solid #33363E; border-radius: 0 0 8px 8px; margin-top: 4px; }
+.side-menu [hidden] { display: none; }
+/* Écrans peu hauts (portables 13 pouces) : encore un peu plus compact */
+@media (max-height: 820px) and (min-width: 901px) {
+  .side { padding-top: 16px; }
+  .side-brand { padding-bottom: 14px; }
+  .side-nav a { padding-top: 6px; padding-bottom: 6px; min-height: 34px; }
+  .nav-group { margin-top: 6px; }
+}

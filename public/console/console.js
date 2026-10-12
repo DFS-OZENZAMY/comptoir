@@ -1039,6 +1039,8 @@ async function viewUsers() {
       const p = VIEW_PERM[a.dataset.view];
       a.hidden = !!(p && !can(p));
     });
+    // Groupe du menu sans aucune rubrique autorisée (rôle limité) : masqué entièrement.
+    $$('.side-nav .nav-group').forEach((g) => { g.hidden = !g.querySelector('a:not([hidden])'); });
   }
   function firstAllowedView() {
     for (const [k, p] of Object.entries(VIEW_PERM)) if (can(p)) return k;
@@ -1079,6 +1081,9 @@ async function viewUsers() {
     const l = e.target.closest('[data-link]'); if (l) { location.hash = l.dataset.link; return; }
     const st = e.target.closest('[data-store]'); if (st && st.dataset.store && st.dataset.store !== 'null' && !e.target.closest('#drawer')) openStore(Number(st.dataset.store));
   });
+  // Menu du compte (bas du menu latéral) : se ferme au clic ailleurs, avec Échap ou après un choix.
+  document.addEventListener('click', (e) => { const d = document.getElementById('sideAccount'); if (!d || !d.open) return; if (!d.contains(e.target) || e.target.closest('.side-menu a, .side-menu button')) d.open = false; });
+  document.addEventListener('keydown', (e) => { const d = document.getElementById('sideAccount'); if (e.key === 'Escape' && d?.open) { d.open = false; d.querySelector('summary').focus(); } });
   $('#logout').addEventListener('click', async () => { await api('/auth/logout', { method: 'POST' }).catch(() => {}); location.href = '/app/'; });
 
   (async () => {
@@ -1098,6 +1103,11 @@ async function viewUsers() {
         state.me.platform_permissions = pm.permissions || [];
       } catch { /* me basique suffit pour super-admin */ }
       $('#myStore').hidden = !me.store;
+      // Bloc compte en bas du menu : nom, initiales, rôle dans l'équipe Comptoir.
+      const nm = me.user?.name || me.user?.email || 'Console';
+      $('#meName').textContent = nm;
+      $('#meInitials').textContent = String(nm).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+      $('#meRole').textContent = state.me.platform_super ? 'Propriétaire' : (state.me.platform_role?.name || 'Équipe Comptoir');
       applyNavAccess();
       if (can('platform.stores.view')) state.plans = await api('/console/plans').catch(() => ({}));
       else state.plans = {};
