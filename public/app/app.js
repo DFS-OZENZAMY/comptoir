@@ -976,11 +976,12 @@
         ${doc.loyalty ? `<p class="sale-loyalty">${doc.loyalty.used ? `${qtyFmt(doc.loyalty.used)} points utilisés. ` : ''}${doc.loyalty.earned ? `+${qtyFmt(doc.loyalty.earned)} points gagnés. ` : ''}Nouveau solde : <strong>${qtyFmt(doc.loyalty.balance)} points</strong></p>` : ''}
       </div>
       <div class="modal-foot">
-        <div><button class="btn" id="sdPrint">Imprimer le ticket</button> <button class="btn" id="sdInvoice">Faire une facture</button></div>
+        <div><button class="btn" id="sdPrint">Imprimer le ticket</button> <button class="btn" id="sdShare">Envoyer au client</button> <button class="btn" id="sdInvoice">Faire une facture</button></div>
         <div class="right"><button class="btn btn-primary" id="sdNext">Nouvelle vente</button></div>
       </div>`);
     $('#sdPrint', body).addEventListener('click', () => printTicket(doc, change));
-    if (doc.offline) $('#sdInvoice', body).hidden = true;
+    if (doc.offline) { $('#sdInvoice', body).hidden = true; $('#sdShare', body).hidden = true; }
+    $('#sdShare', body).addEventListener('click', (e) => shareToClient(doc, e.currentTarget));
     $('#sdInvoice', body).addEventListener('click', async () => {
       try { const f = await api(`/store/documents/${doc.id}/convert`, { method: 'POST', body: { to: 'facture' } }); toast(`${f.number} créée`); showDoc(f.id); } catch (e) { fail(e); }
     });
@@ -1116,6 +1117,45 @@
       ${d.loyalty && d.status !== 'annulé' ? `<hr><div>Fidélité${d.loyalty.earned ? ` : +${qtyFmt(d.loyalty.earned)} pts` : ''}${d.loyalty.used ? `, ${qtyFmt(d.loyalty.used)} pts utilisés` : ''}<br>Solde : ${qtyFmt(d.loyalty.balance)} points</div>` : ''}
       <hr><div class="c">${esc(s.doc_footer || 'Merci de votre visite')}<br><small>${esc(s.legal_info || '')}</small></div>
       <script>setTimeout(() => window.print(), 200);</script></body></html>`);
+  }
+
+  /* ---------------- Ticket et facture numériques ---------------- */
+  // Indicatif téléphonique par pays : « 06 12 34 56 78 » au Maroc devient 212612345678 pour WhatsApp.
+  const DIAL = { MA: '212', DZ: '213', TN: '216', SN: '221', ML: '223', GN: '224', CI: '225', BF: '226', NE: '227', TG: '228', BJ: '229', CM: '237', GA: '241', CG: '242', CD: '243', MG: '261', FR: '33', BE: '32', CH: '41', LU: '352', CA: '1' };
+  function intlPhone(raw) {
+    let p = String(raw || '').replace(/[^\d+]/g, '');
+    if (!p) return '';
+    if (p.startsWith('+')) return p.slice(1);
+    if (p.startsWith('00')) return p.slice(2);
+    const cc = DIAL[state.me.store.country] || '';
+    return p.startsWith('0') && cc ? cc + p.slice(1) : cc && !p.startsWith(cc) && p.length <= 10 ? cc + p : p;
+  }
+  async function shareToClient(d, btn) {
+    if (btn) btn.disabled = true;
+    let url;
+    try { url = (await api(`/store/share/${d.id}`, { method: 'POST', body: {} })).url; }
+    catch (ex) { if (btn) btn.disabled = false; return fail(ex); }
+    if (btn) btn.disabled = false;
+    const c = d.customer_id ? state.customers.find((x) => String(x.id) === String(d.customer_id)) : null;
+    const phone = intlPhone(d.client_phone || c?.phone), email = d.client_email || c?.email || '';
+    const kind = { ticket: 'votre ticket', facture: 'votre facture', devis: 'votre devis', avoir: 'votre avoir', commande: 'votre commande' }[d.type] || 'votre document';
+    const shop = state.settings.shop_name || state.me.store.name;
+    const who = d.client_name && d.client_name !== 'Client comptoir' ? ` ${d.client_name.split(' ')[0]}` : '';
+    const text = `Bonjour${who}, voici ${kind} ${d.number} de ${shop} (${money(d.total_ttc)}) : ${url}`;
+    const sms = `sms:${phone ? '+' + phone : ''}${/iPhone|iPad|iPod|Mac/.test(navigator.userAgent) ? '&' : '?'}body=${encodeURIComponent(text)}`;
+    const body = openModal('Envoyer au client', `
+      <p class="muted">Le client reçoit un lien vers ${esc(kind)}, consultable sur son téléphone et imprimable, sans créer de compte.</p>
+      <div class="share-grid">
+        <a class="share-btn wa" href="https://wa.me/${phone}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">WhatsApp${phone ? `<small>+${esc(phone)}</small>` : '<small>choisir le contact</small>'}</a>
+        <a class="share-btn" href="${esc(sms)}">SMS${phone ? `<small>+${esc(phone)}</small>` : ''}</a>
+        <a class="share-btn" href="mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(`${kind.replace('votre ', '').replace(/^./, (x) => x.toUpperCase())} ${d.number} · ${shop}`)}&body=${encodeURIComponent(text)}">E-mail${email ? `<small>${esc(email)}</small>` : ''}</a>
+        ${navigator.share ? '<button type="button" class="share-btn" id="shNative">Autre application…</button>' : ''}
+      </div>
+      <label class="share-link">Lien<input id="shUrl" readonly value="${esc(url)}"></label>
+      <div class="modal-foot"><div><button class="btn" id="shCopy">Copier le lien</button> <a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Voir</a></div><div class="right"><button class="btn" id="shClose">Fermer</button></div></div>`);
+    $('#shClose', body).addEventListener('click', closeModal);
+    $('#shCopy', body).addEventListener('click', async () => { try { await navigator.clipboard.writeText(url); toast('Lien copié'); } catch { $('#shUrl', body).select(); document.execCommand('copy'); toast('Lien copié'); } });
+    $('#shNative', body)?.addEventListener('click', () => navigator.share({ title: `${d.number} · ${shop}`, text, url }).catch(() => {}));
   }
 
   function printJournal(j) {
@@ -1582,6 +1622,7 @@
       ${d.type === 'facture' && d.status !== 'annulée' ? `<p class="notice">Une facture n'est plus modifiable. En cas d'erreur, annulez-la et créez-en une nouvelle.</p>` : ''}
       <div class="doc-actions">
         <button class="btn btn-dark" id="dPrint">Imprimer / PDF</button>
+        ${['ticket', 'facture', 'devis', 'avoir', 'commande'].includes(d.type) ? '<button class="btn" id="dShare">Envoyer au client</button>' : ''}
         ${d.client_email ? `<a class="btn" href="mailto:${esc(d.client_email)}?subject=${encodeURIComponent(`${cap(conf.one)} ${d.number} — ${state.settings.shop_name || ''}`)}">Écrire au client</a>` : ''}
         ${pendingOrder ? '<button class="btn btn-primary" id="dToPos">Encaisser en caisse</button>' : ''}
         ${isOpenInvoice ? '<button class="btn btn-primary" id="dPay">Encaisser un paiement</button>' : ''}
@@ -1617,6 +1658,7 @@
     }));
 
     $('#dPrint', body).addEventListener('click', () => (isTicket ? printTicket(d) : printDoc(d)));
+    $('#dShare', body)?.addEventListener('click', (e) => shareToClient(d, e.currentTarget));
     $('#dToPos', body)?.addEventListener('click', () => loadOrderInPos(d));
     $('#dEdit', body)?.addEventListener('click', () => docForm(d.type, d));
     $('#dDelete', body)?.addEventListener('click', async () => {

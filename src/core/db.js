@@ -162,6 +162,11 @@ const MIGRATIONS = [
       created_at TEXT DEFAULT CURRENT_TIMESTAMP, invited_by INTEGER)`,
     'CREATE INDEX IF NOT EXISTS idx_platform_staff_role ON platform_staff(role_id)',
   ]],
+  [8, [
+    // Ticket et facture numériques : lien secret envoyé au client (WhatsApp, SMS, e-mail).
+    'ALTER TABLE documents ADD COLUMN share_token TEXT',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_documents_share_token ON documents(share_token) WHERE share_token IS NOT NULL',
+  ]],
 ];
 
 // Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).

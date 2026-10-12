@@ -12,6 +12,7 @@ import { bump, logEvent } from '../core/db.js';
 import { saveProductImage, deleteProductImage, fromBase64 } from '../platform/storage.js';
 import { pushRoutes, stockAlerts, notifyPlatform } from './push.js';
 import { storeSupportRoutes, postClientMessage } from './support.js';
+import { shareDocument } from './receipts.js';
 import { storeAccess } from './auth.js';
 
 /* ------------------------------------------------------------------ */
@@ -818,6 +819,7 @@ function guard(ctx, res, id, action, m, url) {
     case 'push': return; // chacun gère les notifications de ses propres appareils
     case 'support': return; // tout membre peut écrire au support
     case 'sync': return;    // chaque opération vérifie ses propres droits
+    case 'share': if (!ctx.can('pos.sell') && !ctx.can('documents.view')) ctx.need('documents.view'); return; // caissier ou gestionnaire
     case 'alerts': if (id === 'test-email') return ctx.need('settings.manage'); if (id === 'email-status') return; return ctx.need('alerts.view');
     case 'team': case 'roles': return ctx.need('team.manage');
     case 'subscription': return ctx.need('billing.manage');
@@ -948,6 +950,10 @@ export async function storeRoutes(ctx, parts) {
 
     case 'sync':
       if (!id && m === 'POST') return json(await syncOps(ctx, await body()));
+      break;
+
+    case 'share':
+      if (id && m === 'POST') return await shareDocument(ctx, id);
       break;
 
     case 'import':

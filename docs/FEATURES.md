@@ -362,3 +362,12 @@ Sans connexion, le commerce continue de tourner ; tout est envoyé au serveur d�
 - **Droits** : chaque opération est vérifiée au moment de la synchronisation. Refusée (rôle modifié, produit supprimé…) : elle est mise de côté avec la raison, sans bloquer les suivantes ; le commerçant peut la réessayer ou la supprimer. Panne du serveur : nouvel essai automatique.
 - **Stock** : déduit sur l'appareil au moment de la vente, puis recalculé par le serveur ; plusieurs caisses hors ligne en même temps peuvent mener à un stock négatif, signalé dans les alertes.
 - **Bandeau** : « Hors ligne », opérations en attente, synchronisation en cours, opérations refusées, avec le détail. Avant une déconnexion, Comptoir prévient s'il reste des opérations à envoyer.
+
+## Ticket et facture numériques
+
+Après une vente (« Envoyer au client ») ou depuis la fiche d'un ticket, d'une facture, d'un devis, d'un avoir ou d'une commande : envoi d'un **lien** par **WhatsApp** (directement au numéro du client, indicatif du pays ajouté : « 06… » au Maroc devient +212 6…), **SMS**, **e-mail**, partage natif du téléphone, ou copie du lien.
+
+- Page `/r/<jeton>` : le document comme le ticket imprimé (lignes, remises, total, paiements, TVA par taux, reste à payer, mentions légales), à l'heure du pays du commerce, imprimable ou enregistrable en PDF, avec un lien vers la vitrine.
+- Jeton de 128 bits, un par document (toujours le même lien) ; page jamais indexée (`noindex`), jamais mise en cache, sans référent.
+- Partage autorisé aux caissiers (leur ticket) et aux gestionnaires de documents ; un autre commerce ne peut pas partager vos documents.
+- Mention « Ticket envoyé avec Comptoir » : chaque ticket fait connaître la plateforme (boucle de croissance, comme Square ou Shopify).

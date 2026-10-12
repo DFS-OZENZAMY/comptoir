@@ -14,16 +14,20 @@
     "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js"
   },
   "devDependencies": {
-    "@eslint/js": "^9.26.0",
-    "eslint": "^9.26.0",
-    "globals": "^16.0.0",
-    "wrangler": "^4.45.0"
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^16.5.0",
+    "wrangler": "4.142.0"
   },
   "type": "module",
   "optionalDependencies": {
-    "@libsql/client": "^0.15.15"
+    "@libsql/client": "^0.18.0"
   },
   "engines": {
     "node": ">=22.5"
+  },
+  "overrides": {
+    "sharp": "0.35.5",
+    "undici": "7.29.1"
   }
 }

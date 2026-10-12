@@ -983,3 +983,12 @@ a, button, label, select, [role="button"] { touch-action: manipulation; -webkit-
 .sync-list li span { color: var(--ink); overflow-wrap: anywhere; } .sync-list li small { color: var(--muted); }
 .sync-list li.failed { border-color: #F0C2BB; background: #FDF4F2; } .sync-list li.failed b { color: var(--signal-strong); }
 .sync-actions { display: flex; gap: 6px; flex: none; }
+
+/* Ticket et facture numériques : envoi au client */
+.share-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 14px 0; }
+.share-btn { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper); color: var(--ink); font: inherit; font-weight: 700; text-decoration: none; text-align: left; cursor: pointer; }
+.share-btn small { font-weight: 500; color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.share-btn:hover { border-color: var(--ink); }
+.share-btn.wa { background: #E7F7EE; border-color: #B9E6CB; color: #0B5A2D; }
+.share-link { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
+.share-link input { font: inherit; font-size: .85rem; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--zinc); color: var(--ink); }

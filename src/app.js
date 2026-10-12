@@ -12,6 +12,7 @@ import { storeRoutes, runDailyDigests, sendEmail } from './features/store.js';
 import { dailyBackup } from './features/backup.js';
 import { notifyPlatform, dailyPushes } from './features/push.js';
 import { chatIdentity } from './features/support.js';
+import { renderReceipt } from './features/receipts.js';
 import { getRealtime } from './platform/realtime.js';
 import { resolveAccess } from './features/access.js';
 import { consoleRoutes, takeSnapshot, cleanup } from './features/console.js';
@@ -168,6 +169,9 @@ const app = {
         const page = renderHelpGuide(url.origin, hm[1]);
         return page ? html(page, 200, 'public, max-age=3600') : Response.redirect(url.origin + '/aide', 302);
       }
+      // Ticket ou facture numérique envoyé au client (lien secret).
+      const rm = p.match(/^\/r\/([A-Za-z0-9_-]+)\/?$/);
+      if (rm) { await init(env.DB); return await renderReceipt(env, request, rm[1]); }
       const sm = p.match(/^\/s\/([a-z0-9-]+)\/?$/);
       if (sm) {
         if (p.endsWith('/')) return Response.redirect(url.origin + p.slice(0, -1), 301);
