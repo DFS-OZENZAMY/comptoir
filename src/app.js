@@ -75,6 +75,7 @@ async function handleApi(request, env, info, exec) {
         plans: Object.entries(PLANS).filter(([k]) => PAID_PLANS.includes(k)).map(([key, p]) => ({ key, ...p })),
         business_types: Object.entries(BUSINESS_TYPES).map(([key, t]) => ({ key, label: t.label })),
         countries: Object.entries(COUNTRIES).map(([key, x]) => ({ key, ...x })),
+        country_hint: visitorCountry(request, new URL(request.url)).country,   // pays probable (cookie du site, puis réseau)
       });
     }
     if (a === 'images' && b && m === 'GET') return await serveImage(env, db, b);

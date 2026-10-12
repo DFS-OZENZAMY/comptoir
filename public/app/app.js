@@ -145,11 +145,16 @@
     $('#modalTitle').textContent = title;
     $('#modalBody').innerHTML = html;
     modal.classList.toggle('wide', wide);
-    if (!modal.open) modal.showModal();
+    // Une étape d'historique par fenêtre ouverte : le bouton Retour du téléphone ferme la fenêtre, sans quitter la rubrique.
+    if (!modal.open) { modal.showModal(); history.pushState({ modal: true }, ''); }
     modal.scrollTop = 0;
     return $('#modalBody');
   }
   const closeModal = () => modal.open && modal.close();
+  modal.addEventListener('close', () => { if (history.state && history.state.modal) history.back(); });
+  window.addEventListener('popstate', () => { if (modal.open && !(history.state && history.state.modal)) modal.close(); });
+  const amt = (n) => (Math.round(n * 100) / 100).toFixed(2).replace('.', ',');
+  const readAmt = (v) => Number(String(v ?? '').replace(/[\s\u00a0]/g, '').replace(',', '.')) || 0;
   $('#modalClose').addEventListener('click', closeModal);
   modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
@@ -185,7 +190,7 @@
   /* ---------------- Connexion et inscription ---------------- */
   function showLogin(mode) {
     $('#app').hidden = true; $('#auth').hidden = false; closeModal();
-    const signup = mode === 'signup' || (mode === undefined && location.hash === '#/inscription');
+    const signup = mode === 'signup' || (mode === undefined && location.hash.split('?')[0] === '#/inscription');
     $('#loginForm').hidden = signup; $('#signupForm').hidden = !signup;
     $$('[data-authtab]').forEach((b) => b.setAttribute('aria-selected', String((b.dataset.authtab === 'signup') === signup)));
     if (signup) loadPlatform();
@@ -199,12 +204,29 @@
       const types = state.platform.business_types;
       $('#suTypes').innerHTML = types.map((t) => `<button type="button" role="radio" class="chip" data-trade="${t.key}" aria-checked="false" aria-pressed="false">${esc(t.label.split(' & ')[0].replace(' commerce', ''))}</button>`).join('');
       const pick = (key) => { $('#suType').value = key; $$('[data-trade]').forEach((b) => { const on = b.dataset.trade === key; b.setAttribute('aria-checked', String(on)); b.setAttribute('aria-pressed', String(on)); }); };
-      $('#suTypes').addEventListener('click', (e) => { const b = e.target.closest('[data-trade]'); if (b) pick(b.dataset.trade); });
-      pick(types[0].key);
+      $('#suTypes').addEventListener('click', (e) => { const b = e.target.closest('[data-trade]'); if (b) { pick(b.dataset.trade); $('#suTypes').classList.remove('missing'); } });
+      // Aucun métier présélectionné : un mauvais choix par défaut donne de mauvais produits d'exemple.
+      // Arrivée depuis une page métier du site (#/inscription?metier=alimentation) : déjà choisi.
+      const askedType = new URLSearchParams(location.hash.split('?')[1] || '').get('metier');
+      $('#suType').value = '';
+      if (askedType && types.some((t) => t.key === askedType)) pick(askedType);
       const fmtTva = (v) => String(v).replace('.', ',');
       $('#suCountry').innerHTML = state.platform.countries.map((c) => `<option value="${c.key}">${esc(c.name)} (${esc(c.currency)}, TVA ${fmtTva(c.tva)} %)</option>`).join('');
+      const guess = guessCountry(state.platform.countries.map((c) => c.key), state.platform.country_hint);
+      if (guess) $('#suCountry').value = guess;
       $('#trialDays').textContent = state.platform.trial_days;
     } catch (e) { fail(e); }
+  }
+  // Pays probable du commerçant : choix fait sur le site, puis fuseau horaire de l'appareil (fiable même
+  // derrière un VPN), puis pays détecté par le serveur, puis langue du navigateur.
+  const TZ_COUNTRY = { 'Africa/Casablanca': 'MA', 'Africa/El_Aaiun': 'MA', 'Africa/Algiers': 'DZ', 'Africa/Tunis': 'TN', 'Africa/Dakar': 'SN', 'Africa/Abidjan': 'CI',
+    'Africa/Douala': 'CM', 'Europe/Paris': 'FR', 'Europe/Brussels': 'BE', 'Europe/Zurich': 'CH', 'Europe/Luxembourg': 'LU', 'America/Toronto': 'CA', 'America/Montreal': 'CA' };
+  function guessCountry(known, hint) {
+    const ok = (c) => c && known.includes(c) ? c : null;
+    const cookie = (document.cookie.match(/(?:^|;\s*)cp_pays=([A-Z]{2})/) || [])[1];
+    let tz = ''; try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { /* navigateur ancien */ }
+    const lang = (navigator.languages || [navigator.language]).map((l) => (String(l).split('-')[1] || '').toUpperCase()).find((c) => known.includes(c));
+    return ok(cookie) || ok(TZ_COUNTRY[tz]) || ok(hint) || ok(lang) || null;
   }
   $$('[data-authtab]').forEach((b) => b.addEventListener('click', () => {
     history.replaceState(null, '', b.dataset.authtab === 'signup' ? '#/inscription' : '#/');
@@ -222,7 +244,7 @@
       await loadShared();
     } catch (e) { fail(e); }
     renderShell();
-    if (location.hash === '#/inscription' || location.hash === '') location.hash = '#/tableau-de-bord'; else route();
+    if (location.hash.split('?')[0] === '#/inscription' || location.hash === '') location.hash = '#/tableau-de-bord'; else route();
     if (state.me.user.must_change_password) passwordModal(true);
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 600));
     idle(() => ['tableau-de-bord', 'commandes', 'alertes'].forEach(prefetch));
@@ -332,6 +354,12 @@
     const d = Object.fromEntries(new FormData(e.target));
     d.demo = $('#suDemo').checked;
     $('#signupError').textContent = '';
+    if (!d.business_type) {
+      btn.disabled = false;
+      $('#suTypes').classList.add('missing'); $('#suTypes').scrollIntoView({ block: 'center', behavior: 'smooth' });
+      $('#signupError').textContent = 'Choisissez votre type de commerce : il prépare vos catégories et vos produits d’exemple.';
+      return;
+    }
     try {
       await api('/auth/signup', { method: 'POST', body: d });
       location.hash = '#/tableau-de-bord';
@@ -441,7 +469,7 @@
     const y = window.scrollY; const fn = current.key && VIEWS[current.key]?.[1];
     if (fn) Promise.resolve(fn()).then(() => window.scrollTo(0, y)).catch(() => {});
   }
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => { closeModal(); route(); });
   const setActions = (html) => { $('#viewActions').innerHTML = html; };
 
   // Menu « Plus » sur téléphone
@@ -498,6 +526,8 @@
         ${can('documents.edit') ? '<button type="button" data-new="devis">Faire un devis</button><button type="button" data-new="facture">Faire une facture</button>' : ''}
         <button type="button" id="shareVitrine">Partager ma vitrine</button>
       </nav>
+      ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length} · <a href="/aide/bien-demarrer" target="_blank" rel="noopener">Guide complet</a></span></div>
+        <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}</ol></section>` : ''}
       <section class="install-card" id="installCard" hidden>
         <div class="install-icon" aria-hidden="true"><img src="/assets/icon-192.png" alt="" width="56" height="56"></div>
         <div class="install-text"><strong>Installez Comptoir sur cet appareil</strong><span>Votre caisse s’ouvre en un geste, depuis l’écran d’accueil ou le bureau, sans passer par le site.</span></div>
@@ -508,8 +538,6 @@
         <div class="install-text"><strong>Soyez prévenu même application fermée</strong><span>Stock bas, paiements en retard, fin d’essai : une notification arrive sur ce téléphone ou cet ordinateur.</span></div>
         <div class="install-actions"><button type="button" class="btn btn-primary" id="pushCardGo">Activer</button><button type="button" class="btn" id="pushCardHide">Plus tard</button></div>
       </section>
-      ${todo.length ? `<section class="panel onboarding"><div class="panel-head"><h2>Pour bien démarrer</h2><span class="muted">${steps.length - todo.length} sur ${steps.length} · <a href="/aide/bien-demarrer" target="_blank" rel="noopener">Guide complet</a></span></div>
-        <ol>${steps.map((x) => `<li class="${x.done ? 'done' : ''}"><a href="${x.href}">${x.label}</a></li>`).join('')}</ol></section>` : ''}
       <div class="home-grid">
         <section class="panel">
           <div class="panel-head"><h2>À faire</h2>${tasks.length ? `<span class="muted">${tasks.length}</span>` : ''}</div>
@@ -922,7 +950,7 @@
     const body = openModal('Encaissement', `
       <div class="pay-total"><span>À payer</span><strong id="payRest"></strong></div>
       <div class="pay-methods">${METHODS.filter((m) => m !== 'autre').map((m) => `<button type="button" class="pay-method" data-method="${m}">${cap(m)}</button>`).join('')}</div>
-      <label class="field"><span id="payLabel">Montant</span><input id="payAmount" type="number" step="0.01" min="0" inputmode="decimal"></label>
+      <label class="field"><span id="payLabel">Montant</span><input id="payAmount" type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done"></label>
       <div class="quick" id="payQuick"></div>
       <p class="pay-change" id="payChange"></p>
       <ul class="pay-list" id="payList"></ul>
@@ -936,32 +964,32 @@
       const r = rest();
       const notes = [...new Set([10, 20, 50, 100, 200, 500].map((u) => Math.ceil((r + 0.001) / u) * u))].filter((v) => v > r).slice(0, 3);
       $('#payQuick').innerHTML = method === 'espèces' ? [r, ...notes].map((v) => `<button type="button" class="btn btn-sm" data-quick="${v}">${v === r ? 'Compte juste' : money(v)}</button>`).join('') : '';
-      $$('[data-quick]', body).forEach((b) => b.addEventListener('click', () => { amount.value = Number(b.dataset.quick).toFixed(2); refresh(); }));
-      const v = r2(Number(amount.value) || 0);
+      $$('[data-quick]', body).forEach((b) => b.addEventListener('click', () => { amount.value = amt(Number(b.dataset.quick)); refresh(); }));
+      const v = r2(readAmt(amount.value) || 0);
       $('#payChange').innerHTML = method === 'espèces' && v > r ? `<span>À rendre</span><strong>${money(v - r)}</strong>` : '';
       $('#payGo').textContent = v >= r ? 'Valider la vente' : 'Ajouter ce paiement';
       $('#payList').innerHTML = payments.map((p, i) => `<li><span>${cap(p.method)}</span><span>${money(p.amount)} <button type="button" class="link" data-unpay="${i}">retirer</button></span></li>`).join('');
-      $$('[data-unpay]', body).forEach((b) => b.addEventListener('click', () => { payments.splice(b.dataset.unpay, 1); amount.value = rest().toFixed(2); refresh(); }));
+      $$('[data-unpay]', body).forEach((b) => b.addEventListener('click', () => { payments.splice(b.dataset.unpay, 1); amount.value = amt(rest()); refresh(); }));
     };
-    $$('.pay-method', body).forEach((b) => b.addEventListener('click', () => { method = b.dataset.method; if (method !== 'espèces' && Number(amount.value) > rest()) amount.value = rest().toFixed(2); refresh(); amount.focus(); }));
+    $$('.pay-method', body).forEach((b) => b.addEventListener('click', () => { method = b.dataset.method; if (method !== 'espèces' && readAmt(amount.value) > rest()) amount.value = amt(rest()); refresh(); amount.focus(); }));
     amount.addEventListener('input', refresh);
     amount.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#payGo').click(); } });
     $('#payCancel').addEventListener('click', closeModal);
     $('#payGo').addEventListener('click', async (e) => {
-      const r = rest(); const v = r2(Number(amount.value) || 0);
+      const r = rest(); const v = r2(readAmt(amount.value) || 0);
       $('#payErr').textContent = '';
       if (v <= 0) { $('#payErr').textContent = 'Indiquez le montant reçu.'; return; }
       if (v > r && method !== 'espèces') { $('#payErr').textContent = 'Seules les espèces permettent de rendre la monnaie.'; return; }
       const change = method === 'espèces' && v > r ? r2(v - r) : 0;
       payments.push({ method, amount: Math.min(v, r), note: change ? `Reçu ${money(v)}, rendu ${money(change)}` : '' });
-      if (rest() > 0) { amount.value = rest().toFixed(2); refresh(); amount.focus(); return; }
+      if (rest() > 0) { amount.value = amt(rest()); refresh(); amount.focus(); return; }
       e.currentTarget.disabled = true;
       try {
         const doc = await posSubmit(posBody('ticket', payments));
         saleDone(doc, change);
       } catch (ex) { payments.pop(); $('#payErr').textContent = ex.message; e.currentTarget.disabled = false; refresh(); }
     });
-    amount.value = total.toFixed(2);
+    amount.value = amt(total);
     refresh(); amount.select();
   }
 
@@ -1933,7 +1961,9 @@
           : await api(`/store/documents/${d.id}`, { method: 'PUT', body: payload });
         await refresh('products');
         toast(isNew ? `${saved.number} créé` : `${saved.number} enregistré`);
-        if (location.hash !== `#/${conf.view}`) location.hash = `#/${conf.view}`; else route();
+        // Changement de rubrique sans événement « hashchange » (qui fermerait la fiche ouverte juste après)
+        if (location.hash !== `#/${conf.view}`) history.pushState(null, '', `#/${conf.view}`);
+        route();
         showDoc(saved.id);
       } catch (ex) { $('#dError').textContent = ex.message; e.currentTarget.disabled = false; }
     });
@@ -2399,6 +2429,35 @@
     const monthLabels = (L[0]?.months || []).map((m) => new Date(m.month + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'short' }));
     const maxMonth = Math.max(1, ...L.flatMap((x) => x.months.map((m) => m.value)));
     const PALETTE = ['#17181C', '#E4572E', '#2D5F8A', '#2E7D4F', '#B7791F', '#7A4FB0'];
+    // Une seule boutique (la plupart des commerces) : les chiffres du quotidien, sans comparaison inutile.
+    if (L.length < 2) {
+      const x = L[0] || { revenue: 0, sales: 0, average: 0, evolution: null, margin: 0, margin_rate: null, margin_coverage: 0, unpaid: 0, stock_value: 0, out_of_stock: 0, months: [], top: [] };
+      const evo = x.evolution === null ? '<span class="muted">pas de période précédente à comparer</span>' : `${pct(x.evolution)} <span class="muted">par rapport à la période précédente</span>`;
+      const maxM = Math.max(1, ...(x.months || []).map((m) => m.value));
+      $('#view').innerHTML = `
+        <div class="rep-kpis">
+          <div class="rep-kpi main"><span>Chiffre d'affaires TTC</span><strong>${money(x.revenue)}</strong><small>${evo}</small></div>
+          <div class="rep-kpi"><span>Ventes</span><strong>${x.sales}</strong><small>${esc(r.period.label)}</small></div>
+          <div class="rep-kpi"><span>Panier moyen</span><strong>${money(x.average)}</strong><small>par vente</small></div>
+          <div class="rep-kpi"><span>Marge brute</span><strong>${x.margin_coverage ? money(x.margin) : '—'}</strong><small>${x.margin_coverage ? `${x.margin_rate !== null ? String(x.margin_rate).replace('.', ',') + ' %' : ''}${x.margin_coverage < 100 ? ` · sur ${x.margin_coverage} % des ventes` : ''}` : 'renseignez les prix d’achat des produits'}</small></div>
+        </div>
+        <div class="dash-grid">
+          <section class="panel">
+            <div class="panel-head"><h2>6 derniers mois</h2><span class="muted">TTC</span></div>
+            <div class="month-bars">${(x.months || []).map((m) => `<div class="mb-col"><div class="mb-stack"><span title="${money(m.value)}" style="height:${Math.round((m.value / maxM) * 100)}%;background:${PALETTE[1]}"></span></div><small>${new Date(m.month + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'short' })}</small></div>`).join('')}</div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><h2>Meilleures ventes</h2><span class="muted">${esc(r.period.label)}</span></div>
+            ${x.top && x.top.length ? `<ol class="tops-single">${x.top.map((t) => `<li><span>${esc(t.label)}</span><strong>${money(t.amount)}</strong></li>`).join('')}</ol>` : '<div class="empty-state">Vos produits les plus vendus apparaîtront ici après vos premières ventes.</div>'}
+          </section>
+        </div>
+        <div class="rep-kpis small">
+          <div class="rep-kpi"><span>Valeur du stock</span><strong>${money(x.stock_value || 0)}</strong><small>${x.out_of_stock ? `<span class="stock-out">${x.out_of_stock} produit${x.out_of_stock > 1 ? 's' : ''} en rupture</span>` : 'au prix d’achat'}</small></div>
+          <div class="rep-kpi"><span>Reste à encaisser</span><strong class="${x.unpaid ? 'stock-low' : ''}">${money(x.unpaid || 0)}</strong><small>factures non soldées</small></div>
+        </div>
+        <p class="muted report-note">La marge brute compare le prix de vente HT au prix d'achat des produits.${can('locations.manage') ? ' Plusieurs points de vente ? <a href="#/boutiques">Ajoutez vos boutiques</a> pour comparer leurs chiffres.' : ''}</p>`;
+      return;
+    }
     $('#view').innerHTML = `
       ${L.length < 2 ? `<div class="notice">Vous avez une seule boutique. ${can('locations.manage') ? '<a href="#/boutiques">Ajoutez vos autres points de vente</a> pour comparer leurs chiffres.' : ''}</div>` : ''}
       ${best && best.revenue > 0 && L.length > 1 ? `<section class="report-hero"><span class="muted">${esc(r.period.label)}</span><h2><strong>${esc(best.name)}</strong> réalise ${String(best.share).replace('.', ',')} % du chiffre d'affaires</h2><p>${money(best.revenue)} sur ${money(r.total)} au total, toutes boutiques confondues.</p></section>` : ''}

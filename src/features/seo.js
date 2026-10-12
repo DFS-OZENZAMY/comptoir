@@ -243,7 +243,7 @@ export function renderMetier(origin, slug, country = 'FR') {
       <div class="hero-copy">
         <h1>${e(m.h1)}</h1>
         <p class="lead">${e(m.lead)}</p>
-        <div class="hero-cta"><a class="btn btn-primary btn-lg" href="/app/#/inscription">Essayer gratuitement</a><span class="muted">14 jours gratuits, sans carte bancaire</span></div>
+        <div class="hero-cta"><a class="btn btn-primary btn-lg" href="/app/#/inscription?metier=${e(m.type)}">Essayer gratuitement</a><span class="muted">14 jours gratuits, sans carte bancaire</span></div>
       </div>
     </section>
     <section class="band" id="fonctions">
@@ -306,6 +306,8 @@ export function renderHub(origin) {
 
 const LANDING_FAQ = [
   ['Ai-je besoin de matériel particulier ?', 'Non. Comptoir fonctionne dans un navigateur, sur ordinateur, tablette ou téléphone. Une douchette code-barres USB et une imprimante de tickets 80 mm se branchent sans réglage si vous le souhaitez.'],
+  ['Et si internet coupe ?', 'Vous continuez de vendre : la caisse, les nouveaux clients et les mouvements de stock fonctionnent sans connexion. Tout est gardé sur l’appareil et envoyé automatiquement au retour d’internet, à la date et à l’heure réelles des ventes.'],
+  ['Puis-je installer Comptoir comme une application ?', 'Oui, sur téléphone, tablette ou ordinateur, depuis le navigateur, sans passer par un magasin d’applications. Comptoir s’ouvre alors depuis son icône et vous prévient même application fermée : stock bas, paiements, messages du support.'],
   ['Mes clients peuvent-ils commander en ligne ?', 'La vitrine présente votre catalogue, vos prix et la disponibilité. Vos clients vous appellent ou passent en boutique ; vous mettez la commande de côté en un clic.'],
   ['Mes données sont-elles séparées de celles des autres commerces ?', 'Oui. Chaque commerce dispose de son propre espace, inaccessible aux autres. Vos employés ont des accès limités.'],
   ['Que se passe-t-il à la fin de l’essai ?', 'Vous choisissez une formule depuis votre espace. Sans abonnement, vos données restent consultables mais l’encaissement est suspendu.'],

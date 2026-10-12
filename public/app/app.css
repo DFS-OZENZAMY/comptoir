@@ -992,3 +992,23 @@ a, button, label, select, [role="button"] { touch-action: manipulation; -webkit-
 .share-btn.wa { background: #E7F7EE; border-color: #B9E6CB; color: #0B5A2D; }
 .share-link { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); }
 .share-link input { font: inherit; font-size: .85rem; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--zinc); color: var(--ink); }
+
+/* Inscription : type de commerce oublié */
+#suTypes.missing .chip { border-color: var(--signal-strong); }
+/* Téléphone : les messages s'affichent au-dessus de la barre de navigation du bas, sans la cacher */
+@media (max-width: 900px) { .toast { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); } }
+
+/* Rapports d'une boutique unique : chiffres clés */
+.rep-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.rep-kpi { display: grid; gap: 4px; padding: 16px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius, 12px); }
+.rep-kpi span { color: var(--muted); font-size: .86rem; } .rep-kpi strong { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rep-kpi small { font-size: .8rem; color: var(--muted); line-height: 1.4; } .rep-kpi.main { border-color: var(--ink); }
+.rep-kpis.small .rep-kpi strong { font-size: 1.25rem; }
+.tops-single { margin: 0; padding: 4px 18px 16px 36px; display: grid; gap: 8px; }
+.tops-single li span { display: inline-block; max-width: 70%; } .tops-single li strong { float: right; font-variant-numeric: tabular-nums; }
+
+/* Téléphone : la barre des boutons d'action (Valider la vente, Enregistrer…) reste toujours visible en bas de la fenêtre */
+@media (max-width: 900px) {
+  #modal .modal-foot { position: sticky; bottom: 0; z-index: 2; margin-top: 16px;
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--paper); box-shadow: 0 -10px 16px -14px rgba(23,24,28,.35); }
+}
