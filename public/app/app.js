@@ -262,7 +262,6 @@
     $('#storeName').textContent = state.settings.shop_name || st.name;
     $('#storeLink').href = `/s/${st.slug}`;
     $('#storeLinkM').href = `/s/${st.slug}`;
-    $('#storeNameM').textContent = state.settings.shop_name || st.name;
     $('#consoleLink').hidden = !me.platform_admin;
     $$('[data-perm]').forEach((el) => { el.hidden = !can(el.dataset.perm); });
     $$('[data-perm-any]').forEach((el) => { el.hidden = !canAny(el.dataset.permAny); });

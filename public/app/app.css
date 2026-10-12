@@ -1074,3 +1074,16 @@ body.scanning { overflow: hidden; }
   .side-nav a { padding-top: 6px; padding-bottom: 6px; min-height: 34px; }
   .nav-group { margin-top: 6px; }
 }
+
+/* ================= Logo Comptoir en haut à gauche (icône + nom de l'application) ================= */
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--paper); text-decoration: none; min-width: 0; }
+.brand-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+.brand-name { font-weight: 850; font-stretch: 70%; font-size: 1.5rem; line-height: 1; letter-spacing: .005em; color: var(--paper); }
+.side-brand .brand:hover .brand-name { color: #fff; }
+.side-brand .brand + .plan-badge { margin-top: 4px; }
+@media (max-width: 900px) {
+  .mobile-store.brand { flex-direction: row; align-items: center; gap: 10px; }
+  .mobile-store.brand .brand-icon { width: 30px; height: 30px; border-radius: 8px; }
+  .mobile-store .brand-txt { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .mobile-store .brand-name { font-size: 1.3rem; }
+}
