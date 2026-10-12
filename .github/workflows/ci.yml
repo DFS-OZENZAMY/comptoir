@@ -9,7 +9,7 @@ on:
 jobs:
   tests:
     name: Code et tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # version fixée : pas de changement surprise de machine
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,7 +22,7 @@ jobs:
 
   docker:
     name: Image Docker
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # version fixée : pas de changement surprise de machine
     needs: tests
     steps:
       - uses: actions/checkout@v4
