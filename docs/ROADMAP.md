@@ -4,6 +4,10 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 
 **Suivi** : chaque fonction a son ticket GitHub, rangé dans le tableau [Comptoir — Feuille de route](https://github.com/users/DFS-OZENZAMY/projects/4) (priorité, effort, jalon, statut). Ce document donne la vue d'ensemble ; le détail et l'avancement sont dans les tickets.
 
+**Tenue de la todo** : avant de commencer un ticket, l'assigner et le passer « En cours » ; à la livraison, commenter ce qui a été fait et vérifié, fermer le ticket, le passer « Terminé », et le déplacer dans « Fait » ci-dessous. Toute nouvelle tâche repérée (bogue, idée, action manuelle) reçoit un ticket.
+
+**À faire par le propriétaire** (comptes, sécurité, sauvegardes, juridique, essais sur appareils réels) : ticket épinglé #17.
+
 ## Ce que dit le marché
 
 ### Réglementation : la facture électronique devient obligatoire
@@ -33,4 +37,4 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 | 8 | **QR code sur le ticket imprimé** vers le ticket numérique | Prolonge le ticket numérique | Faible | #10 |
 
 ## Déjà identifié (backlog)
-Paiement des abonnements (#11), mot de passe oublié par e-mail (#12), captcha à l'inscription (#13), certification NF525 (#14), découpage de `public/app/app.js` (#15), grille tarifaire face à la concurrence (#16).
+Paiement des abonnements (#11), mot de passe oublié par e-mail (#12), captcha à l'inscription (#13), certification NF525 (#14), découpage de `public/app/app.js` (#15), grille tarifaire face à la concurrence (#16), maquettes Figma de la messagerie (#18), appareil reconnu non bloqué par adresse IP (#19, à valider), temps réel sur plusieurs serveurs Node.js (#20).
