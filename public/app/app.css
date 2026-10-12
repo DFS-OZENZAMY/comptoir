@@ -1092,8 +1092,9 @@ body.scanning { overflow: hidden; }
 .form-error .link { color: inherit; font-weight: 700; }
 
 /* ================= Étiquettes code-barres ================= */
-.bc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.bc-tools small { flex-basis: 100%; }
+/* Outils du code-barres : toute la largeur, sous le champ (jamais à côté d'un autre champ) */
+.bc-tools { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: -4px; min-width: 0; }
+.bc-tools small { flex-basis: 100%; line-height: 1.4; overflow-wrap: anywhere; }
 .lab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 16px; align-items: end; }
 .lab-grid .check { display: flex; gap: 8px; align-items: center; font-weight: 500; }
 .lab-grid .check input { width: auto; }

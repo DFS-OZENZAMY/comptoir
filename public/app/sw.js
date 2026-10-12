@@ -2,7 +2,7 @@
 // Données (/api/) : toujours le serveur quand il répond ; hors ligne, l'application se sert de ses
 // propres copies (IndexedDB, outbox.js) et met les opérations en file, envoyées au retour du réseau.
 importScripts('/app/outbox.js');
-const VERSION = 'comptoir-2026-10-12e';
+const VERSION = 'comptoir-2026-10-12f';
 const SHELL = [
   '/app/', '/app/app.js', '/app/app.css', '/app/chat.js', '/app/outbox.js', '/app/scanner.js', '/app/labels.js', '/app/offline', '/assets/fonts.css',
   '/assets/fonts/archivo.woff2', '/assets/fonts/archivo-narrow.woff2', '/assets/fonts/plex-mono-400.woff2', '/assets/fonts/plex-mono-600.woff2',
