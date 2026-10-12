@@ -305,7 +305,7 @@ export function renderHub(origin) {
 /* ------------------------------------------------------------------ */
 
 const LANDING_FAQ = [
-  ['Ai-je besoin de matériel particulier ?', 'Non. Comptoir fonctionne dans un navigateur, sur ordinateur, tablette ou téléphone. Une douchette code-barres USB et une imprimante de tickets 80 mm se branchent sans réglage si vous le souhaitez.'],
+  ['Ai-je besoin de matériel particulier ?', 'Non. Comptoir fonctionne dans un navigateur, sur ordinateur, tablette ou téléphone, et la caméra du téléphone suffit pour scanner les codes-barres. Une douchette USB ou Bluetooth et une imprimante de tickets 80 mm se branchent sans réglage si vous le souhaitez.'],
   ['Et si internet coupe ?', 'Vous continuez de vendre : la caisse, les nouveaux clients et les mouvements de stock fonctionnent sans connexion. Tout est gardé sur l’appareil et envoyé automatiquement au retour d’internet, à la date et à l’heure réelles des ventes.'],
   ['Puis-je installer Comptoir comme une application ?', 'Oui, sur téléphone, tablette ou ordinateur, depuis le navigateur, sans passer par un magasin d’applications. Comptoir s’ouvre alors depuis son icône et vous prévient même application fermée : stock bas, paiements, messages du support.'],
   ['Mes clients peuvent-ils commander en ligne ?', 'La vitrine présente votre catalogue, vos prix et la disponibilité. Vos clients vous appellent ou passent en boutique ; vous mettez la commande de côté en un clic.'],

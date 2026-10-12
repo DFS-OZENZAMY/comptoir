@@ -2,9 +2,9 @@
 // Données (/api/) : toujours le serveur quand il répond ; hors ligne, l'application se sert de ses
 // propres copies (IndexedDB, outbox.js) et met les opérations en file, envoyées au retour du réseau.
 importScripts('/app/outbox.js');
-const VERSION = 'comptoir-2026-10-12';
+const VERSION = 'comptoir-2026-10-12b';
 const SHELL = [
-  '/app/', '/app/app.js', '/app/app.css', '/app/chat.js', '/app/outbox.js', '/app/offline', '/assets/fonts.css',
+  '/app/', '/app/app.js', '/app/app.css', '/app/chat.js', '/app/outbox.js', '/app/scanner.js', '/app/offline', '/assets/fonts.css',
   '/assets/fonts/archivo.woff2', '/assets/fonts/archivo-narrow.woff2', '/assets/fonts/plex-mono-400.woff2', '/assets/fonts/plex-mono-600.woff2',
   '/assets/icon-192.png', '/assets/favicon.svg',
 ];
@@ -28,6 +28,11 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
+  // Lecteur de codes-barres (iPhone, Firefox) : gardé après le premier usage, pour scanner hors ligne.
+  if (url.pathname.startsWith('/vendor/barcode/')) {
+    e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; })));
+    return;
+  }
   // Photos des produits : adresse versionnée, gardées pour la caisse hors ligne.
   if (url.pathname.startsWith('/api/images/')) {
     e.respondWith(caches.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; })).catch(() => new Response('', { status: 504 })));

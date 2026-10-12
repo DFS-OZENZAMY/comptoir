@@ -17,13 +17,13 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 
 ## Fait
 - Ticket et facture numériques par WhatsApp, SMS, e-mail (octobre 2026).
+- Scan des codes-barres avec la caméra du téléphone (#1, octobre 2026).
 - Mode hors ligne avec synchronisation, messagerie support en direct, notifications push, import depuis les anciens logiciels, multi-boutiques, fidélité, vitrine en ligne.
 
 ## Priorités
 
 | Priorité | Fonction | Pourquoi | Effort | Ticket |
 |---|---|---|---|---|
-| 1 | **Scan des codes-barres avec la caméra** du téléphone (caisse, fiche produit, inventaire) | Les petits commerces n'ont pas de douchette ; standard chez les concurrents | Moyen | #1 |
 | 2 | **Achats et fournisseurs** : fiches fournisseurs, bons de commande depuis les alertes de stock, réception de marchandise (mise à jour du stock et du prix d'achat) | Inclus dans les formules Pro des concurrents ; complète la gestion de stock | Moyen à fort | #2 |
 | 3 | **Facture électronique structurée** : export UBL 2.1 / CII (EN 16931), puis Factur-X (PDF/A-3) ; ensuite raccordement à une plateforme agréée (France) et à la DGI (Maroc) | Obligation légale 2027 en France, déploiement en cours au Maroc | Fort | #3, #4, #5 |
 | 4 | **Click & collect** : commandes de la vitrine enregistrées dans Comptoir (au lieu du seul message WhatsApp), paiement à la remise | Transforme la vitrine en canal de vente | Moyen | #6 |

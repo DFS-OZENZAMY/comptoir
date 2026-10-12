@@ -371,3 +371,13 @@ Après une vente (« Envoyer au client ») ou depuis la fiche d'un ticket, d'une
 - Jeton de 128 bits, un par document (toujours le même lien) ; page jamais indexée (`noindex`), jamais mise en cache, sans référent.
 - Partage autorisé aux caissiers (leur ticket) et aux gestionnaires de documents ; un autre commerce ne peut pas partager vos documents.
 - Mention « Ticket envoyé avec Comptoir » : chaque ticket fait connaître la plateforme (boucle de croissance, comme Square ou Shopify).
+
+## Scan des codes-barres avec la caméra
+
+Avec la caméra du téléphone, de la tablette ou de l'ordinateur, sans douchette (`public/app/scanner.js`).
+
+- **Caisse** : scan en continu, chaque code lu ajoute l'article au ticket (bip, vibration, compteur) ; un même code n'est compté à nouveau qu'après 1,8 s (pas de double compte par erreur). Code inconnu : « Créer ce produit », fiche préremplie avec le code.
+- **Fiche produit** : le code lu remplit le champ, avec un avertissement s'il appartient déjà à un autre produit. **Liste des produits** : retrouver un produit en le scannant. **Mouvements de stock et transferts** : le scan choisit le produit.
+- Formats : EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, Code 93, ITF, Codabar, QR code, Data Matrix. Un EAN-13 commençant par 0 et l'UPC-A correspondant sont reconnus comme le même produit (aussi pour les douchettes).
+- Lecteur natif du navigateur quand il existe (Chrome Android, Edge) ; sinon ZXing en WebAssembly (`public/vendor/barcode/`, MIT), chargé à la première ouverture et gardé par le service worker : **le scan fonctionne hors ligne**, sur iPhone comme sur Android.
+- Lampe torche si le téléphone le permet ; saisie manuelle du code toujours possible ; message clair si la caméra est refusée ou absente ; caméra éteinte dès la fermeture ; le bouton Retour du téléphone ferme le scanner.

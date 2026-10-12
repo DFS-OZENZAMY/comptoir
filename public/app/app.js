@@ -640,6 +640,7 @@
         <section class="pos-catalog">
           <div class="pos-search">
             <input id="posSearch" type="search" placeholder="Scanner ou rechercher un produit" value="${esc(pos.q)}" autocomplete="off">
+            <button class="btn scan-open" id="posScan" type="button" aria-label="Scanner avec la caméra" title="Scanner avec la caméra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg><span>Scanner</span></button>
             <button class="btn" id="posFree" type="button">Article libre</button>
           </div>
           <div class="chips pos-cats" id="posCats"></div>
@@ -667,13 +668,25 @@
       if (e.key !== 'Enter') return;
       e.preventDefault();
       const q = search.value.trim().toLowerCase(); if (!q) return;
-      const exact = state.products.find((p) => (p.barcode && p.barcode.toLowerCase() === q) || (p.ref && p.ref.toLowerCase() === q));
+      const exact = findByCode(q);
       const list = posFiltered();
       const p = exact || (list.length === 1 ? list[0] : null);
       if (p) { posAdd(p); search.value = ''; pos.q = ''; renderPosGrid(); }
       else toast(list.length ? 'Plusieurs produits correspondent : touchez le bon.' : `Aucun produit pour « ${search.value} ».`, !list.length);
     });
     $('#posFree').addEventListener('click', freeItemModal);
+    // Scanner en continu : chaque code lu ajoute l'article au ticket, la caméra reste ouverte.
+    $('#posScan').hidden = !window.ComptoirScanner;
+    $('#posScan').addEventListener('click', () => window.ComptoirScanner.open({
+      title: 'Scanner des articles', continuous: true, hint: 'Visez le code-barres : l’article s’ajoute au ticket',
+      onCode: (code) => {
+        const p = findByCode(code);
+        if (!p) return { ok: false, message: `Code ${code} inconnu`, actionLabel: can('products.edit') ? 'Créer ce produit' : null, action: () => productForm(null, { barcode: code }) };
+        posAdd(p);
+        const l = pos.lines.find((x) => x.product_id === p.id);
+        return { ok: true, message: `${p.name} · ${qtyFmt(l ? l.qty : 1)} au ticket` };
+      },
+    }));
     $('#posPay').addEventListener('click', payModal);
     $('#posMbarPay').addEventListener('click', payModal);
     $('#posMbarSee').addEventListener('click', () => $('.pos-ticket').scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -1147,6 +1160,39 @@
       <script>setTimeout(() => window.print(), 200);</script></body></html>`);
   }
 
+  /* ---------------- Codes-barres : douchette et caméra ---------------- */
+  function findByCode(code) {
+    const q = String(code || '').trim().toLowerCase(); if (!q) return null;
+    const same = window.ComptoirScanner ? window.ComptoirScanner.sameCode : (x, y) => String(x).toLowerCase() === String(y).toLowerCase();
+    return state.products.find((p) => p.barcode && same(p.barcode, q)) || state.products.find((p) => p.ref && p.ref.toLowerCase() === q) || null;
+  }
+  document.addEventListener('click', (e) => {
+    if (!window.ComptoirScanner) return;
+    // Remplir un champ par scan (code-barres de la fiche produit)
+    const into = e.target.closest('[data-scan-into]');
+    if (into) {
+      const form = into.closest('form'); const input = form.querySelector(`[name="${into.dataset.scanInto}"]`);
+      const editing = form.dataset.productId || '';
+      window.ComptoirScanner.open({ title: 'Scanner le code-barres', onCode: (code) => {
+        input.value = code; input.dispatchEvent(new Event('input', { bubbles: true }));
+        const dup = state.products.find((p) => p.barcode && window.ComptoirScanner.sameCode(p.barcode, code) && String(p.id) !== String(editing));
+        return dup ? { ok: true, message: `Attention : ce code est déjà celui de « ${dup.name} »` } : { ok: true, message: `Code ${code}` };
+      } });
+      return;
+    }
+    // Choisir un produit par scan (mouvement de stock, transfert)
+    const pick = e.target.closest('[data-scan-pick]');
+    if (pick) {
+      const select = pick.closest('form').querySelector(`[name="${pick.dataset.scanPick}"]`);
+      window.ComptoirScanner.open({ title: 'Scanner le produit', onCode: (code) => {
+        const p = findByCode(code);
+        if (!p) return { ok: false, message: `Code ${code} inconnu` };
+        select.value = String(p.id); select.dispatchEvent(new Event('change', { bubbles: true }));
+        return { ok: true, message: p.name };
+      } });
+    }
+  });
+
   /* ---------------- Ticket et facture numériques ---------------- */
   // Indicatif téléphonique par pays : « 06 12 34 56 78 » au Maroc devient 212612345678 pour WhatsApp.
   const DIAL = { MA: '212', DZ: '213', TN: '216', SN: '221', ML: '223', GN: '224', CI: '225', BF: '226', NE: '227', TG: '228', BJ: '229', CM: '237', GA: '241', CG: '242', CD: '243', MG: '261', FR: '33', BE: '32', CH: '41', LU: '352', CA: '1' };
@@ -1223,11 +1269,21 @@
     setActions(`${can('products.edit') ? '<a class="btn" href="#/importer">Importer</a>' : ''}<button class="btn" id="manageCats">Catégories</button><button class="btn btn-primary" id="newProduct">Nouveau produit</button>`);
     $('#view').innerHTML = `
       <div class="toolbar">
-        <input type="search" id="pq" placeholder="Rechercher un produit" value="${esc(pv.q)}">
+        <span class="input-scan"><input type="search" id="pq" placeholder="Rechercher un produit" value="${esc(pv.q)}"><button type="button" class="scan-in" id="pqScan" aria-label="Scanner avec la caméra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg></button></span>
         <select id="pcat"><option value="">Toutes les catégories</option>${state.categories.map((c) => `<option value="${c.id}" ${String(pv.cat) === String(c.id) ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
       </div>
       <div id="ptable"></div>`;
     $('#pq').addEventListener('input', (e) => { pv.q = e.target.value; renderProductTable(); });
+    $('#pqScan').hidden = !window.ComptoirScanner;
+    $('#pqScan').addEventListener('click', () => window.ComptoirScanner.open({
+      title: 'Retrouver un produit',
+      onCode: (code) => {
+        const p = findByCode(code);
+        if (!p) return { ok: false, message: `Code ${code} inconnu`, actionLabel: can('products.edit') ? 'Créer ce produit' : null, action: () => productForm(null, { barcode: code }) };
+        setTimeout(() => productForm(p), 300);
+        return { ok: true, message: p.name };
+      },
+    }));
     $('#pcat').addEventListener('change', (e) => { pv.cat = e.target.value; renderProductTable(); });
     $('#newProduct').addEventListener('click', () => productForm());
     $('#manageCats').addEventListener('click', categoriesModal);
@@ -1270,14 +1326,14 @@
     });
   }
 
-  function productForm(p = null) {
+  function productForm(p = null, prefill = {}) {
     const isNew = !p;
     const tvaDef = Number(state.settings.tva_default) || 20;
-    p = p || { track_stock: 1, name: '', ref: '', barcode: '', description: '', category_id: '', price_ht: '', purchase_price: '', tva_rate: tvaDef, stock: '', stock_min: 0, unit: (state.me.units || [])[0] || 'pièce', visible: 1 };
+    p = p || { track_stock: 1, name: '', ref: '', barcode: '', description: '', category_id: '', price_ht: '', purchase_price: '', tva_rate: tvaDef, stock: '', stock_min: 0, unit: (state.me.units || [])[0] || 'pièce', visible: 1, ...prefill };
     const ttc = p.price_ht === '' ? '' : r2(p.price_ht * (1 + p.tva_rate / 100)).toFixed(2);
     let newImage = null, removeImage = false;
     const body = openModal(isNew ? 'Nouveau produit' : p.name, `
-      <form id="pform" novalidate>
+      <form id="pform" novalidate data-product-id="${p.id || ''}">
         <div class="pf-top">
           <div class="pf-photo">
             <div class="img-preview" id="imgPreview">${p.image ? `<img src="${esc(p.image)}" alt="">` : '<span>Photo</span>'}</div>
@@ -1299,7 +1355,7 @@
             <label class="field"><span>Unité de vente</span><input name="unit" value="${esc(p.unit)}" list="units"><datalist id="units">${(state.me.units || []).map((u) => `<option>${esc(u)}</option>`).join('')}</datalist></label>
             <label class="field"><span>M'alerter quand il en reste</span><input name="stock_min" type="number" step="any" min="0" value="${p.stock_min}"></label>
             <label class="field"><span>Référence</span><input name="ref" value="${esc(p.ref)}"></label>
-            <label class="field"><span>Code-barres</span><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scannez ou saisissez"></label>
+            <label class="field"><span>Code-barres</span><span class="input-scan"><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scannez ou saisissez"><button type="button" class="scan-in" data-scan-into="barcode" aria-label="Scanner avec la caméra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg></button></span></label>
             <label class="field"><span>Prix d'achat (${esc(cur())} HT)</span><input name="purchase_price" type="number" step="0.01" min="0" value="${p.purchase_price}"><small id="marginHint"></small></label>
             <label class="field"><span>TVA (%)</span><input name="tva_rate" type="number" step="0.1" min="0" value="${p.tva_rate}"><small id="htHint"></small></label>
             <label class="field full"><span>Description</span><textarea name="description" rows="3" placeholder="Visible sur votre vitrine en ligne">${esc(p.description)}</textarea></label>
@@ -1434,7 +1490,7 @@
     const to = locs.find((l) => l.id !== from)?.id;
     const body = openModal('Transfert entre boutiques', `
       <form id="trForm" class="fields" novalidate>
-        <label class="field full"><span>Produit</span><select name="product_id" required><option value="">Choisir un produit</option>${state.products.filter((p) => p.track_stock).map((p) => `<option value="${p.id}" ${String(p.id) === String(productId) ? 'selected' : ''}>${esc(p.name)}${p.ref ? ' (' + esc(p.ref) + ')' : ''}</option>`).join('')}</select></label>
+        <label class="field full"><span>Produit</span><span class="input-scan"><select name="product_id" required><option value="">Choisir un produit</option>${state.products.filter((p) => p.track_stock).map((p) => `<option value="${p.id}" ${String(p.id) === String(productId) ? 'selected' : ''}>${esc(p.name)}${p.ref ? ' (' + esc(p.ref) + ')' : ''}</option>`).join('')}</select><button type="button" class="scan-in" data-scan-pick="product_id" aria-label="Scanner le produit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg></button></span></label>
         <label class="field"><span>Depuis</span><select name="from">${locs.map((l) => `<option value="${l.id}" ${l.id === from ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>
         <label class="field"><span>Vers</span><select name="to">${locs.map((l) => `<option value="${l.id}" ${l.id === to ? 'selected' : ''}>${esc(l.name)}</option>`).join('')}</select></label>
         <label class="field"><span>Quantité</span><input name="qty" type="number" step="any" min="0" inputmode="decimal" required></label>
@@ -1463,7 +1519,7 @@
     const titles = { 'entrée': 'Entrée de stock', sortie: 'Sortie de stock', inventaire: 'Inventaire' };
     const body = openModal(titles[type], `
       <form id="sform" class="fields" novalidate>
-        <label class="field full"><span>Produit</span><select name="product_id" required><option value="">Choisir un produit</option>${state.products.map((p) => `<option value="${p.id}" ${String(p.id) === String(productId) ? 'selected' : ''}>${esc(p.name)}${p.ref ? ' (' + esc(p.ref) + ')' : ''}</option>`).join('')}</select></label>
+        <label class="field full"><span>Produit</span><span class="input-scan"><select name="product_id" required><option value="">Choisir un produit</option>${state.products.map((p) => `<option value="${p.id}" ${String(p.id) === String(productId) ? 'selected' : ''}>${esc(p.name)}${p.ref ? ' (' + esc(p.ref) + ')' : ''}</option>`).join('')}</select><button type="button" class="scan-in" data-scan-pick="product_id" aria-label="Scanner le produit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg></button></span></label>
         ${state.scope === 'all' && (state.me.locations || []).length > 1 ? `<label class="field"><span>Boutique</span><select name="location_id">${state.me.locations.map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}</select></label>` : ''}
         <label class="field"><span>Type</span><select name="type">${Object.keys(titles).map((t) => `<option value="${t}" ${t === type ? 'selected' : ''}>${cap(t)}</option>`).join('')}</select></label>
         <label class="field"><span id="qtyLabel">Quantité</span><input name="qty" type="number" step="any" min="0" required></label>
