@@ -1,3 +1,20 @@
+# Sécurité : sur tous les fichiers (les réponses de l'application reçoivent les mêmes, src/app.js)
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: microphone=(), geolocation=(), payment=()
+
+# Espace commerçant, console et site : jamais affichés dans un cadre d'un autre site (clickjacking)
+/
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+/app/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+/console/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+
 # Polices : fichiers qui ne changent jamais, mis en cache un an par le navigateur
 /assets/fonts/*
   Cache-Control: public, max-age=31536000, immutable

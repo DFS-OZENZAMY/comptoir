@@ -16,7 +16,9 @@ Aucune compilation : les fichiers de `public/` sont servis tels quels, il suffit
 
 1. Une branche par sujet : `git switch -c caisse-remise-ligne`.
 2. Petits envois, avec un message qui dit ce qui change pour l'utilisateur.
-3. `npm run check` doit passer. L'intégration continue (GitHub Actions) le vérifie de toute façon à chaque envoi, et construit l'image Docker.
+3. `npm run check` doit passer. Il est vérifié deux fois :
+   - **par Cloudflare avant chaque déploiement** (`scripts/predeploy.js`, lancé par Wrangler via `build.command`) : si ESLint ou un test échoue, le déploiement est annulé et la version en ligne reste inchangée. Le détail est dans le journal de construction (Workers & Pages, comptoir, Deployments) ;
+   - par GitHub Actions (`.github/workflows/ci.yml`), qui construit aussi l'image Docker, quand Actions est disponible sur le compte.
 4. Demande de modification (pull request) : remplissez la liste de vérification proposée.
 
 ## Conventions

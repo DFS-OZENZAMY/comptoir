@@ -170,6 +170,8 @@ export async function consoleSupportRoutes(ctx, parts, m) {
 /* ------------------------------------------------------------------ */
 // « ?as=support » : réservé aux administrateurs de la plateforme. Sinon : membre d'un commerce.
 export async function chatIdentity(env, request) {
+  const origin = request.headers.get('origin');
+  if (origin) { let ok = false; try { ok = new URL(origin).host === new URL(request.url).host; } catch { /* origine illisible */ } if (!ok) throw new HttpError(403, 'Connexion refusée : origine inconnue.'); }
   await init(env.DB);
   const ctx = await getContext(env.DB, env, request);
   if (!ctx?.user) throw new HttpError(401, 'Connectez-vous pour utiliser la messagerie.');

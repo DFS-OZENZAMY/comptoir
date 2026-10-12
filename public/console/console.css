@@ -129,14 +129,14 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 .timeline.compact li { padding: 9px 0; }
 .t-type { font-size: .76rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: var(--zinc); white-space: nowrap; }
 .t-when { margin-left: auto; color: var(--muted); font-size: .82rem; white-space: nowrap; }
-.req { color: var(--signal); font-weight: 600; }
+.req { color: var(--signal-strong); font-weight: 600; }
 
 /* Carte d'activité */
 .heat-panel { padding: 16px 18px; overflow-x: auto; }
 .heat { display: grid; gap: 3px; min-width: 760px; }
 .heat-row { display: grid; grid-template-columns: 200px repeat(var(--days), minmax(14px, 1fr)) 84px; gap: 3px; align-items: center; }
 .heat-row[data-store] { cursor: pointer; border-radius: 3px; }
-.heat-row[data-store]:hover .heat-name { color: var(--signal); }
+.heat-row[data-store]:hover .heat-name { color: var(--signal-strong); }
 .heat-head { font-size: .72rem; color: var(--muted); }
 .heat-day { text-align: left; white-space: nowrap; overflow: visible; }
 .heat-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .9rem; font-weight: 600; padding-right: 8px; }
@@ -233,7 +233,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 
 /* Console sur téléphone : barre du haut et onglets de sections */
 .console-mnav { display: none; }
-.mobile-store small { font-family: var(--font); font-size: .75rem; font-weight: 600; color: var(--signal); margin-left: 6px; }
+.mobile-store small { font-family: var(--font); font-size: .75rem; font-weight: 600; color: var(--signal-strong); margin-left: 6px; }
 .mobile-search { border: 0; background: none; color: #C5CAD3; padding: 4px; cursor: pointer; }
 @media (max-width: 900px) {
   .console-mnav { display: flex; gap: 6px; position: sticky; top: 56px; z-index: 25; padding: 10px 16px; overflow-x: auto; scrollbar-width: none; background: var(--zinc); border-bottom: 1px solid var(--line); }
@@ -347,3 +347,6 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
 
 .err-done td { opacity: .55; } .err-done .badge { opacity: 1; }
 .status-banner #ackErrors { margin-left: auto; flex: none; }
+
+/* Conversation sélectionnée : texte secondaire plus foncé sur le fond orange pâle (contraste AA) */
+.inbox-item.selected .inbox-line time, .inbox-item.selected .inbox-preview { color: #4F535B; }

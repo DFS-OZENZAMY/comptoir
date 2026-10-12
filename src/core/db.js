@@ -80,6 +80,8 @@ const SCHEMA = [
     created_at TEXT, last_success_at TEXT, failures INTEGER DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS idx_push_store ON push_subscriptions(store_id)`,
   `CREATE TABLE IF NOT EXISTS push_log (key TEXT PRIMARY KEY, sent_at TEXT)`,
+  // Connexion : échecs récents par compte et par adresse IP (protection contre les essais en masse).
+  `CREATE TABLE IF NOT EXISTS login_attempts (key TEXT PRIMARY KEY, failures INTEGER DEFAULT 0, window_start TEXT, locked_until TEXT)`,
   // Messagerie avec le support : une conversation par commerce, et ses messages.
   `CREATE TABLE IF NOT EXISTS support_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL UNIQUE, status TEXT DEFAULT 'ouverte',
     assigned_to INTEGER, created_at TEXT, updated_at TEXT, last_message_at TEXT, last_preview TEXT DEFAULT '', last_author TEXT,

@@ -23,8 +23,8 @@ h3 { margin: 0; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; border-radius: var(--r-control); border: 1px solid transparent; font-weight: 600; font-size: .9rem; text-decoration: none; white-space: nowrap; cursor: pointer; transition: background .15s, border-color .15s; }
 .btn-lg { padding: 15px 24px; font-size: 1rem; }
 .btn-block { width: 100%; }
-.btn-primary { background: var(--signal); color: #fff; }
-.btn-primary:hover { background: var(--signal-strong); }
+.btn-primary { background: var(--signal-strong); color: #fff; }
+.btn-primary:hover { background: #A93A19; }
 .btn-secondary { background: var(--surface); border-color: var(--line); }
 .btn-secondary:hover { border-color: var(--ink); }
 .btn-dark { background: var(--ink); color: #fff; }
@@ -67,7 +67,7 @@ h3 { margin: 0; }
 .r-line { display: grid; grid-template-columns: 30px 1fr auto; gap: 8px; }
 .r-q, .r-pay { color: var(--muted); }
 .r-total { display: flex; justify-content: space-between; font-weight: 600; font-size: 18px; line-height: 24px; margin-bottom: 4px; }
-.r-total span:last-child { color: var(--signal); }
+.r-total span:last-child { color: var(--signal-strong); }
 .r-pay { display: flex; justify-content: space-between; }
 .r-thanks { margin: 0; text-align: center; color: var(--muted); }
 
@@ -97,7 +97,7 @@ h3 { margin: 0; }
 .plan.featured { background: var(--ink); border-color: var(--ink); color: #fff; }
 .plan-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .plan h3 { font-size: 1.25rem; font-weight: 600; }
-.plan-tag { background: var(--signal); color: #fff; font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
+.plan-tag { background: var(--signal-strong); color: #fff; font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; }
 .price { margin: 0; display: flex; align-items: baseline; gap: 6px; }
 .price strong { font-family: var(--display); font-size: 3.5rem; line-height: 1; }
 .price span, .plan-desc { color: var(--muted); }
@@ -119,7 +119,7 @@ h3 { margin: 0; }
 .faq details p { margin: 10px 0 0; color: var(--muted); }
 
 /* Appel final et pied */
-.final { background: var(--signal); color: #fff; padding: clamp(40px, 6vw, 72px) 0; }
+.final { background: var(--signal-strong); color: #fff; padding: clamp(40px, 6vw, 72px) 0; }
 .final-in { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
 .final h2 { max-width: 13em; }
 .footer { background: var(--ink); color: #CFD1D6; font-size: .88rem; }

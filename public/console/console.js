@@ -125,7 +125,9 @@
     const y = (v) => P.t + (H - P.t - P.b) * (1 - (v - min) / (top - min));
     const ticks = [min, (min + top) / 2, top];
     const step = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(W / 90))));
-    let svg = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img">`;
+    // Résumé pour les lecteurs d'écran : séries, période, valeur la plus haute.
+    const summary = `Graphique : ${series.map((s) => s.label).filter(Boolean).join(', ')}${n ? `, de ${labels[0]} à ${labels[n - 1]}` : ''}, maximum ${nf0.format(max)}`;
+    let svg = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(summary)}"><title>${esc(summary)}</title>`;
     ticks.forEach((t) => { svg += `<line x1="${P.l}" x2="${W - P.r}" y1="${y(t)}" y2="${y(t)}" class="c-grid"/><text x="${P.l - 8}" y="${y(t) + 4}" class="c-axis" text-anchor="end">${esc(format(Math.round(t)))}</text>`; });
     labels.forEach((l, i) => { if (showLabel(i, n, step)) svg += `<text x="${x(i)}" y="${H - 6}" class="c-axis" text-anchor="${i === n - 1 ? 'end' : 'middle'}">${esc(l)}</text>`; });
     series.forEach((s, si) => {
@@ -146,7 +148,8 @@
     const n = values.length, max = Math.max(...values, 1);
     const bw = (W - P.l - P.r) / n, gap = Math.min(8, bw * 0.25);
     const step = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(W / 70))));
-    let svg = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img">`;
+    const summary = `Graphique en barres${n ? `, de ${labels[0]} à ${labels[n - 1]}` : ''}, maximum ${format(max)}`;
+    let svg = `<svg class="chart-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(summary)}"><title>${esc(summary)}</title>`;
     values.forEach((v, i) => {
       const h = Math.max(v ? 3 : 1, ((H - P.t - P.b) * v) / max);
       const xx = P.l + i * bw + gap / 2, yy = H - P.b - h;
@@ -1043,6 +1046,7 @@ async function viewUsers() {
   }
   let lastRefresh = null;
   function route() {
+    if (!state.me) return; // accès refusé : rien à charger derrière l'écran d'accueil
     let [key, arg] = (location.hash.replace(/^#\//, '') || 'vue-d-ensemble').split('?')[0].split('/');
     const need = VIEW_PERM[key];
     if (need && !can(need)) { key = firstAllowedView(); location.hash = `#/${key}`; }

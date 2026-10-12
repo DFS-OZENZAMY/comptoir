@@ -187,7 +187,7 @@
     $('#app').hidden = true; $('#auth').hidden = false; closeModal();
     const signup = mode === 'signup' || (mode === undefined && location.hash === '#/inscription');
     $('#loginForm').hidden = signup; $('#signupForm').hidden = !signup;
-    $$('[data-authtab]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.authtab === 'signup') === signup)));
+    $$('[data-authtab]').forEach((b) => b.setAttribute('aria-selected', String((b.dataset.authtab === 'signup') === signup)));
     if (signup) loadPlatform();
     setTimeout(() => $(signup ? '#suName' : '#liEmail').focus(), 30);
   }

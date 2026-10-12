@@ -86,7 +86,7 @@ async function handleApi(request, env, info, exec) {
         later(notifyPlatform(env, { title: 'Nouvelle inscription', body: `${String(body.store_name || 'Un commerce').slice(0, 80)} vient de s’inscrire.`, url: '/console/#/commerces', tag: 'inscription' }));
         return res;
       }
-      if (b === 'login' && m === 'POST') return await login(db, env, await readBody(request));
+      if (b === 'login' && m === 'POST') return await login(db, env, await readBody(request), request);
       if (b === 'logout' && m === 'POST') return await logout(db, request);
     }
 
@@ -116,7 +116,7 @@ async function handleApi(request, env, info, exec) {
   }
 }
 
-export default {
+const app = {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const p = url.pathname;
@@ -185,6 +185,25 @@ export default {
 };
 
 // Tâche du matin : une seule exécution par jour, même avec plusieurs serveurs (verrou en base).
+// En-têtes de sécurité sur toutes les réponses de l'application (les fichiers servis directement
+// reçoivent les mêmes par public/_headers). Les vitrines restent intégrables sur le site d'un commerçant.
+function secure(res, request) {
+  if (res.status === 101 || res.webSocket) return res;          // ouverture d'une connexion temps réel : intouchable
+  const out = new Response(res.body, res);
+  const h = out.headers, url = new URL(request.url);
+  h.set('x-content-type-options', 'nosniff');
+  h.set('referrer-policy', 'strict-origin-when-cross-origin');
+  h.set('permissions-policy', 'microphone=(), geolocation=(), payment=()');
+  if (!url.pathname.startsWith('/s/')) { h.set('x-frame-options', 'DENY'); h.set('content-security-policy', "frame-ancestors 'none'"); }
+  if (url.protocol === 'https:') h.set('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  return out;
+}
+
+export default {
+  fetch: (request, env, ctx) => app.fetch(request, env, ctx).then((res) => secure(res, request)),
+  scheduled: (event, env, ctx) => app.scheduled(event, env, ctx),
+};
+
 export async function runDailyTasks(env) {
       await init(env.DB);
       const day = new Date().toISOString().slice(0, 10);

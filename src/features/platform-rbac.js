@@ -80,6 +80,22 @@ export function platformNeed(ctx, key) {
   }
 }
 
+// Pas d'élévation de privilèges : on ne peut attribuer que des permissions qu'on possède soi-même
+// (rôle donné à un membre, permissions d'un rôle créé ou modifié). Les propriétaires (PLATFORM_ADMIN_EMAILS) peuvent tout.
+function assertCanGrant(ctx, perms, what) {
+  if (ctx.platformSuper) return;
+  const mine = new Set(ctx.platformPermissions || []);
+  const extra = perms.filter((k) => !mine.has(k));
+  if (extra.length) {
+    const labels = extra.map((k) => PLATFORM_PERMISSIONS.find((p) => p.key === k)?.label || k);
+    throw new HttpError(403, `${what} donnerait des droits que vous n’avez pas vous-même : ${labels.join(', ')}. Demandez à un propriétaire.`);
+  }
+}
+async function rolePerms(db, roleId) {
+  const r = await db.prepare('SELECT id, name, permissions FROM platform_roles WHERE id = ?').bind(roleId).first();
+  return r ? { ...r, perms: parsePerms(r.permissions) } : null;
+}
+
 export function platformCan(ctx, key) {
   return !!(ctx.platformSuper || (ctx.platformPermissions || []).includes(key));
 }
@@ -118,6 +134,7 @@ export async function createPlatformRole(ctx, b) {
   }
   const perms = [...new Set((Array.isArray(b.permissions) ? b.permissions : []).filter((k) => PLATFORM_PERMISSION_KEYS.includes(k)))];
   if (!perms.length) throw new HttpError(400, 'Choisissez au moins une permission.');
+  assertCanGrant(ctx, perms, 'Ce rôle');
   const r = await db.prepare(
     'INSERT INTO platform_roles (name, description, permissions, system) VALUES (?, ?, ?, 0)',
   ).bind(name, str(b.description, 300), JSON.stringify(perms)).run();
@@ -134,6 +151,7 @@ export async function updatePlatformRole(ctx, id, b) {
   const name = str(b.name, 60) || role.name;
   const perms = [...new Set((Array.isArray(b.permissions) ? b.permissions : parsePerms(role.permissions)).filter((k) => PLATFORM_PERMISSION_KEYS.includes(k)))];
   if (!perms.length) throw new HttpError(400, 'Choisissez au moins une permission.');
+  assertCanGrant(ctx, perms, 'Ce rôle');
   if (name !== role.name && await db.prepare('SELECT 1 FROM platform_roles WHERE name = ? AND id != ?').bind(name, role.id).first()) {
     throw new HttpError(409, 'Un rôle porte déjà ce nom.');
   }
@@ -200,14 +218,15 @@ export async function listPlatformStaff(db, env) {
 
 export async function addPlatformStaff(ctx, b) {
   platformNeed(ctx, 'platform.staff.manage');
-  const { db, env } = ctx;
+  const { db } = ctx;
   const email = str(b.email, 160).toLowerCase();
   const name = str(b.name, 80);
   const roleId = num(b.role_id);
   if (!email || !email.includes('@')) throw new HttpError(400, 'Indiquez une adresse e-mail valide.');
   if (!roleId) throw new HttpError(400, 'Choisissez un rôle.');
-  const role = await db.prepare('SELECT id, name FROM platform_roles WHERE id = ?').bind(roleId).first();
+  const role = await rolePerms(db, roleId);
   if (!role) throw new HttpError(404, 'Rôle introuvable.');
+  assertCanGrant(ctx, role.perms, `Le rôle « ${role.name} »`);
 
   let user = await db.prepare('SELECT id, email, name FROM users WHERE lower(email) = ?').bind(email).first();
   let temp = null;
@@ -240,8 +259,9 @@ export async function updatePlatformStaff(ctx, userId, b) {
   if (!staff) throw new HttpError(404, 'Membre introuvable dans l’équipe plateforme.');
   const roleId = num(b.role_id);
   if (!roleId) throw new HttpError(400, 'Choisissez un rôle.');
-  const role = await db.prepare('SELECT id, name FROM platform_roles WHERE id = ?').bind(roleId).first();
+  const role = await rolePerms(db, roleId);
   if (!role) throw new HttpError(404, 'Rôle introuvable.');
+  assertCanGrant(ctx, role.perms, `Le rôle « ${role.name} »`);
   await db.prepare('UPDATE platform_staff SET role_id = ? WHERE user_id = ?').bind(role.id, uid).run();
   await logEvent(db, null, ctx.user.id, 'platform_staff', `Rôle changé (user ${uid}) → ${role.name}`);
   return { ok: true };

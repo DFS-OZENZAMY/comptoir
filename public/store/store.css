@@ -57,7 +57,7 @@ button, input { font: inherit; color: inherit; }
 .card-open { display: flex; flex-direction: column; flex: 1; border: 0; padding: 0; background: none; text-align: left; cursor: pointer; }
 .card-media { aspect-ratio: 4 / 3; background: var(--canvas); display: grid; place-items: center; }
 .card-media img { width: 100%; height: 100%; object-fit: contain; padding: 14px; }
-.placeholder { font-family: var(--display); font-weight: 700; font-size: 2.8rem; color: var(--line); }
+.placeholder { font-family: var(--display); font-weight: 700; font-size: 2.8rem; color: #7E828A; } /* grande lettre décorative : contraste 3:1 suffisant */
 .card-body { padding: 16px 16px 4px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
 .card-ref { font-size: .78rem; font-weight: 500; color: var(--muted); }
 .card-name { font-weight: 600; line-height: 1.35; }
@@ -67,7 +67,7 @@ button, input { font: inherit; color: inherit; }
 .price small { font-weight: 400; color: var(--muted); font-size: .82rem; }
 .avail { display: inline-flex; align-items: center; gap: 6px; font-size: .85rem; margin: 0; }
 .avail::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.avail.in { color: var(--ok); } .avail.low { color: var(--warn); } .avail.out { color: var(--bad); }
+.avail.in { color: var(--ok); } .avail.low { color: #8A5E0A; } .avail.out { color: var(--bad); }
 .empty { grid-column: 1 / -1; padding: 48px 0; color: var(--muted); }
 .empty strong { display: block; color: var(--ink); font-size: 1.15rem; margin-bottom: 4px; }
 
@@ -103,9 +103,9 @@ button, input { font: inherit; color: inherit; }
 .footer a { color: #CFD1D6; text-decoration: none; }
 .powered strong { color: #fff; }
 .notfound { max-width: 560px; margin: 0 auto; padding: 120px 24px; text-align: center; }
-.notfound h1 { font-family: var(--display); font-size: 2.6rem; margin: 0 0 10px; }
+.notfound h1, .notfound h2 { font-family: var(--display); font-size: 2.6rem; margin: 0 0 10px; }
 .notfound p { color: var(--muted); margin: 0 0 24px; }
-.notfound .btn-cta { background: #E4572E; color: #fff; }
+.notfound .btn-cta { background: #C9461F; color: #fff; }
 
 /* Téléphone */
 @media (max-width: 720px) {

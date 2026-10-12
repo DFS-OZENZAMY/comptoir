@@ -6,7 +6,7 @@ import { backupStatus, backupConfig, listBackups, createBackup, verifyBackup, re
 import { PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES, planEur, pricing } from '../core/catalog.js';
 import { logEvent } from '../core/db.js';
 import {
-  platformNeed, platformCan, CONSOLE_ROUTE_PERM,
+  platformNeed, CONSOLE_ROUTE_PERM,
   listPlatformPermissions, listPlatformRoles, createPlatformRole, updatePlatformRole, deletePlatformRole,
   listPlatformStaff, addPlatformStaff, updatePlatformStaff, removePlatformStaff,
 } from './platform-rbac.js';
@@ -66,6 +66,7 @@ export async function cleanup(db) {
   await db.batch([
     db.prepare('DELETE FROM api_stats WHERE hour < ?').bind(addDays(today(), -31)),
     db.prepare('DELETE FROM error_log WHERE created_at < ?').bind(ago(90)),
+    db.prepare('DELETE FROM login_attempts WHERE COALESCE(locked_until, window_start) < ?').bind(new Date(Date.now() - 86400000).toISOString()),
     db.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(ago(0)),
   ]);
 }

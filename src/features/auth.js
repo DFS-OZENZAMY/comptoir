@@ -101,13 +101,41 @@ export async function signup(db, env, b) {
   return json({ ok: true, slug: store.slug }, 201, { 'set-cookie': await openSession(db, userId, store.id) });
 }
 
-export async function login(db, env, b) {
+// Protection contre les essais de mots de passe en masse :
+//   par compte : 5 échecs en 15 minutes → compte bloqué 15 minutes ;
+//   par adresse IP : 30 échecs en 15 minutes → adresse bloquée 15 minutes.
+// Compteurs atomiques en base (des essais en parallèle ne les contournent pas) ; une réussite remet le compte à zéro.
+const LOGIN_LIMITS = { account: 5, ip: 30, windowMin: 15, lockMin: 15 };
+const clientIp = (request) => (request?.headers.get('cf-connecting-ip') || request?.headers.get('x-forwarded-for')?.split(',')[0] || '').trim() || 'inconnue';
+async function loginLocked(db, keys) {
+  const now = new Date().toISOString();
+  const r = await db.prepare(`SELECT MAX(locked_until) AS until FROM login_attempts WHERE key IN (${keys.map(() => '?').join(',')}) AND locked_until > ?`).bind(...keys, now).first();
+  return r?.until || null;
+}
+async function loginFailed(db, key, limit) {
+  const now = new Date(), start = new Date(now - LOGIN_LIMITS.windowMin * 60000).toISOString();
+  const r = await db.prepare(`INSERT INTO login_attempts (key, failures, window_start) VALUES (?, 1, ?)
+      ON CONFLICT (key) DO UPDATE SET failures = CASE WHEN login_attempts.window_start < ? THEN 1 ELSE login_attempts.failures + 1 END,
+        window_start = CASE WHEN login_attempts.window_start < ? THEN excluded.window_start ELSE login_attempts.window_start END
+      RETURNING failures`).bind(key, now.toISOString(), start, start).first();
+  if (r.failures >= limit) await db.prepare('UPDATE login_attempts SET locked_until = ? WHERE key = ?').bind(new Date(+now + LOGIN_LIMITS.lockMin * 60000).toISOString(), key).run();
+  return r.failures;
+}
+const lockMessage = (until) => { const min = Math.max(1, Math.ceil((Date.parse(until) - Date.now()) / 60000)); return `Trop de tentatives de connexion. Réessayez dans ${min} minute${min > 1 ? 's' : ''}, ou demandez un nouveau mot de passe.`; };
+
+export async function login(db, env, b, request) {
   const email = str(b.email, 160).toLowerCase(), password = String(b.password || '');
+  const kAccount = `compte:${email}`, kIp = `ip:${clientIp(request)}`;
+  const locked = await loginLocked(db, [kAccount, kIp]);
+  if (locked) throw new HttpError(429, lockMessage(locked));
   const user = await db.prepare('SELECT * FROM users WHERE email = ?').bind(email).first();
   if (!user || !(await verifyPassword(password, user.password_hash))) {
-    await new Promise((r) => setTimeout(r, 600));
+    const [nAccount] = await Promise.all([loginFailed(db, kAccount, LOGIN_LIMITS.account), loginFailed(db, kIp, LOGIN_LIMITS.ip)]);
+    await new Promise((r) => setTimeout(r, 400));
+    if (nAccount >= LOGIN_LIMITS.account) throw new HttpError(429, lockMessage(new Date(Date.now() + LOGIN_LIMITS.lockMin * 60000).toISOString()));
     throw new HttpError(401, 'E-mail ou mot de passe incorrect.');
   }
+  await db.prepare('DELETE FROM login_attempts WHERE key = ?').bind(kAccount).run();
   const m = await db.prepare('SELECT store_id FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1').bind(user.id).first();
   // Accès autorisé si commerce, super-admin env, ou membre de l'équipe plateforme (RBAC console).
   let platformMember = false;
