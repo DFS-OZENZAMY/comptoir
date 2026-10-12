@@ -345,7 +345,21 @@
     if (e.target.closest('#installCardHide')) { try { localStorage.setItem('comptoir.installation.masquee', '1'); } catch { /* navigation privée */ } refreshInstall(); }
   });
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {}));
+    window.addEventListener('load', () => navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).then((reg) => {
+      // Application restée ouverte : on cherche les mises à jour au retour au premier plan, et toutes les 30 minutes.
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+      setInterval(() => reg.update().catch(() => {}), 30 * 60000);
+    }).catch(() => {}));
+    // Nouvelle version installée pendant l'utilisation : bandeau « Recharger » (jamais de rechargement imposé en pleine vente).
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || document.getElementById('updateBar')) return;
+      const bar = document.createElement('div'); bar.id = 'updateBar'; bar.className = 'update-bar'; bar.setAttribute('role', 'status');
+      bar.innerHTML = '<span>Comptoir a été mis à jour.</span><button type="button" class="btn btn-sm btn-primary">Recharger</button><button type="button" class="update-x" aria-label="Plus tard">✕</button>';
+      bar.querySelector('.btn').addEventListener('click', () => location.reload());
+      bar.querySelector('.update-x').addEventListener('click', () => bar.remove());
+      document.body.append(bar);
+    });
   }
   $('#locSwitchM').addEventListener('change', (e) => { closeMore(); switchLocation(e.target.value); });
   document.addEventListener('click', (e) => { if (e.target.closest('[data-repair]')) window.comptoirRepair(); });

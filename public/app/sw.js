@@ -2,7 +2,7 @@
 // Données (/api/) : toujours le serveur quand il répond ; hors ligne, l'application se sert de ses
 // propres copies (IndexedDB, outbox.js) et met les opérations en file, envoyées au retour du réseau.
 importScripts('/app/outbox.js');
-const VERSION = 'comptoir-2026-10-12f';
+const VERSION = 'comptoir-2026-10-13';
 const SHELL = [
   '/app/', '/app/app.js', '/app/app.css', '/app/chat.js', '/app/outbox.js', '/app/scanner.js', '/app/labels.js', '/app/offline', '/assets/fonts.css',
   '/assets/fonts/archivo.woff2', '/assets/fonts/archivo-narrow.woff2', '/assets/fonts/plex-mono-400.woff2', '/assets/fonts/plex-mono-600.woff2',
@@ -10,7 +10,8 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // « reload » : la nouvelle version est téléchargée depuis le serveur, jamais reprise d'un ancien cache du navigateur.
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -67,7 +68,8 @@ self.addEventListener('fetch', (e) => {
 
   // Code de l'application : toujours la dernière version, la copie sans réseau (ou réseau trop lent).
   if (url.pathname.startsWith('/app/') || url.pathname === '/assets/fonts.css') {
-    e.respondWith(withTimeout(fetch(req), 4000).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; })
+    // « no-cache » : toujours vérifié auprès du serveur (réponse 304 quasi instantanée quand rien n'a changé).
+    e.respondWith(withTimeout(fetch(req, { cache: 'no-cache' }), 4000).then((res) => { if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); } return res; })
       .catch(async () => (await caches.match(req)) || (await caches.match(url.pathname)) || Response.error()));
   }
 });
