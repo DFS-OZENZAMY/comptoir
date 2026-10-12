@@ -1090,3 +1090,19 @@ body.scanning { overflow: hidden; }
 
 .auth-help { margin: 6px 0 0; font-size: .85rem; } .auth-help .link, .form-error .link { padding: 0; border: 0; background: none; color: var(--muted); text-decoration: underline; font: inherit; cursor: pointer; }
 .form-error .link { color: inherit; font-weight: 700; }
+
+/* ================= Étiquettes code-barres ================= */
+.bc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bc-tools small { flex-basis: 100%; }
+.lab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px 16px; align-items: end; }
+.lab-grid .check { display: flex; gap: 8px; align-items: center; font-weight: 500; }
+.lab-grid .check input { width: auto; }
+.lab-tools { display: flex; gap: 8px; margin: 16px 0 8px; flex-wrap: wrap; } .lab-tools input { flex: 1; min-width: 200px; }
+.lab-list { max-height: 44vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+.lab-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.lab-row:last-child { border-bottom: 0; } .lab-row.on { background: var(--signal-soft); }
+.lab-row > input[type=checkbox] { width: 18px; height: 18px; flex: none; }
+.lab-name { flex: 1; min-width: 0; font-weight: 600; } .lab-name small { display: block; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.lab-name b { color: var(--signal-strong); font-weight: 600; }
+.lab-row input[type=number] { width: 72px; flex: none; text-align: center; }
+.lab-sum { margin: 10px 0 0; color: var(--muted); } .lab-sum b { color: var(--signal-strong); }

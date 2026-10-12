@@ -649,6 +649,36 @@ async function addStockMovement(ctx, b) {
   return { ok: true, stock: p.stock + delta, stock_here: here + delta };
 }
 
+/* ------------------------------------------------------------------ */
+/* Codes-barres internes (EAN-13, préfixe GS1 « 20 » : usage interne)  */
+/* ------------------------------------------------------------------ */
+// Le préfixe 20 est réservé par GS1 à la numérotation interne d'un magasin : ces codes ne peuvent
+// jamais correspondre à un produit du commerce. Code = 20 + identifiant du produit sur 10 chiffres + clé.
+export function ean13Check(d12) {
+  const sum = String(d12).split('').reduce((t, c, i) => t + Number(c) * (i % 2 ? 3 : 1), 0);
+  return String((10 - (sum % 10)) % 10);
+}
+export const internalBarcode = (n) => { const d12 = '20' + String(n).padStart(10, '0').slice(-10); return d12 + ean13Check(d12); };
+
+async function generateBarcodes(ctx, b) {
+  const { db } = ctx; const sid = ctx.store.id;
+  const ids = Array.isArray(b.ids) ? b.ids.map(Number).filter(Boolean).slice(0, 5000) : null;
+  const rows = (await db.prepare(`SELECT id FROM products WHERE store_id = ? AND (barcode IS NULL OR TRIM(barcode) = '')${ids ? ` AND id IN (${ids.map(() => '?').join(',')})` : ''} ORDER BY id`)
+    .bind(sid, ...(ids || [])).all()).results;
+  const taken = new Set((await db.prepare("SELECT barcode FROM products WHERE store_id = ? AND barcode IS NOT NULL AND barcode != ''").bind(sid).all()).results.map((r) => r.barcode));
+  const done = [];
+  for (const r of rows) {
+    let code = internalBarcode(r.id), tries = 0;
+    // Déjà pris (code saisi à la main, par exemple) : on tire un autre code interne libre.
+    while (taken.has(code) && tries++ < 50) code = internalBarcode(9000000000 + Math.floor(Math.random() * 999999999));
+    if (taken.has(code)) continue;
+    taken.add(code);
+    await db.prepare("UPDATE products SET barcode = ? WHERE id = ? AND store_id = ? AND (barcode IS NULL OR TRIM(barcode) = '')").bind(code, r.id, sid).run();
+    done.push({ id: r.id, barcode: code });
+  }
+  return { updated: done.length, products: done };
+}
+
 async function createCustomer(ctx, b) {
   const { db } = ctx; const sid = ctx.store.id;
   const f = customerFields(b);
@@ -904,6 +934,8 @@ export async function storeRoutes(ctx, parts) {
       break;
 
     case 'products':
+      // Codes-barres internes pour les produits qui n'en ont pas (étiquettes à imprimer).
+      if (id === 'barcodes' && m === 'POST') return json(await generateBarcodes(ctx, await body()));
       if (!id && m === 'GET') {
         const rows = (await db.prepare(`SELECT p.*, c.name AS category_name FROM products p
           LEFT JOIN categories c ON c.id = p.category_id AND c.store_id = p.store_id WHERE p.store_id = ? ORDER BY p.name COLLATE NOCASE`).bind(sid).all()).results;

@@ -24,6 +24,7 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 - Scan des codes-barres avec la caméra du téléphone (#1, octobre 2026).
 - Menus latéraux regroupés, compte toujours visible, tout tient sur un portable 1280 × 720 (#21, octobre 2026).
 - Écran de démarrage animé de l'application (#22, octobre 2026).
+- Codes-barres internes et étiquettes à imprimer (#7, octobre 2026).
 - Logo Comptoir (icône et nom) en haut à gauche, nom du commerce dans le bloc compte (#23, octobre 2026).
 - Mode hors ligne avec synchronisation, messagerie support en direct, notifications push, import depuis les anciens logiciels, multi-boutiques, fidélité, vitrine en ligne.
 
@@ -34,7 +35,6 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 | 2 | **Achats et fournisseurs** : fiches fournisseurs, bons de commande depuis les alertes de stock, réception de marchandise (mise à jour du stock et du prix d'achat) | Inclus dans les formules Pro des concurrents ; complète la gestion de stock | Moyen à fort | #2 |
 | 3 | **Facture électronique structurée** : export UBL 2.1 / CII (EN 16931), puis Factur-X (PDF/A-3) ; ensuite raccordement à une plateforme agréée (France) et à la DGI (Maroc) | Obligation légale 2027 en France, déploiement en cours au Maroc | Fort | #3, #4, #5 |
 | 4 | **Click & collect** : commandes de la vitrine enregistrées dans Comptoir (au lieu du seul message WhatsApp), paiement à la remise | Transforme la vitrine en canal de vente | Moyen | #6 |
-| 5 | **Étiquettes code-barres** et prix en rayon imprimables | Complète le scan et la réception | Faible | #7 |
 | 6 | **Paiements mobiles** (Wave, Orange Money, MTN MoMo, CMI) : lien ou QR de paiement, rapprochement automatique | Paiement dominant en Afrique de l'Ouest | Fort (contrats partenaires) | #8 |
 | 7 | **Variantes de produits** (taille, couleur) avec stock par variante | Mode, chaussures, téléphonie | Moyen | #9 |
 | 8 | **QR code sur le ticket imprimé** vers le ticket numérique | Prolonge le ticket numérique | Faible | #10 |

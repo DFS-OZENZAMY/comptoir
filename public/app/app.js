@@ -282,7 +282,7 @@
       net.started = true;
       window.ComptoirOutbox.all().then(async (all) => { for (const o of all) if (o.status === 'later' && o.store_id === me.store.id) await window.ComptoirOutbox.put({ ...o, status: 'pending' }); await net.refresh(); syncNow(); }).catch(() => {});
     }
-    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push, enqueue, net }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
+    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push, enqueue, net, openModal, closeModal, money, esc, printWindow, can, refresh }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
   }
   function renderLocSwitch() {
     const locs = state.me.locations || [];
@@ -1216,6 +1216,25 @@
     }
   });
 
+  /* ---------------- Codes-barres internes et étiquettes ---------------- */
+  document.addEventListener('click', (e) => {
+    const gen = e.target.closest('[data-gen-barcode]');
+    if (gen && window.ComptoirLabels) {
+      const input = gen.closest('form').querySelector('[name="barcode"]');
+      if (input.value.trim() && !confirm('Ce produit a déjà un code-barres. Le remplacer par un code interne ?')) return;
+      const taken = new Set(state.products.map((p) => p.barcode).filter(Boolean));
+      input.value = window.ComptoirLabels.internalCode(taken); input.dispatchEvent(new Event('input', { bubbles: true }));
+      toast('Code-barres créé : enregistrez la fiche, puis imprimez son étiquette');
+    }
+    const pr = e.target.closest('[data-print-label]');
+    if (pr && window.ComptoirLabels) {
+      const form = pr.closest('form'); const id = Number(form.dataset.productId);
+      const p = state.products.find((x) => x.id === id); const typed = form.querySelector('[name="barcode"]').value.trim();
+      if (p && typed !== (p.barcode || '')) return toast('Enregistrez d’abord la fiche pour imprimer le nouveau code-barres.', true);
+      window.ComptoirLabels.open([id]);
+    }
+  });
+
   /* ---------------- Ticket et facture numériques ---------------- */
   // Indicatif téléphonique par pays : « 06 12 34 56 78 » au Maroc devient 212612345678 pour WhatsApp.
   const DIAL = { MA: '212', DZ: '213', TN: '216', SN: '221', ML: '223', GN: '224', CI: '225', BF: '226', NE: '227', TG: '228', BJ: '229', CM: '237', GA: '241', CG: '242', CD: '243', MG: '261', FR: '33', BE: '32', CH: '41', LU: '352', CA: '1' };
@@ -1289,7 +1308,9 @@
   const thumb = (p) => p.image ? `<img class="thumb" src="${esc(p.image)}" alt="">` : `<span class="thumb">${esc((p.ref || p.name).replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase())}</span>`;
 
   function viewProducts() {
-    setActions(`${can('products.edit') ? '<a class="btn" href="#/importer">Importer</a>' : ''}<button class="btn" id="manageCats">Catégories</button><button class="btn btn-primary" id="newProduct">Nouveau produit</button>`);
+    setActions(`${can('products.edit') ? '<a class="btn" href="#/importer">Importer</a>' : ''}<button class="btn" id="labelsBtn">Étiquettes</button><button class="btn" id="manageCats">Catégories</button><button class="btn btn-primary" id="newProduct">Nouveau produit</button>`);
+    $('#labelsBtn').hidden = !window.ComptoirLabels;
+    $('#labelsBtn').addEventListener('click', () => window.ComptoirLabels.open());
     $('#view').innerHTML = `
       <div class="toolbar">
         <span class="input-scan"><input type="search" id="pq" placeholder="Rechercher un produit" value="${esc(pv.q)}"><button type="button" class="scan-in" id="pqScan" aria-label="Scanner avec la caméra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg></button></span>
@@ -1379,6 +1400,7 @@
             <label class="field"><span>M'alerter quand il en reste</span><input name="stock_min" type="number" step="any" min="0" value="${p.stock_min}"></label>
             <label class="field"><span>Référence</span><input name="ref" value="${esc(p.ref)}"></label>
             <label class="field"><span>Code-barres</span><span class="input-scan"><input name="barcode" value="${esc(p.barcode || '')}" inputmode="numeric" placeholder="Scannez ou saisissez"><button type="button" class="scan-in" data-scan-into="barcode" aria-label="Scanner avec la caméra"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5.5A1.5 1.5 0 0 1 5.5 4H7M17 4h1.5A1.5 1.5 0 0 1 20 5.5V7M20 17v1.5a1.5 1.5 0 0 1-1.5 1.5H17M7 20H5.5A1.5 1.5 0 0 1 4 18.5V17"/><path d="M7.5 8v8M10 8v8M12.5 8v8M15 8v5M16.5 8v8"/></svg></button></span></label>
+            <div class="bc-tools field"><button type="button" class="btn btn-sm" data-gen-barcode>Générer un code-barres</button>${p.id ? '<button type="button" class="btn btn-sm" data-print-label>Imprimer son étiquette</button>' : ''}<small class="muted">Pour les produits sans code : un code interne au format EAN-13, à imprimer sur une étiquette.</small></div>
             <label class="field"><span>Prix d'achat (${esc(cur())} HT)</span><input name="purchase_price" type="number" step="0.01" min="0" value="${p.purchase_price}"><small id="marginHint"></small></label>
             <label class="field"><span>TVA (%)</span><input name="tva_rate" type="number" step="0.1" min="0" value="${p.tva_rate}"><small id="htHint"></small></label>
             <label class="field full"><span>Description</span><textarea name="description" rows="3" placeholder="Visible sur votre vitrine en ligne">${esc(p.description)}</textarea></label>

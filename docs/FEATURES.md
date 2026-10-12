@@ -381,3 +381,12 @@ Avec la caméra du téléphone, de la tablette ou de l'ordinateur, sans douchett
 - Formats : EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, Code 93, ITF, Codabar, QR code, Data Matrix. Un EAN-13 commençant par 0 et l'UPC-A correspondant sont reconnus comme le même produit (aussi pour les douchettes).
 - Lecteur natif du navigateur quand il existe (Chrome Android, Edge) ; sinon ZXing en WebAssembly (`public/vendor/barcode/`, MIT), chargé à la première ouverture et gardé par le service worker : **le scan fonctionne hors ligne**, sur iPhone comme sur Android.
 - Lampe torche si le téléphone le permet ; saisie manuelle du code toujours possible ; message clair si la caméra est refusée ou absente ; caméra éteinte dès la fermeture ; le bouton Retour du téléphone ferme le scanner.
+
+## Codes-barres internes et étiquettes
+
+Pour les produits sans code-barres (vrac, artisanat, fruits et légumes, fabrication maison) : générer un code et imprimer des étiquettes autocollantes à scanner ensuite (`public/app/labels.js`).
+
+- **Codes** : EAN-13 à préfixe GS1 « 20 » (réservé à la numérotation interne d'un magasin : jamais en conflit avec un produit du commerce), uniques dans le commerce, chiffre de contrôle conforme. Générés en masse (`POST /api/store/products/barcodes`, droit « modifier les produits » ; code = 20 + identifiant du produit, autre code interne libre en cas de conflit ; codes existants jamais modifiés) ou depuis la fiche produit.
+- **Étiquettes** : nom, prix TTC (facultatif), nom du commerce (facultatif), code-barres vectoriel avec ses chiffres. Formats : planches A4 de 21 (63,5 × 38,1 mm), 24 (70 × 37), 40 (52,5 × 29,7) ou 65 (38,1 × 21,2) étiquettes, rouleaux 50 × 30 et 40 × 25 mm ; nombre d'étiquettes par produit ; position de départ pour une planche entamée.
+- Codes imprimables : EAN-13, EAN-8, UPC-A ; un produit avec un code d'un autre format est signalé (à remplacer par un code interne).
+- Vérifié de bout en bout : étiquette générée, imprimée, puis lue par le scanner caméra de la caisse.
