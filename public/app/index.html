@@ -31,6 +31,8 @@
     @keyframes boot-bar { to { stroke-dashoffset: 0; } }
     @keyframes boot-breathe { 0%, 100% { stroke-dashoffset: 0; } 50% { stroke-dashoffset: 46; } }
     @keyframes boot-fade { to { opacity: 1; } }
+    .boot-help { max-width: 300px; margin: 6px 0 0; text-align: center; color: #5D616A; font: 400 .92rem/1.45 system-ui, sans-serif; }
+    .boot-repair { padding: 11px 18px; border: 0; border-radius: 999px; background: #17181C; color: #fff; font: 600 .95rem system-ui, sans-serif; cursor: pointer; }
     @media (prefers-reduced-motion: reduce) { .boot svg, .boot-shape, .boot-bar, .boot-name { animation: none !important; opacity: 1; transform: none; stroke-dashoffset: 0; } }
   </style>
 </head>
@@ -46,8 +48,21 @@
     </div>
   </div>
   <script>
-    // Filet de sécurité : l'écran de démarrage ne masque jamais une erreur plus de 10 secondes.
-    setTimeout(function () { var b = document.getElementById('boot'); if (b) b.classList.add('out'); }, 10000);
+    // Réparer l'application sur cet appareil : retire le service worker et les fichiers gardés en mémoire
+    // (une ancienne version peut bloquer le démarrage). Les ventes faites hors ligne et non envoyées sont conservées.
+    window.comptoirRepair = function () {
+      var done = function () { location.replace('/app/?repare=' + Date.now()); };
+      var tasks = [];
+      if (navigator.serviceWorker) tasks.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+      if (window.caches) tasks.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+      Promise.all(tasks).then(done, done);
+    };
+    // Filet de sécurité : si l'application n'a pas démarré au bout de 10 secondes, on explique et on propose la réparation.
+    setTimeout(function () {
+      var b = document.getElementById('boot'); if (!b) return;
+      if (window.__comptoirReady) { b.classList.add('out'); return; }
+      b.querySelector('.boot-in').insertAdjacentHTML('beforeend', '<p class="boot-help">Comptoir met du temps à démarrer. Vérifiez votre connexion, ou réparez l’application sur cet appareil (vos ventes hors ligne sont conservées).</p><button type="button" class="boot-repair" onclick="comptoirRepair()">Réparer l’application</button>');
+    }, 10000);
   </script>
   <div class="auth" id="auth" hidden>
     <aside class="auth-side">
@@ -72,7 +87,7 @@
           <button type="button" role="tab" data-authtab="signup" aria-selected="false">Créer mon commerce</button>
         </div>
 
-        <form id="loginForm" class="auth-form" novalidate>
+        <form id="loginForm" class="auth-form" novalidate action="javascript:void 0">
           <div class="auth-head">
             <h1>Bon retour</h1>
             <p>Connectez-vous pour ouvrir votre caisse.</p>
@@ -80,6 +95,7 @@
           <label class="field"><span>E-mail</span><input id="liEmail" type="email" autocomplete="email" required></label>
           <label class="field"><span>Mot de passe</span><input id="liPassword" type="password" autocomplete="current-password" required></label>
           <p class="form-error" id="loginError" role="alert"></p>
+          <p class="auth-help"><button type="button" class="link" data-repair>Problème de connexion ? Réparer l’application sur cet appareil</button></p>
           <button class="btn btn-primary btn-block btn-lg" type="submit">Se connecter</button>
           <div class="auth-help">
             <strong>Mot de passe oublié ?</strong>
@@ -87,7 +103,7 @@
           </div>
         </form>
 
-        <form id="signupForm" class="auth-form" hidden novalidate>
+        <form id="signupForm" class="auth-form" hidden novalidate action="javascript:void 0">
           <div class="auth-head">
             <h1>Créez votre commerce</h1>
             <p>14 jours gratuits, sans carte bancaire. Prêt en 2 minutes.</p>

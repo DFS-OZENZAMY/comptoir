@@ -1087,3 +1087,6 @@ body.scanning { overflow: hidden; }
   .mobile-store .brand-txt { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
   .mobile-store .brand-name { font-size: 1.3rem; }
 }
+
+.auth-help { margin: 6px 0 0; font-size: .85rem; } .auth-help .link, .form-error .link { padding: 0; border: 0; background: none; color: var(--muted); text-decoration: underline; font: inherit; cursor: pointer; }
+.form-error .link { color: inherit; font-weight: 700; }

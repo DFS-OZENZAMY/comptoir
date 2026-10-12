@@ -348,19 +348,29 @@
     window.addEventListener('load', () => navigator.serviceWorker.register('/app/sw.js', { scope: '/app/' }).catch(() => {}));
   }
   $('#locSwitchM').addEventListener('change', (e) => { closeMore(); switchLocation(e.target.value); });
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-repair]')) window.comptoirRepair(); });
+  window.__comptoirReady = true;   // le script a démarré : les formulaires peuvent être envoyés
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = e.submitter; btn.disabled = true;
+    const btn = e.submitter || e.target.querySelector('[type=submit]'); if (btn) btn.disabled = true;
     $('#loginError').textContent = '';
     try {
       await api('/auth/login', { method: 'POST', body: { email: $('#liEmail').value, password: $('#liPassword').value } });
+      // Le serveur a accepté : on vérifie que le navigateur a bien gardé la session (cookie).
+      const me = await api('/auth/me', { fresh: true });
+      if (!me.authenticated) {
+        $('#loginError').innerHTML = 'Connexion acceptée, mais votre navigateur n’a pas gardé la session : les cookies semblent bloqués pour ce site. '
+          + 'Dans Chrome, cliquez sur l’icône à gauche de l’adresse, puis « Cookies et données de site » et autorisez-les ; désactivez aussi les extensions qui bloquent les cookies. '
+          + 'Vérifiez que l’adresse commence par <strong>https://</strong>. <button type="button" class="link" data-repair>Réparer l’application sur cet appareil</button>';
+        return;
+      }
       $('#liPassword').value = '';
       showApp();
-    } catch (ex) { $('#loginError').textContent = ex.message; } finally { btn.disabled = false; }
+    } catch (ex) { $('#loginError').textContent = ex.message; } finally { if (btn) btn.disabled = false; }
   });
   $('#signupForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const btn = e.submitter; btn.disabled = true;
+    const btn = e.submitter || e.target.querySelector('[type=submit]'); if (btn) btn.disabled = true;
     const d = Object.fromEntries(new FormData(e.target));
     d.demo = $('#suDemo').checked;
     $('#signupError').textContent = '';
@@ -2176,7 +2186,7 @@
     });
     $('#sform').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const btn = e.submitter; btn.disabled = true;
+      const btn = e.submitter || e.target.querySelector('[type=submit]'); if (btn) btn.disabled = true;
       try { state.settings = await api('/store/settings', { method: 'PUT', body: collect() }); renderShell(); toast('Paramètres enregistrés'); updateBadges(); }
       catch (ex) { fail(ex); } finally { btn.disabled = false; }
     });
