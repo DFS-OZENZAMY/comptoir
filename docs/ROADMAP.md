@@ -2,6 +2,8 @@
 
 Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les priorités. Il guide les prochaines évolutions.
 
+**Suivi** : chaque fonction a son ticket GitHub, rangé dans le tableau [Comptoir — Feuille de route](https://github.com/users/DFS-OZENZAMY/projects/4) (priorité, effort, jalon, statut). Ce document donne la vue d'ensemble ; le détail et l'avancement sont dans les tickets.
+
 ## Ce que dit le marché
 
 ### Réglementation : la facture électronique devient obligatoire
@@ -19,16 +21,16 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 
 ## Priorités
 
-| Priorité | Fonction | Pourquoi | Effort |
-|---|---|---|---|
-| 1 | **Scan des codes-barres avec la caméra** du téléphone (caisse, fiche produit, inventaire) | Les petits commerces n'ont pas de douchette ; standard chez les concurrents | Moyen |
-| 2 | **Achats et fournisseurs** : fiches fournisseurs, bons de commande depuis les alertes de stock, réception de marchandise (mise à jour du stock et du prix d'achat) | Inclus dans les formules Pro des concurrents ; complète la gestion de stock | Moyen à fort |
-| 3 | **Facture électronique structurée** : export UBL 2.1 / CII (EN 16931), puis Factur-X (PDF/A-3) ; ensuite raccordement à une plateforme agréée (France) et à la DGI (Maroc) | Obligation légale 2027 en France, déploiement en cours au Maroc | Fort |
-| 4 | **Click & collect** : commandes de la vitrine enregistrées dans Comptoir (au lieu du seul message WhatsApp), paiement à la remise | Transforme la vitrine en canal de vente | Moyen |
-| 5 | **Étiquettes code-barres** et prix en rayon imprimables | Complète le scan et la réception | Faible |
-| 6 | **Paiements mobiles** (Wave, Orange Money, MTN MoMo, CMI) : lien ou QR de paiement, rapprochement automatique | Paiement dominant en Afrique de l'Ouest | Fort (contrats partenaires) |
-| 7 | **Variantes de produits** (taille, couleur) avec stock par variante | Mode, chaussures, téléphonie | Moyen |
-| 8 | **QR code sur le ticket imprimé** vers le ticket numérique | Prolonge le ticket numérique | Faible |
+| Priorité | Fonction | Pourquoi | Effort | Ticket |
+|---|---|---|---|---|
+| 1 | **Scan des codes-barres avec la caméra** du téléphone (caisse, fiche produit, inventaire) | Les petits commerces n'ont pas de douchette ; standard chez les concurrents | Moyen | #1 |
+| 2 | **Achats et fournisseurs** : fiches fournisseurs, bons de commande depuis les alertes de stock, réception de marchandise (mise à jour du stock et du prix d'achat) | Inclus dans les formules Pro des concurrents ; complète la gestion de stock | Moyen à fort | #2 |
+| 3 | **Facture électronique structurée** : export UBL 2.1 / CII (EN 16931), puis Factur-X (PDF/A-3) ; ensuite raccordement à une plateforme agréée (France) et à la DGI (Maroc) | Obligation légale 2027 en France, déploiement en cours au Maroc | Fort | #3, #4, #5 |
+| 4 | **Click & collect** : commandes de la vitrine enregistrées dans Comptoir (au lieu du seul message WhatsApp), paiement à la remise | Transforme la vitrine en canal de vente | Moyen | #6 |
+| 5 | **Étiquettes code-barres** et prix en rayon imprimables | Complète le scan et la réception | Faible | #7 |
+| 6 | **Paiements mobiles** (Wave, Orange Money, MTN MoMo, CMI) : lien ou QR de paiement, rapprochement automatique | Paiement dominant en Afrique de l'Ouest | Fort (contrats partenaires) | #8 |
+| 7 | **Variantes de produits** (taille, couleur) avec stock par variante | Mode, chaussures, téléphonie | Moyen | #9 |
+| 8 | **QR code sur le ticket imprimé** vers le ticket numérique | Prolonge le ticket numérique | Faible | #10 |
 
 ## Déjà identifié (backlog)
-Paiement des abonnements (Stripe, CMI, Wave), mot de passe oublié par e-mail, captcha à l'inscription, certification NF525 (caisse en France), découpage de `public/app/app.js`.
+Paiement des abonnements (#11), mot de passe oublié par e-mail (#12), captcha à l'inscription (#13), certification NF525 (#14), découpage de `public/app/app.js` (#15), grille tarifaire face à la concurrence (#16).
