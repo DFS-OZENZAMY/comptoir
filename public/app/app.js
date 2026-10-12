@@ -188,7 +188,14 @@
   }
 
   /* ---------------- Connexion et inscription ---------------- */
+  // Écran de démarrage : s'efface dès que la connexion ou l'application est prête (au moins le temps de l'animation d'entrée).
+  const bootStart = performance.now();
+  function bootDone() {
+    const b = document.getElementById('boot'); if (!b || b.dataset.done) return; b.dataset.done = '1';
+    setTimeout(() => { b.classList.add('out'); setTimeout(() => b.remove(), 320); }, Math.max(0, 700 - (performance.now() - bootStart)));
+  }
   function showLogin(mode) {
+    bootDone();
     $('#app').hidden = true; $('#auth').hidden = false; closeModal();
     const signup = mode === 'signup' || (mode === undefined && location.hash.split('?')[0] === '#/inscription');
     $('#loginForm').hidden = signup; $('#signupForm').hidden = !signup;
@@ -245,6 +252,7 @@
     } catch (e) { fail(e); }
     renderShell();
     if (location.hash.split('?')[0] === '#/inscription' || location.hash === '') location.hash = '#/tableau-de-bord'; else route();
+    bootDone();
     if (state.me.user.must_change_password) passwordModal(true);
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 600));
     idle(() => ['tableau-de-bord', 'commandes', 'alertes'].forEach(prefetch));

@@ -16,8 +16,39 @@
   <link rel="preload" href="/assets/fonts/archivo.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/assets/fonts.css">
   <link rel="stylesheet" href="/app/app.css">
+  <style>
+    /* Écran de démarrage animé : prend le relais de la page de démarrage du système (même fond, même icône). */
+    .boot { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #F4F4F1; transition: opacity .28s ease, visibility .28s; }
+    .boot.out { opacity: 0; visibility: hidden; }
+    .boot-in { display: grid; justify-items: center; gap: 18px; }
+    .boot svg { width: 112px; height: 112px; filter: drop-shadow(0 10px 24px rgba(23,24,28,.18)); animation: boot-pop .35s cubic-bezier(.2,.9,.3,1.2) both; }
+    .boot-shape { fill: none; stroke: #fff; stroke-width: 38; stroke-linejoin: round; stroke-dasharray: 520; stroke-dashoffset: 520; animation: boot-draw .45s .2s ease-out forwards; }
+    /* La barre : deux demi-traits à bouts ronds qui partent du centre (extrémités jamais déformées). */
+    .boot-bar { fill: none; stroke: #E4572E; stroke-width: 46; stroke-linecap: round; stroke-dasharray: 113 113; stroke-dashoffset: 113; animation: boot-bar .35s .05s cubic-bezier(.2,.8,.2,1) forwards, boot-breathe 1.3s .75s ease-in-out infinite; }
+    .boot-name { font: 850 1.45rem/1 "Archivo", system-ui, sans-serif; font-stretch: 70%; letter-spacing: 0; color: #17181C; opacity: 0; animation: boot-fade .3s .4s ease-out forwards; }
+    @keyframes boot-pop { from { transform: scale(.82); opacity: 0; } to { transform: none; opacity: 1; } }
+    @keyframes boot-draw { to { stroke-dashoffset: 0; } }
+    @keyframes boot-bar { to { stroke-dashoffset: 0; } }
+    @keyframes boot-breathe { 0%, 100% { stroke-dashoffset: 0; } 50% { stroke-dashoffset: 46; } }
+    @keyframes boot-fade { to { opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .boot svg, .boot-shape, .boot-bar, .boot-name { animation: none !important; opacity: 1; transform: none; stroke-dashoffset: 0; } }
+  </style>
 </head>
 <body>
+  <div class="boot" id="boot" role="status" aria-label="Chargement de Comptoir">
+    <div class="boot-in">
+      <svg viewBox="0 0 512 512" aria-hidden="true">
+        <rect width="512" height="512" rx="112" fill="#17181C"/>
+        <path class="boot-shape" d="M176 280 V185 H336 V280"/>
+        <path class="boot-bar" d="M256 345 H369 M256 345 H143"/>
+      </svg>
+      <span class="boot-name">Comptoir</span>
+    </div>
+  </div>
+  <script>
+    // Filet de sécurité : l'écran de démarrage ne masque jamais une erreur plus de 10 secondes.
+    setTimeout(function () { var b = document.getElementById('boot'); if (b) b.classList.add('out'); }, 10000);
+  </script>
   <div class="auth" id="auth" hidden>
     <aside class="auth-side">
       <a class="auth-brand" href="/">Comptoir</a>
