@@ -13,6 +13,7 @@ import { saveProductImage, deleteProductImage, fromBase64 } from '../platform/st
 import { pushRoutes, stockAlerts, notifyPlatform } from './push.js';
 import { storeSupportRoutes, postClientMessage } from './support.js';
 import { shareDocument } from './receipts.js';
+import { supplierRoutes, purchaseRoutes, ownedSupplier } from './purchases.js';
 import { storeAccess } from './auth.js';
 
 /* ------------------------------------------------------------------ */
@@ -601,6 +602,7 @@ async function createProduct(ctx, b) {
   if (loc) await db.prepare('INSERT OR IGNORE INTO location_stock (store_id, location_id, product_id, qty) VALUES (?, ?, ?, ?)').bind(sid, loc.id, id, stock).run();
   if (stock > 0) await db.prepare("INSERT INTO stock_movements (store_id, product_id, qty, type, reason, location_id) VALUES (?, ?, ?, 'entrée', 'Stock initial', ?)").bind(sid, id, stock, loc ? loc.id : null).run();
   await logEvent(db, sid, ctx.user.id, 'product', f.name);
+  if (b.supplier_id) await db.prepare('UPDATE products SET supplier_id = ? WHERE id = ? AND store_id = ?').bind(await ownedSupplier(db, sid, b.supplier_id), r.meta.last_row_id, sid).run();
   return { id };
 }
 
@@ -612,6 +614,7 @@ async function updateProduct(ctx, id, b) {
       tva_rate = ?, stock_min = ?, unit = ?, visible = ?, track_stock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND store_id = ?`)
     .bind(f.ref, f.barcode, f.name, f.description, category_id, f.price_ht, f.purchase_price, f.tva_rate, f.stock_min, f.unit, f.visible, f.track_stock, num(id), sid).run();
   if (!r.meta.changes) throw new HttpError(404, 'Produit introuvable.');
+  if ('supplier_id' in b) await db.prepare('UPDATE products SET supplier_id = ? WHERE id = ? AND store_id = ?').bind(await ownedSupplier(db, sid, b.supplier_id), num(id), sid).run();
   return { ok: true };
 }
 
@@ -834,6 +837,9 @@ function guard(ctx, res, id, action, m, url) {
     case 'connect': return ctx.need('products.edit');
     case 'settings': if (W) ctx.need('settings.manage'); return;
     case 'categories': case 'products': if (W) ctx.need('products.edit'); return;
+    // Fournisseurs : consultés aussi par qui modifie les produits (choix du fournisseur dans la fiche) ; modification : purchases.manage.
+    case 'suppliers': if (!ctx.can('purchases.view') && !ctx.can('products.edit')) ctx.need('purchases.view'); return;
+    case 'purchases': return ctx.need('purchases.view');
     case 'stock': return ctx.need('stock.manage');
     case 'customers': if (W) ctx.need('customers.manage'); return;
     case 'documents':
@@ -987,6 +993,12 @@ export async function storeRoutes(ctx, parts) {
     case 'share':
       if (id && m === 'POST') return await shareDocument(ctx, id);
       break;
+
+    case 'suppliers':
+      return await supplierRoutes(ctx, id, m, body);
+
+    case 'purchases':
+      return await purchaseRoutes(ctx, parts.slice(1), m, body);
 
     case 'import':
       if (id === 'products' && m === 'POST') return json(await importProducts(ctx, await body()));

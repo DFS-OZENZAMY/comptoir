@@ -87,6 +87,7 @@ Les erreurs métier sont des `HttpError(statut, message)` : le message, en fran�
 | `src/features/seo.js` | Pages publiques rendues côté serveur : accueil, métiers, vitrines, pages légales, plan du site |
 | `src/features/help.js` | Centre d'aide |
 | `src/features/push.js` | Notifications push : abonnements par appareil, destinataires selon les droits, alertes de stock en temps réel, résumé du matin, alertes de plateforme |
+| `src/features/purchases.js` | Achats : fournisseurs, bons de commande, suggestions depuis les alertes, réception (stock par boutique, coût moyen pondéré), rapport |
 | `src/features/support.js` | Messagerie avec le support : conversations, messages, prise en charge, lecture, identité des connexions temps réel |
 | `src/features/backup.js` | Sauvegardes : export SQL, chiffrement, vérification, rotation, copie des photos (voir [BACKUP.md](BACKUP.md)) |
 | `src/platform/html.js` | Réécriture HTML portable (interface identique au HTMLRewriter de Cloudflare) |
@@ -101,6 +102,8 @@ Côté navigateur :
 |---|---|
 | `public/app/app.js` | Espace commerçant : état, appels d'API (mémoire courte de 30 s, préchargement), routeur par ancre (`#/caisse`…), un `view…()` par écran |
 | `public/app/import.js` | Lecture des fichiers d'import (CSV, XLSX, bases SQLite / Access / dBase), encodages, reconnaissance des logiciels |
+| `public/app/purchases.js` | Interface des achats et fournisseurs (onglets de Produits, préparation depuis les Alertes) |
+| `public/app/labels.js` | Codes-barres internes (EAN-13) et étiquettes à imprimer |
 | `public/app/chat.js` | Messagerie du commerçant : lanceur, panneau, connexion WebSocket, envoi instantané |
 | `public/app/sw.js` | Service worker : application installable et utilisable hors ligne, synchronisation en arrière-plan, notifications |
 | `public/app/outbox.js` | Mode hors ligne : copies des lectures et file d'attente des opérations (IndexedDB), envoi vers `/api/store/sync` ; partagé par l'application et le service worker |

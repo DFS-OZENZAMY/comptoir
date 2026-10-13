@@ -1112,3 +1112,31 @@ body.scanning { overflow: hidden; }
 .update-bar { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 150; display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 18px; border-radius: 999px; background: var(--steel); color: #fff; box-shadow: 0 10px 30px rgba(23,24,28,.3); font-size: .92rem; white-space: nowrap; }
 .update-x { border: 0; background: none; color: #AEB3BC; font-size: 1rem; cursor: pointer; padding: 6px 8px; }
 @media (max-width: 900px) { .update-bar { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); } }
+
+/* ================= Achats et fournisseurs ================= */
+.po-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.po-kpis .kpi { display: grid; gap: 4px; padding: 16px 18px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius, 12px); }
+.po-kpi-name { font-size: 1.15rem !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.po-chips { margin-bottom: 12px; } .po-chips .count { opacity: .6; margin-left: 2px; }
+.po-row { cursor: pointer; } .po-row:hover td { background: var(--zinc); } .po-row:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.po-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.po-draft { background: #ECECE8; color: #4F535B; } .po-sent { background: #E3EEF8; color: #234D73; } .po-partial { background: #FBF0D9; color: #6E4B08; }
+.po-done { background: #E1F1E7; color: #1F5E3A; } .po-cancel { background: #FBE7E4; color: #8A2A14; }
+.po-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 14px; } .po-head .muted { flex-basis: 100%; font-size: .88rem; }
+.po-table { width: 100%; border-collapse: collapse; } .po-table th { text-align: left; font-size: .8rem; color: var(--muted); font-weight: 600; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.po-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; } .po-table .num { text-align: right; white-space: nowrap; }
+.po-table input[type=number] { width: 96px; } .po-table tfoot td { border-bottom: 0; padding-top: 12px; }
+.po-ok { color: var(--ok); font-weight: 700; } .po-part { color: #8A5E0A; font-weight: 700; }
+.po-add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0 8px; } .po-add .input-scan { flex: 1; min-width: 240px; }
+.po-lines { max-height: 42vh; overflow-y: auto; margin-bottom: 12px; } .po-empty { padding: 18px 4px; }
+.po-total { color: var(--muted); align-self: center; } .po-total strong { color: var(--ink); }
+.po-rc-tools { display: flex; gap: 6px; margin: 10px 0; } .po-recs { font-size: .86rem; }
+.po-group { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; margin-bottom: 10px; }
+.po-group-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-bottom: 6px; } .po-group-head select { max-width: 260px; }
+.po-group .check { display: inline-flex; gap: 8px; align-items: center; font-weight: 600; } .po-group .check input { width: auto; }
+.po-wa { color: #0B5A2D; font-weight: 600; }
+@media (max-width: 900px) { .po-table input[type=number] { width: 72px; } .po-table th:nth-child(4), .po-table td:nth-child(4) { display: none; } }
+@media (max-width: 900px) {
+  .po-kpis { grid-template-columns: 1fr 1fr; gap: 8px; } .po-kpis .kpi { padding: 12px 14px; } .po-kpis .kpi:last-child { grid-column: 1 / -1; }
+  .po-kpis .kpi-value { font-size: 1.3rem; } .po-kpis .kpi-sub { font-size: .76rem; }
+}

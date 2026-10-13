@@ -167,9 +167,11 @@
     ]);
     Object.assign(state, { settings, products, categories, customers });
     updateBadges();
+    // Fournisseurs (fiche produit, achats) : chargés en arrière-plan, sans retarder l'ouverture de l'application.
+    if (can('purchases.view') || can('products.edit')) api('/store/suppliers', { fresh: true, background: true }).then((s) => { state.suppliers = s; }).catch(() => {});
   }
   async function refresh(...keys) {
-    const map = { products: '/store/products', categories: '/store/categories', customers: '/store/customers', settings: '/store/settings' };
+    const map = { products: '/store/products', categories: '/store/categories', customers: '/store/customers', settings: '/store/settings', suppliers: '/store/suppliers' };
     const res = await Promise.all(keys.map((k) => api(map[k], { fresh: true })));
     keys.forEach((k, i) => { state[k] = res[i]; });
     updateBadges();
@@ -282,7 +284,7 @@
       net.started = true;
       window.ComptoirOutbox.all().then(async (all) => { for (const o of all) if (o.status === 'later' && o.store_id === me.store.id) await window.ComptoirOutbox.put({ ...o, status: 'pending' }); await net.refresh(); syncNow(); }).catch(() => {});
     }
-    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push, enqueue, net, openModal, closeModal, money, esc, printWindow, can, refresh }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
+    if (!window.ComptoirApp) { window.ComptoirApp = { api, toast, state, enablePush, push, enqueue, net, openModal, closeModal, money, esc, printWindow, can, refresh, setActions, qtyFmt, dateFmt, intlPhone, findByCode, cur, route }; window.dispatchEvent(new CustomEvent('comptoir:ready', { detail: window.ComptoirApp })); }
   }
   function renderLocSwitch() {
     const locs = state.me.locations || [];
@@ -452,26 +454,28 @@
     boutiques: ['Réglages', viewLocations],
     importer: ['Produits', viewImport],
     notifications: ['Notifications', viewNotifications],
+    achats: ['Produits', () => window.ComptoirPurchases ? window.ComptoirPurchases.viewOrders() : null],
+    fournisseurs: ['Produits', () => window.ComptoirPurchases ? window.ComptoirPurchases.viewSuppliers() : null],
     rapports: ['Rapports', viewReports],
   };
   // Permission nécessaire pour afficher chaque rubrique.
   const VIEW_PERM = {
     'tableau-de-bord': 'reports.view', caisse: 'pos.sell', alertes: 'alerts.view', commandes: 'documents.view', devis: 'documents.view',
     factures: 'documents.view', stock: 'stock.manage', parametres: 'settings.manage', equipe: 'team.manage', abonnement: 'billing.manage',
-    boutiques: 'locations.manage', rapports: 'reports.view', importer: 'products.edit',
+    boutiques: 'locations.manage', rapports: 'reports.view', importer: 'products.edit', achats: 'purchases.view', fournisseurs: 'purchases.view',
   };
   // Guide d'aide de chaque écran (centre d'aide public, /aide).
   const HELP_FOR = {
     'tableau-de-bord': 'bien-demarrer', caisse: 'caisse', commandes: 'devis-commandes-factures', devis: 'devis-commandes-factures',
     factures: 'devis-commandes-factures', produits: 'produits-et-stock', stock: 'produits-et-stock', clients: 'clients-et-fidelite',
     alertes: 'reglages-et-abonnement#les-alertes', rapports: 'boutiques-et-rapports', parametres: 'reglages-et-abonnement',
-    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', importer: 'importer-ses-produits', notifications: 'reglages-et-abonnement#les-notifications', abonnement: 'reglages-et-abonnement#l-abonnement',
+    boutiques: 'boutiques-et-rapports', equipe: 'equipe-et-droits', importer: 'importer-ses-produits', achats: 'produits-et-stock#achats-et-fournisseurs', fournisseurs: 'produits-et-stock#achats-et-fournisseurs', notifications: 'reglages-et-abonnement#les-notifications', abonnement: 'reglages-et-abonnement#l-abonnement',
   };
   const allowedView = (k) => !!VIEWS[k] && (!VIEW_PERM[k] || can(VIEW_PERM[k]));
   // Les écrans proches sont regroupés sous une seule entrée de menu, avec des onglets.
   const GROUPS = {
     ventes: [['commandes', 'Commandes'], ['devis', 'Devis'], ['factures', 'Factures']],
-    produits: [['produits', 'Catalogue'], ['stock', 'Stock'], ['importer', 'Importer']],
+    produits: [['produits', 'Catalogue'], ['stock', 'Stock'], ['achats', 'Achats'], ['fournisseurs', 'Fournisseurs'], ['importer', 'Importer']],
     reglages: [['parametres', 'Mon commerce'], ['boutiques', 'Boutiques'], ['equipe', 'Équipe et rôles'], ['abonnement', 'Abonnement']],
   };
   const groupOf = (key) => Object.keys(GROUPS).find((g) => GROUPS[g].some(([k]) => k === key)) || key;
@@ -1417,6 +1421,7 @@
             <div class="bc-tools"><button type="button" class="btn btn-sm" data-gen-barcode>Générer un code-barres</button>${p.id ? '<button type="button" class="btn btn-sm" data-print-label>Imprimer son étiquette</button>' : ''}<small class="muted">Pour les produits sans code : un code interne au format EAN‑13, à imprimer sur une étiquette.</small></div>
             <label class="field"><span>Prix d'achat (${esc(cur())} HT)</span><input name="purchase_price" type="number" step="0.01" min="0" value="${p.purchase_price}"><small id="marginHint"></small></label>
             <label class="field"><span>TVA (%)</span><input name="tva_rate" type="number" step="0.1" min="0" value="${p.tva_rate}"><small id="htHint"></small></label>
+            ${state.suppliers && (can('purchases.view') || can('products.edit')) ? `<label class="field full"><span>Fournisseur habituel</span><select name="supplier_id"><option value="">Aucun</option>${state.suppliers.map((s) => `<option value="${s.id}" ${String(s.id) === String(p.supplier_id || '') ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select><small class="muted">Utilisé pour préparer les bons de commande depuis les alertes.</small></label>` : ''}
             <label class="field full"><span>Description</span><textarea name="description" rows="3" placeholder="Visible sur votre vitrine en ligne">${esc(p.description)}</textarea></label>
             <label class="check full"><input type="checkbox" name="visible" ${p.visible ? 'checked' : ''}> Afficher sur ma vitrine en ligne</label>
             <label class="check full"><input type="checkbox" name="track_stock" ${p.track_stock === 0 ? '' : 'checked'}> Suivre le stock <span class="muted">(décochez pour un service)</span></label>
@@ -1909,7 +1914,8 @@
     const table = (head, rows) => `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
     const empty = (msg) => `<div class="empty-state"><strong>${msg}</strong></div>`;
     const reorder = [...a.out_of_stock, ...a.low_stock];
-    setActions(reorder.length ? `<button class="btn" id="printReorder">Imprimer la liste à commander</button>` : '');
+    setActions(reorder.length ? `<button class="btn" id="printReorder">Imprimer la liste à commander</button>${can('purchases.manage') && window.ComptoirPurchases ? '<button class="btn btn-primary" id="prepOrders">Préparer les bons de commande</button>' : ''}` : '');
+    $('#prepOrders')?.addEventListener('click', () => window.ComptoirPurchases.prepare());
     $('#view').innerHTML = `
       <section class="alert-strip ${digestOn ? 'on' : ''}">
         ${digestOn

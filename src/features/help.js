@@ -47,6 +47,13 @@ export const GUIDES = [
     slug: 'produits-et-stock', title: 'Produits et stock', app: 'produits',
     summary: 'Créer une fiche produit, gérer les catégories et les photos, réceptionner la marchandise, faire un inventaire et recevoir les alertes de rupture.',
     sections: [
+      ['Achats et fournisseurs', `<p>Commandez à vos fournisseurs et réceptionnez la marchandise sans ressaisie, dans <strong>Produits, Achats</strong> et <strong>Produits, Fournisseurs</strong>.</p>
+        <ul><li><strong>Fournisseurs</strong> : ajoutez-les avec leur contact, leur téléphone WhatsApp et leur délai de livraison. Dans chaque fiche produit (Plus d’options), choisissez son <strong>fournisseur habituel</strong>.</li>
+        <li><strong>Préparer les commandes</strong> : dans Alertes, touchez « Préparer les bons de commande ». Les produits sous leur seuil sont regroupés par fournisseur, avec une quantité proposée (de quoi revenir au double du seuil, moins ce qui est déjà commandé). Un brouillon est créé par fournisseur.</li>
+        <li><strong>Envoyer</strong> : ouvrez le bon, vérifiez-le, puis « Envoyer au fournisseur » : par WhatsApp ou e-mail, il reçoit un lien vers le bon, imprimable. Un bon envoyé n’est plus modifiable.</li>
+        <li><strong>Réceptionner</strong> : à la livraison, ouvrez le bon et touchez « Réceptionner ». Indiquez ce qui est arrivé (tout, ou une partie) et le prix facturé : le stock de la boutique augmente, le prix d’achat est recalculé (coût moyen pondéré) et chaque entrée est tracée. Vous pouvez ensuite imprimer les étiquettes des articles reçus.</li>
+        <li><strong>Annuler ou clôturer</strong> : un bon sans rien de reçu s’annule ; un bon en partie reçu se clôture (le reste n’est plus attendu).</li></ul>
+        <p>L’onglet Achats montre les achats du mois, ce qui est en attente de livraison, et vos achats par mois et par fournisseur.</p>`],
       ['Créer un produit', `<p>Dans <strong>Produits, Nouveau produit</strong>, l’essentiel suffit : photo, nom, <strong>prix de vente TTC</strong> (le prix payé par le client), quantité en stock et catégorie.</p>
         <p>Sous <strong>Plus d’options</strong> : référence, code-barres, TVA, prix d’achat (pour calculer la marge), unité de vente (pièce, kg, mètre, lot…) et seuil d’alerte. Décochez « Suivre le stock » pour un service.</p>`],
       ['Faire entrer ou sortir du stock', `<p>Dans <strong>Produits, Stock</strong> :</p>

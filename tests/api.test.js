@@ -2,6 +2,7 @@
 // caisse, droits, boutiques, fidélité, import, pages publiques, tâche du matin.
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
+import { PERMISSIONS } from '../src/core/catalog.js';
 import { startApp } from './helpers.js';
 import { runDailyTasks } from '../src/app.js';
 
@@ -21,7 +22,7 @@ test('inscription, session et déconnexion', async () => {
   const s = await c.signup({ store_name: 'Quincaillerie Premium', country: 'FR' });
   assert.equal(s.slug, 'quincaillerie-premium');
   const me = await c.get('/api/auth/me');
-  assert.equal(me.data.authenticated, true); assert.equal(me.data.role, 'owner'); assert.equal(me.data.permissions.length, 16);
+  assert.equal(me.data.authenticated, true); assert.equal(me.data.role, 'owner'); assert.equal(me.data.permissions.length, PERMISSIONS.length, 'le propriétaire a toutes les permissions du catalogue');
   await c.post('/api/auth/logout');
   assert.equal((await c.get('/api/auth/me')).data.authenticated, false);
 });

@@ -94,7 +94,8 @@
   // Fenêtre « Imprimer des étiquettes » : choix des produits, quantités, format, options.
   function open(preselected = []) {
     const A = window.ComptoirApp; if (!A) return;
-    const st = { q: '', sel: new Map(preselected.map((id) => [Number(id), 1])), fmt: localStorage.getItem('comptoir.labels.fmt') || 'a4-24', price: true, shop: false, start: 1 };
+    // preselected : identifiants (1 étiquette chacun) ou paires [identifiant, nombre d'étiquettes] (articles reçus).
+    const st = { q: '', sel: new Map(preselected.map((x) => (Array.isArray(x) ? [Number(x[0]), Math.max(1, Math.round(Number(x[1]) || 1))] : [Number(x), 1]))), fmt: localStorage.getItem('comptoir.labels.fmt') || 'a4-24', price: true, shop: false, start: 1 };
     const ttc = (p) => Math.round(p.price_ht * (1 + (p.tva_rate || 0) / 100) * 100) / 100;
     const body = A.openModal('Imprimer des étiquettes', `
       <div class="lab-grid">

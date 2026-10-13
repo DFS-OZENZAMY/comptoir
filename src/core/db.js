@@ -167,6 +167,30 @@ const MIGRATIONS = [
     'ALTER TABLE documents ADD COLUMN share_token TEXT',
     'CREATE UNIQUE INDEX IF NOT EXISTS uq_documents_share_token ON documents(share_token) WHERE share_token IS NOT NULL',
   ]],
+  [9, [
+    // Achats et fournisseurs : fiches fournisseurs, bons de commande, lignes, réceptions (une par livraison).
+    `CREATE TABLE IF NOT EXISTS suppliers (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, name TEXT NOT NULL,
+      contact TEXT DEFAULT '', phone TEXT DEFAULT '', email TEXT DEFAULT '', address TEXT DEFAULT '', lead_days INTEGER DEFAULT 0,
+      notes TEXT DEFAULT '', archived INTEGER DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    'CREATE INDEX IF NOT EXISTS idx_suppliers_store ON suppliers(store_id)',
+    'ALTER TABLE products ADD COLUMN supplier_id INTEGER',
+    `CREATE TABLE IF NOT EXISTS purchase_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, number TEXT NOT NULL,
+      supplier_id INTEGER, location_id INTEGER, status TEXT DEFAULT 'brouillon', expected_date TEXT, notes TEXT DEFAULT '',
+      total_ht REAL DEFAULT 0, received_ht REAL DEFAULT 0, remainder_cancelled INTEGER DEFAULT 0, share_token TEXT,
+      created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, sent_at TEXT, received_at TEXT, cancelled_at TEXT)`,
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_orders_number ON purchase_orders(store_id, number)',
+    'CREATE UNIQUE INDEX IF NOT EXISTS uq_purchase_orders_share ON purchase_orders(share_token) WHERE share_token IS NOT NULL',
+    'CREATE INDEX IF NOT EXISTS idx_purchase_orders_store ON purchase_orders(store_id, status)',
+    `CREATE TABLE IF NOT EXISTS purchase_lines (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, store_id INTEGER NOT NULL,
+      product_id INTEGER, label TEXT NOT NULL, qty REAL NOT NULL, qty_received REAL DEFAULT 0, unit_cost REAL DEFAULT 0, position INTEGER DEFAULT 0)`,
+    'CREATE INDEX IF NOT EXISTS idx_purchase_lines_order ON purchase_lines(order_id)',
+    `CREATE TABLE IF NOT EXISTS purchase_receptions (id INTEGER PRIMARY KEY AUTOINCREMENT, store_id INTEGER NOT NULL, order_id INTEGER NOT NULL,
+      supplier_id INTEGER, location_id INTEGER, total_ht REAL DEFAULT 0, created_by INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    'CREATE INDEX IF NOT EXISTS idx_purchase_receptions_store ON purchase_receptions(store_id, created_at)',
+    // Rôles existants : qui gère le stock peut commander et réceptionner ; qui voit les rapports peut consulter les achats.
+    `UPDATE roles SET permissions = json_insert(permissions, '$[#]', 'purchases.view') WHERE (permissions LIKE '%"stock.manage"%' OR permissions LIKE '%"reports.view"%') AND permissions NOT LIKE '%"purchases.view"%'`,
+    `UPDATE roles SET permissions = json_insert(permissions, '$[#]', 'purchases.manage') WHERE permissions LIKE '%"stock.manage"%' AND permissions NOT LIKE '%"purchases.manage"%'`,
+  ]],
 ];
 
 // Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).

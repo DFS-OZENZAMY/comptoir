@@ -390,3 +390,17 @@ Pour les produits sans code-barres (vrac, artisanat, fruits et légumes, fabrica
 - **Étiquettes** : nom, prix TTC (facultatif), nom du commerce (facultatif), code-barres vectoriel avec ses chiffres. Formats : planches A4 de 21 (63,5 × 38,1 mm), 24 (70 × 37), 40 (52,5 × 29,7) ou 65 (38,1 × 21,2) étiquettes, rouleaux 50 × 30 et 40 × 25 mm ; nombre d'étiquettes par produit ; position de départ pour une planche entamée.
 - Codes imprimables : EAN-13, EAN-8, UPC-A ; un produit avec un code d'un autre format est signalé (à remplacer par un code interne).
 - Vérifié de bout en bout : étiquette générée, imprimée, puis lue par le scanner caméra de la caisse.
+
+## Achats et fournisseurs
+
+Produits › Achats, Produits › Fournisseurs, Alertes › Préparer les bons de commande (`src/features/purchases.js`, `public/app/purchases.js`).
+
+- **Fournisseurs** : nom, contact, téléphone WhatsApp, e-mail, adresse, délai de livraison, notes ; **fournisseur habituel** dans chaque fiche produit. Un fournisseur déjà utilisé dans un bon est archivé (historique conservé), sinon supprimé.
+- **Bons de commande** numérotés `BC-AAAA-0001` (numérotation continue, sûre en cas de saisies simultanées). Statuts : brouillon, envoyé, partiellement reçu, reçu (ou clôturé), annulé. Seul un brouillon se modifie ou se supprime.
+- **Préparation depuis les alertes** : produits sous leur seuil ou en rupture, regroupés par fournisseur ; quantité proposée = de quoi revenir au double du seuil, moins ce qui est déjà en commande ; produits sans fournisseur : choix du fournisseur ; un brouillon par fournisseur.
+- **Envoi** : lien secret vers le bon (page publique `/r/<jeton>`, imprimable, non indexée) par WhatsApp (numéro du fournisseur, indicatif du pays ajouté) ou e-mail.
+- **Réception** totale ou partielle, en une transaction : stock de la boutique choisie, **coût moyen pondéré** du prix d'achat, mouvements de stock « Réception BC-… », historique des réceptions ; impression proposée des étiquettes des articles reçus (quantités reçues).
+- **Annulation** (rien de reçu) ou **clôture** (en partie reçu : le reste n'est plus attendu).
+- **Rapport** : achats du mois, montant en attente de livraison, achats par mois et par fournisseur (12 mois).
+- **Droits** : `purchases.view` (voir) et `purchases.manage` (commander, réceptionner, gérer les fournisseurs). Rôles par défaut : Gérant et Magasinier (les deux), Comptable (voir). Les rôles des commerces existants sont mis à jour par la migration 9.
+- Disponible dans toutes les formules (à arbitrer avec la grille tarifaire, #16).

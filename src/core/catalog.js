@@ -193,6 +193,8 @@ export const PERMISSIONS = [
   { key: 'pos.journal', group: 'Caisse', label: 'Voir le journal de caisse' },
   { key: 'products.edit', group: 'Produits et stock', label: 'Créer et modifier les produits, les prix et les catégories' },
   { key: 'stock.manage', group: 'Produits et stock', label: 'Réceptionner, ajuster et transférer le stock' },
+  { key: 'purchases.view', group: 'Produits et stock', label: 'Voir les achats et les fournisseurs' },
+  { key: 'purchases.manage', group: 'Produits et stock', label: 'Commander aux fournisseurs et réceptionner la marchandise' },
   { key: 'customers.manage', group: 'Clients', label: 'Créer et modifier les fiches clients' },
   { key: 'documents.view', group: 'Ventes', label: 'Voir les devis, commandes et factures' },
   { key: 'documents.edit', group: 'Ventes', label: 'Créer, modifier et annuler devis, commandes, factures et tickets' },
@@ -209,13 +211,13 @@ export const PERMISSION_KEYS = PERMISSIONS.map((p) => p.key);
 // Rôles créés pour chaque commerce ; le propriétaire a toujours toutes les permissions.
 export const DEFAULT_ROLES = [
   { name: 'Gérant', description: 'Tient la boutique au quotidien : caisse, produits, stock, ventes et chiffres.',
-    permissions: ['pos.sell', 'pos.discount', 'pos.credit', 'pos.journal', 'products.edit', 'stock.manage', 'customers.manage', 'documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'alerts.view'] },
+    permissions: ['pos.sell', 'pos.discount', 'pos.credit', 'pos.journal', 'products.edit', 'stock.manage', 'purchases.view', 'purchases.manage', 'customers.manage', 'documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'alerts.view'] },
   { name: 'Caissier', description: 'Encaisse les ventes et consulte son journal de caisse.',
     permissions: ['pos.sell', 'pos.journal', 'customers.manage'] },
   { name: 'Magasinier', description: 'Réceptionne la marchandise, tient le stock et les fiches produits.',
-    permissions: ['products.edit', 'stock.manage', 'alerts.view'] },
+    permissions: ['products.edit', 'stock.manage', 'purchases.view', 'purchases.manage', 'alerts.view'] },
   { name: 'Comptable', description: 'Suit les factures, les paiements et les chiffres, sans encaisser.',
-    permissions: ['documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'pos.journal', 'customers.manage'] },
+    permissions: ['documents.view', 'documents.edit', 'payments.manage', 'reports.view', 'purchases.view', 'pos.journal', 'customers.manage'] },
 ];
 
 
