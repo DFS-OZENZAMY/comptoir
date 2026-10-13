@@ -7,7 +7,7 @@
 import { HttpError, json, num, readBody } from './core/lib.js';
 import { init, bump, recordRequest, logError, setMeta } from './core/db.js';
 import { PLATFORM, PLANS, PAID_PLANS, BUSINESS_TYPES, COUNTRIES } from './core/catalog.js';
-import { signup, login, logout, getContext, me, changePassword, touchStore } from './features/auth.js';
+import { signup, login, logout, getContext, me, changePassword, touchStore, forgotPassword, checkReset, resetPassword } from './features/auth.js';
 import { storeRoutes, runDailyDigests, sendEmail } from './features/store.js';
 import { dailyBackup } from './features/backup.js';
 import { notifyPlatform, dailyPushes } from './features/push.js';
@@ -90,6 +90,10 @@ async function handleApi(request, env, info, exec) {
       }
       if (b === 'login' && m === 'POST') return await login(db, env, await readBody(request), request);
       if (b === 'logout' && m === 'POST') return await logout(db, request);
+      // Mot de passe oublié : demande de lien, vérification du lien, nouveau mot de passe.
+      if (b === 'forgot' && m === 'POST') return json(await forgotPassword(db, env, await readBody(request), request, sendEmail));
+      if (b === 'reset' && m === 'GET') return json(await checkReset(db, url.searchParams.get('jeton')));
+      if (b === 'reset' && m === 'POST') return await resetPassword(db, await readBody(request));
     }
 
     const ctx = await getContext(db, env, request);

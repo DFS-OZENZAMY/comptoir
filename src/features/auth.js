@@ -1,6 +1,6 @@
 // Comptes, sessions et création des espaces commerce.
 import {
-  HttpError, json, str, num, r2, isEmail, slugify, sha256Hex, randomToken, hashPassword, verifyPassword, addDays, today, nowIso,
+  HttpError, json, str, num, r2, isEmail, slugify, sha256Hex, randomToken, hashPassword, verifyPassword, addDays, today, nowIso, escHtml,
 } from '../core/lib.js';
 import { PLATFORM, PLANS, COUNTRIES, BUSINESS_TYPES, defaultSettings } from '../core/catalog.js';
 import { bump, logEvent } from '../core/db.js';
@@ -232,6 +232,92 @@ export async function me(db, ctx) {
     units: store ? (BUSINESS_TYPES[store.business_type] || BUSINESS_TYPES.autre).units : [],
     usage, access: storeAccess(store),
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Mot de passe oublié                                                 */
+/* ------------------------------------------------------------------ */
+// Lien à usage unique, valable 30 minutes ; seule l'empreinte du jeton est enregistrée (illisible même en lisant la base).
+// Même réponse que l'adresse existe ou non ; envois limités par adresse (en silence) et par adresse IP.
+const RESET = { minutes: 30, perEmail: 3, perIp: 10, windowMin: 60 };
+
+async function countRequest(db, key) {
+  const now = new Date(), start = new Date(now - RESET.windowMin * 60000).toISOString();
+  const r = await db.prepare(`INSERT INTO login_attempts (key, failures, window_start) VALUES (?, 1, ?)
+      ON CONFLICT (key) DO UPDATE SET failures = CASE WHEN login_attempts.window_start < ? THEN 1 ELSE login_attempts.failures + 1 END,
+        window_start = CASE WHEN login_attempts.window_start < ? THEN excluded.window_start ELSE login_attempts.window_start END
+      RETURNING failures`).bind(key, now.toISOString(), start, start).first();
+  return r.failures;
+}
+
+// Crée un lien de réinitialisation (annule les précédents non utilisés). Aussi utilisé par le support (console).
+export async function createResetLink(db, env, userId, origin, via = 'email', ip = '') {
+  const token = randomToken(32);
+  const expires = new Date(Date.now() + RESET.minutes * 60000).toISOString();
+  await db.batch([
+    db.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL').bind(userId),
+    db.prepare('INSERT INTO password_resets (token_hash, user_id, expires_at, via, requested_ip) VALUES (?, ?, ?, ?, ?)').bind(await sha256Hex(token), userId, expires, via, ip),
+  ]);
+  const base = env.APP_URL ? new URL(env.APP_URL).origin : origin;
+  return { url: `${base}/app/#/reinitialiser?jeton=${token}`, expires_at: expires, minutes: RESET.minutes };
+}
+
+function resetEmail(name, url) {
+  const first = String(name || '').split(' ')[0];
+  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#17181C;line-height:1.5">
+    <p style="font-size:20px;font-weight:800;margin:0 0 18px">Comptoir</p>
+    <p>Bonjour${first ? ' ' + escHtml(first) : ''},</p>
+    <p>Vous avez demandé à réinitialiser le mot de passe de votre compte Comptoir. Touchez le bouton pour en choisir un nouveau :</p>
+    <p style="margin:26px 0"><a href="${escHtml(url)}" style="background:#C9461F;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:999px;display:inline-block">Choisir un nouveau mot de passe</a></p>
+    <p style="color:#5D616A;font-size:14px">Ce lien est valable ${RESET.minutes} minutes et ne sert qu’une fois. Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail : votre mot de passe reste inchangé.</p>
+    <p style="color:#5D616A;font-size:13px;word-break:break-all">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br>${escHtml(url)}</p></div>`;
+}
+
+export async function forgotPassword(db, env, b, request, mailer) {
+  const email = str(b.email, 160).toLowerCase();
+  if (!isEmail(email)) throw new HttpError(400, 'Indiquez une adresse e-mail valide.');
+  const ip = clientIp(request);
+  if ((await countRequest(db, `reset-ip:${ip}`)) > RESET.perIp) throw new HttpError(429, 'Trop de demandes depuis cette connexion. Réessayez dans une heure.');
+  const done = { ok: true, minutes: RESET.minutes };
+  if ((await countRequest(db, `reset:${email}`)) > RESET.perEmail) return done;        // en silence : ne révèle rien
+  const user = await db.prepare('SELECT id, name, email FROM users WHERE email = ?').bind(email).first();
+  if (!user) { await new Promise((r) => setTimeout(r, 250)); return done; }             // même réponse, temps comparable
+  const link = await createResetLink(db, env, user.id, new URL(request.url).origin, 'email', ip);
+  try { await mailer(env, user.email, 'Réinitialiser votre mot de passe Comptoir', resetEmail(user.name, link.url)); }
+  catch (e) { console.error('Mot de passe oublié : e-mail non envoyé', e.message); }   // signalé dans la console (Système)
+  return done;
+}
+
+async function findReset(db, token) {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(String(token || ''))) return null;
+  return db.prepare(`SELECT r.token_hash, r.user_id, u.email, u.name FROM password_resets r JOIN users u ON u.id = r.user_id
+      WHERE r.token_hash = ? AND r.used_at IS NULL AND r.expires_at > ?`).bind(await sha256Hex(String(token)), new Date().toISOString()).first();
+}
+const maskEmail = (e) => { const [u, d] = String(e).split('@'); return `${u.slice(0, 2)}${'•'.repeat(Math.max(1, Math.min(6, u.length - 2)))}@${d}`; };
+
+export async function checkReset(db, token) {
+  const r = await findReset(db, token);
+  return r ? { valid: true, email: maskEmail(r.email) } : { valid: false };
+}
+
+// Nouveau mot de passe : lien consommé (une seule fois, même en cas de double envoi), toutes les sessions fermées,
+// blocage de connexion du compte levé, puis connexion directe.
+export async function resetPassword(db, b) {
+  const password = String(b.password || '');
+  if (password.length < 8) throw new HttpError(400, 'Le mot de passe doit contenir au moins 8 caractères.');
+  const r = await findReset(db, b.token);
+  if (!r) throw new HttpError(400, 'Ce lien n’est plus valable (déjà utilisé ou expiré). Demandez-en un nouveau.');
+  const used = await db.prepare('UPDATE password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL RETURNING user_id').bind(nowIso(), r.token_hash).first();
+  if (!used) throw new HttpError(400, 'Ce lien n’est plus valable (déjà utilisé ou expiré). Demandez-en un nouveau.');
+  await db.batch([
+    db.prepare('UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?').bind(await hashPassword(password), r.user_id),
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(r.user_id),
+    db.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL').bind(r.user_id),
+    db.prepare('DELETE FROM login_attempts WHERE key = ?').bind(`compte:${r.email}`),
+  ]);
+  const m = await db.prepare('SELECT store_id FROM memberships WHERE user_id = ? ORDER BY created_at LIMIT 1').bind(r.user_id).first();
+  if (m) await logEvent(db, m.store_id, r.user_id, 'password_reset');
+  return json({ ok: true }, 200, { 'set-cookie': await openSession(db, r.user_id, m ? m.store_id : null) });
 }
 
 export async function changePassword(db, ctx, b) {

@@ -542,6 +542,8 @@ export function digestEmail(a, settings, appUrl) {
 }
 
 export async function sendEmail(env, to, subject, html) {
+  // Tests uniquement : e-mails déposés dans une boîte d'envoi (un tableau ne peut pas venir d'une variable d'environnement).
+  if (Array.isArray(env.MAIL_OUTBOX)) { env.MAIL_OUTBOX.push({ to, subject, html }); return; }
   if (!env.RESEND_API_KEY) throw new HttpError(503, "L'envoi d'e-mails n'est pas encore activé sur la plateforme.");
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',

@@ -26,6 +26,7 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 - Écran de démarrage animé de l'application (#22, octobre 2026).
 - Codes-barres internes et étiquettes à imprimer (#7, octobre 2026).
 - Achats et fournisseurs : bons de commande, réception, coût moyen pondéré (#2, octobre 2026).
+- Mot de passe oublié par e-mail, lien du support par WhatsApp (#12, octobre 2026).
 - Logo Comptoir (icône et nom) en haut à gauche, nom du commerce dans le bloc compte (#23, octobre 2026).
 - Mode hors ligne avec synchronisation, messagerie support en direct, notifications push, import depuis les anciens logiciels, multi-boutiques, fidélité, vitrine en ligne.
 
@@ -40,4 +41,4 @@ Mise à jour : 12 octobre 2026. Ce document consigne l'étude du marché et les 
 | 8 | **QR code sur le ticket imprimé** vers le ticket numérique | Prolonge le ticket numérique | Faible | #10 |
 
 ## Déjà identifié (backlog)
-Paiement des abonnements (#11), mot de passe oublié par e-mail (#12), captcha à l'inscription (#13), certification NF525 (#14), découpage de `public/app/app.js` (#15), grille tarifaire face à la concurrence (#16), maquettes Figma de la messagerie (#18), appareil reconnu non bloqué par adresse IP (#19, à valider), temps réel sur plusieurs serveurs Node.js (#20).
+Paiement des abonnements (#11), captcha à l'inscription (#13), certification NF525 (#14), découpage de `public/app/app.js` (#15), grille tarifaire face à la concurrence (#16), maquettes Figma de la messagerie (#18), appareil reconnu non bloqué par adresse IP (#19, à valider), temps réel sur plusieurs serveurs Node.js (#20).

@@ -94,6 +94,7 @@
           </div>
           <label class="field"><span>E-mail</span><input id="liEmail" type="email" autocomplete="email" required></label>
           <label class="field"><span>Mot de passe</span><input id="liPassword" type="password" autocomplete="current-password" required></label>
+          <p class="auth-forgot"><button type="button" class="link" data-forgot>Mot de passe oublié ?</button></p>
           <p class="form-error" id="loginError" role="alert"></p>
           <p class="auth-help"><button type="button" class="link" data-repair>Problème de connexion ? Réparer l’application sur cet appareil</button></p>
           <button class="btn btn-primary btn-block btn-lg" type="submit">Se connecter</button>
@@ -129,6 +130,31 @@
           <p class="form-error" id="signupError" role="alert"></p>
           <button class="btn btn-primary btn-block btn-lg" type="submit">Créer mon commerce</button>
           <p class="auth-legal">En créant votre compte, vous acceptez les <a href="/cgu" target="_blank" rel="noopener">conditions d’utilisation</a> et la <a href="/confidentialite" target="_blank" rel="noopener">politique de confidentialité</a>.</p>
+        </form>
+        <form id="forgotForm" class="auth-form" hidden novalidate action="javascript:void 0">
+          <div class="auth-head"><h1>Mot de passe oublié</h1><p>Indiquez l’adresse e-mail de votre compte : nous vous envoyons un lien pour choisir un nouveau mot de passe.</p></div>
+          <div id="fgAsk">
+            <label class="field"><span>E-mail</span><input id="fgEmail" type="email" autocomplete="email" required></label>
+            <p class="form-error" id="fgError" role="alert"></p>
+            <button class="btn btn-primary btn-block btn-lg" type="submit">Recevoir le lien</button>
+          </div>
+          <div id="fgSent" class="auth-sent" hidden role="status"></div>
+          <p class="auth-help"><button type="button" class="link" data-back-login>Retour à la connexion</button></p>
+        </form>
+        <form id="resetForm" class="auth-form" hidden novalidate action="javascript:void 0">
+          <div class="auth-head"><h1>Nouveau mot de passe</h1><p id="rsFor">Choisissez votre nouveau mot de passe.</p></div>
+          <div id="rsFields">
+            <label class="field"><span>Nouveau mot de passe</span><input id="rsPassword" type="password" autocomplete="new-password" minlength="8" required><small class="muted">8 caractères minimum</small></label>
+            <label class="field"><span>Confirmez le mot de passe</span><input id="rsPassword2" type="password" autocomplete="new-password" required></label>
+            <label class="check"><input type="checkbox" id="rsShow"> Afficher les mots de passe</label>
+            <p class="form-error" id="rsError" role="alert"></p>
+            <button class="btn btn-primary btn-block btn-lg" type="submit">Enregistrer et me connecter</button>
+          </div>
+          <div id="rsInvalid" hidden>
+            <p class="notice">Ce lien n’est plus valable : il a déjà servi, ou il a expiré (il est valable 30 minutes).</p>
+            <button type="button" class="btn btn-primary btn-block btn-lg" data-forgot>Demander un nouveau lien</button>
+          </div>
+          <p class="auth-help"><button type="button" class="link" data-back-login>Retour à la connexion</button></p>
         </form>
       </div>
     </main>

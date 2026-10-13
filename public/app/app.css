@@ -1140,3 +1140,10 @@ body.scanning { overflow: hidden; }
   .po-kpis { grid-template-columns: 1fr 1fr; gap: 8px; } .po-kpis .kpi { padding: 12px 14px; } .po-kpis .kpi:last-child { grid-column: 1 / -1; }
   .po-kpis .kpi-value { font-size: 1.3rem; } .po-kpis .kpi-sub { font-size: .76rem; }
 }
+
+/* Mot de passe oublié */
+.auth-forgot { margin: -6px 0 2px; text-align: right; font-size: .88rem; }
+.auth-forgot .link { padding: 0; border: 0; background: none; color: var(--muted); text-decoration: underline; font: inherit; cursor: pointer; }
+.auth-sent { display: grid; gap: 4px; padding: 16px 18px; border-radius: 12px; background: #E7F7EE; color: #0B4A26; }
+.auth-sent p { margin: 0 0 6px; } .auth-sent .muted { color: #2F5C43; font-size: .9rem; } .auth-sent a { color: inherit; font-weight: 600; }
+.auth-form .check { display: flex; gap: 8px; align-items: center; font-weight: 500; } .auth-form .check input { width: auto; }

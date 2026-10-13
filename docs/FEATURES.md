@@ -404,3 +404,14 @@ Produits › Achats, Produits › Fournisseurs, Alertes › Préparer les bons d
 - **Rapport** : achats du mois, montant en attente de livraison, achats par mois et par fournisseur (12 mois).
 - **Droits** : `purchases.view` (voir) et `purchases.manage` (commander, réceptionner, gérer les fournisseurs). Rôles par défaut : Gérant et Magasinier (les deux), Comptable (voir). Les rôles des commerces existants sont mis à jour par la migration 9.
 - Disponible dans toutes les formules (à arbitrer avec la grille tarifaire, #16).
+
+## Mot de passe oublié
+
+Page de connexion › « Mot de passe oublié ? » (`src/features/auth.js` : `forgotPassword`, `checkReset`, `resetPassword`, `createResetLink`).
+
+- E-mail (Resend) avec un **lien à usage unique, valable 30 minutes** (`/app/#/reinitialiser?jeton=…`, jeton dans le fragment : jamais envoyé au serveur dans l'adresse ni dans le référent). Seule l'empreinte SHA-256 du jeton est enregistrée (`password_resets`). Une nouvelle demande annule le lien précédent.
+- **Même réponse** que l'adresse existe ou non ; **limites** : 3 e-mails par adresse et par heure (au-delà, ignoré en silence), 10 demandes par adresse IP et par heure (429).
+- Page « Nouveau mot de passe » : compte indiqué (adresse masquée), confirmation, 8 caractères minimum ; lien expiré ou déjà utilisé : demande d'un nouveau lien.
+- Après le changement : **toutes les sessions fermées** (tous les appareils), blocage de connexion du compte levé, **connexion directe**, jeton retiré de la barre d'adresse.
+- **Support** (console › Utilisateurs › Réinitialiser) : « Envoyer un lien » (recommandé, à transmettre par WhatsApp au numéro du commerce converti au format international, par e-mail ou copié) ou mot de passe temporaire. Droit `platform.users.reset`.
+- Production : l'envoi d'e-mails demande `RESEND_API_KEY` et `MAIL_FROM` (domaine vérifié chez Resend) ; sans eux, le lien du support reste disponible.

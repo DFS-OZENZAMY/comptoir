@@ -191,6 +191,12 @@ const MIGRATIONS = [
     `UPDATE roles SET permissions = json_insert(permissions, '$[#]', 'purchases.view') WHERE (permissions LIKE '%"stock.manage"%' OR permissions LIKE '%"reports.view"%') AND permissions NOT LIKE '%"purchases.view"%'`,
     `UPDATE roles SET permissions = json_insert(permissions, '$[#]', 'purchases.manage') WHERE permissions LIKE '%"stock.manage"%' AND permissions NOT LIKE '%"purchases.manage"%'`,
   ]],
+  [10, [
+    // Mot de passe oublié : liens à usage unique (seule l'empreinte du jeton est gardée), valables 30 minutes.
+    `CREATE TABLE IF NOT EXISTS password_resets (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, expires_at TEXT NOT NULL,
+      used_at TEXT, via TEXT DEFAULT 'email', requested_ip TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP)`,
+    'CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)',
+  ]],
 ];
 
 // Bases déjà initialisées : suivi base par base (un même serveur peut en ouvrir plusieurs).

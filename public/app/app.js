@@ -196,15 +196,69 @@
     const b = document.getElementById('boot'); if (!b || b.dataset.done) return; b.dataset.done = '1';
     setTimeout(() => { b.classList.add('out'); setTimeout(() => b.remove(), 320); }, Math.max(0, 700 - (performance.now() - bootStart)));
   }
+  // Écrans de la page d'accueil : connexion, inscription, mot de passe oublié, nouveau mot de passe (lien reçu).
+  const AUTH_HASH = { '#/inscription': 'signup', '#/mot-de-passe-oublie': 'forgot', '#/reinitialiser': 'reset' };
   function showLogin(mode) {
     bootDone();
     $('#app').hidden = true; $('#auth').hidden = false; closeModal();
-    const signup = mode === 'signup' || (mode === undefined && location.hash.split('?')[0] === '#/inscription');
-    $('#loginForm').hidden = signup; $('#signupForm').hidden = !signup;
-    $$('[data-authtab]').forEach((b) => b.setAttribute('aria-selected', String((b.dataset.authtab === 'signup') === signup)));
-    if (signup) loadPlatform();
-    setTimeout(() => $(signup ? '#suName' : '#liEmail').focus(), 30);
+    mode = mode || AUTH_HASH[location.hash.split('?')[0]] || 'login';
+    const forms = { login: '#loginForm', signup: '#signupForm', forgot: '#forgotForm', reset: '#resetForm' };
+    Object.entries(forms).forEach(([k, f]) => { $(f).hidden = k !== mode; });
+    $('.auth-tabs').hidden = mode === 'forgot' || mode === 'reset';
+    $$('[data-authtab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.authtab === mode)));
+    if (mode === 'signup') loadPlatform();
+    if (mode === 'forgot') { $('#fgAsk').hidden = false; $('#fgSent').hidden = true; $('#fgError').textContent = ''; if (!$('#fgEmail').value) $('#fgEmail').value = $('#liEmail').value; }
+    if (mode === 'reset') prepareReset();
+    setTimeout(() => $({ login: '#liEmail', signup: '#suName', forgot: '#fgEmail', reset: '#rsPassword' }[mode]).focus(), 30);
   }
+  /* Mot de passe oublié */
+  let resetToken = '';
+  async function prepareReset() {
+    resetToken = new URLSearchParams(location.hash.split('?')[1] || '').get('jeton') || resetToken;
+    $('#rsFields').hidden = true; $('#rsInvalid').hidden = true; $('#rsError').textContent = '';
+    let r = { valid: false };
+    try { r = await api(`/auth/reset?jeton=${encodeURIComponent(resetToken)}`, { fresh: true }); } catch { /* lien invalide */ }
+    $('#rsFields').hidden = !r.valid; $('#rsInvalid').hidden = r.valid;
+    $('#rsFor').textContent = r.valid ? `Pour le compte ${r.email}. Choisissez votre nouveau mot de passe.` : 'Ce lien ne permet plus de changer le mot de passe.';
+    if (r.valid) $('#rsPassword').focus();
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-forgot]')) { history.replaceState(null, '', '#/mot-de-passe-oublie'); showLogin('forgot'); }
+    if (e.target.closest('[data-back-login]')) { history.replaceState(null, '', '#/'); showLogin('login'); }
+  });
+  $('#forgotForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.submitter || e.target.querySelector('[type=submit]'); const email = $('#fgEmail').value.trim();
+    $('#fgError').textContent = '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('#fgError').textContent = 'Indiquez une adresse e-mail valide.'; return; }
+    if (btn) btn.disabled = true;
+    try {
+      const r = await api('/auth/forgot', { method: 'POST', body: { email } });
+      $('#fgAsk').hidden = true; $('#fgSent').hidden = false;
+      $('#fgSent').innerHTML = `<p><strong>Vérifiez votre boîte de réception.</strong></p><p>Si un compte existe pour <strong>${esc(email)}</strong>, un e-mail vient d’être envoyé avec un lien pour choisir un nouveau mot de passe. Le lien est valable ${r.minutes || 30} minutes.</p>`
+        + '<p class="muted">Pas reçu après quelques minutes ? Regardez dans les courriers indésirables, puis réessayez. Toujours rien : écrivez au support Comptoir depuis le <a href="/aide" target="_blank" rel="noopener">centre d’aide</a>, il peut vous envoyer un lien par WhatsApp.</p>'
+        + '<button type="button" class="btn btn-block" id="fgAgain">Renvoyer l’e-mail</button>';
+      $('#fgAgain').addEventListener('click', () => { $('#fgAsk').hidden = false; $('#fgSent').hidden = true; });
+    } catch (ex) { $('#fgError').textContent = ex.message; } finally { if (btn) btn.disabled = false; }
+  });
+  $('#rsShow').addEventListener('change', (e) => { ['#rsPassword', '#rsPassword2'].forEach((s) => { $(s).type = e.target.checked ? 'text' : 'password'; }); });
+  $('#resetForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.submitter || e.target.querySelector('[type=submit]'); const p1 = $('#rsPassword').value, p2 = $('#rsPassword2').value;
+    $('#rsError').textContent = '';
+    if (p1.length < 8) { $('#rsError').textContent = 'Le mot de passe doit contenir au moins 8 caractères.'; return; }
+    if (p1 !== p2) { $('#rsError').textContent = 'Les deux mots de passe ne sont pas identiques.'; $('#rsPassword2').focus(); return; }
+    if (btn) btn.disabled = true;
+    try {
+      await api('/auth/reset', { method: 'POST', body: { token: resetToken, password: p1 } });
+      resetToken = ''; $('#rsPassword').value = ''; $('#rsPassword2').value = '';
+      history.replaceState(null, '', '#/tableau-de-bord');   // le lien disparaît de la barre d'adresse
+      await showApp(); toast('Mot de passe modifié : vous êtes connecté');
+    } catch (ex) {
+      $('#rsError').textContent = ex.message;
+      if (/plus valable/.test(ex.message)) { $('#rsFields').hidden = true; $('#rsInvalid').hidden = false; }
+    } finally { if (btn) btn.disabled = false; }
+  });
   async function loadPlatform() {
     if (state.platform) return;
     try {
@@ -253,7 +307,7 @@
       await loadShared();
     } catch (e) { fail(e); }
     renderShell();
-    if (location.hash.split('?')[0] === '#/inscription' || location.hash === '') location.hash = '#/tableau-de-bord'; else route();
+    if (AUTH_HASH[location.hash.split('?')[0]] || location.hash === '' || location.hash === '#/') location.hash = '#/tableau-de-bord'; else route();
     bootDone();
     if (state.me.user.must_change_password) passwordModal(true);
     const idle = window.requestIdleCallback || ((f) => setTimeout(f, 600));
@@ -510,7 +564,13 @@
     const y = window.scrollY; const fn = current.key && VIEWS[current.key]?.[1];
     if (fn) Promise.resolve(fn()).then(() => window.scrollTo(0, y)).catch(() => {});
   }
-  window.addEventListener('hashchange', () => { closeModal(); route(); });
+  window.addEventListener('hashchange', () => {
+    closeModal();
+    // Lien de réinitialisation ouvert dans un onglet déjà ouvert (seule la fin de l'adresse change) : on l'affiche.
+    const h = location.hash.split('?')[0];
+    if (h === '#/reinitialiser' || (!state.me && AUTH_HASH[h])) return showLogin(AUTH_HASH[h]);
+    route();
+  });
   const setActions = (html) => { $('#viewActions').innerHTML = html; };
 
   // Menu « Plus » sur téléphone
@@ -2817,6 +2877,8 @@
 
   /* ---------------- Démarrage ---------------- */
   api('/auth/me').then((r) => {
+    // Lien « choisir un nouveau mot de passe » : toujours ouvert, même si quelqu'un est connecté sur cet appareil.
+    if (location.hash.startsWith('#/reinitialiser')) return showLogin('reset');
     if (r.authenticated && r.store) showApp();
     else if (r.authenticated && r.platform_admin) location.href = '/console/';
     else showLogin();

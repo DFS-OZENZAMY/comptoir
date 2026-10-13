@@ -1,3 +1,4 @@
+import { createResetLink } from './auth.js';
 // Console du propriétaire de la plateforme : pilotage, monitoring, commerces, revenus, système.
 import { HttpError, json, r2, num, str, today, addDays, isDate, readBody, hashPassword, tempPassword } from '../core/lib.js';
 import { consoleSupportRoutes } from './support.js';
@@ -502,6 +503,19 @@ export async function consoleRoutes(ctx, parts) {
       db.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
     ]);
     return json({ ok: true, email: user.email, temp_password: password });
+  }
+  // Lien de réinitialisation à transmettre par le support (WhatsApp…) : l'utilisateur choisit lui-même son mot de passe.
+  if (res === 'users' && id && action === 'reset-link' && m === 'POST') {
+    platformNeed(ctx, 'platform.users.reset');
+    const user = await db.prepare('SELECT u.id, u.email, u.name, s.id AS store_id, s.country FROM users u LEFT JOIN memberships ms ON ms.user_id = u.id LEFT JOIN stores s ON s.id = ms.store_id WHERE u.id = ? ORDER BY ms.created_at LIMIT 1').bind(num(id)).first();
+    if (!user) throw new HttpError(404, 'Utilisateur introuvable.');
+    // Téléphone du commerce (réglages), au format international d'après le pays : le lien part directement par WhatsApp.
+    user.phone = user.store_id ? ((await db.prepare("SELECT value FROM settings WHERE store_id = ? AND key = 'phone'").bind(user.store_id).first())?.value || '') : '';
+    const DIAL = { MA: '212', DZ: '213', TN: '216', SN: '221', ML: '223', GN: '224', CI: '225', BF: '226', NE: '227', TG: '228', BJ: '229', CM: '237', GA: '241', CG: '242', CD: '243', MG: '261', FR: '33', BE: '32', CH: '41', LU: '352', CA: '1' };
+    const raw = String(user.phone).replace(/[^\d+]/g, ''), cc = DIAL[user.country] || '';
+    user.phone_intl = !raw ? '' : raw.startsWith('+') ? raw.slice(1) : raw.startsWith('00') ? raw.slice(2) : raw.startsWith('0') && cc ? cc + raw.slice(1) : raw;
+    const link = await createResetLink(db, env, user.id, new URL(request.url).origin, 'support');
+    return json({ ok: true, email: user.email, name: user.name, phone: user.phone || '', phone_intl: user.phone_intl, ...link });
   }
   if (res === 'users' && id && action === 'logout' && m === 'POST') {
     platformNeed(ctx, 'platform.users.reset');

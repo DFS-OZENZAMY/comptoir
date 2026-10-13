@@ -877,14 +877,40 @@ async function viewUsers() {
           <td>${u.store_id ? `<button class="link" data-store="${u.store_id}">${esc(u.store_name)}</button>` : '<span class="muted">aucun</span>'}</td>
           <td>${u.role === 'owner' ? 'propriétaire' : u.role === 'staff' ? 'employé' : ''}</td>
           <td class="muted">${since(u.last_login_at)}</td><td class="num">${u.sessions}</td>
-          <td class="num nowrap"><button class="btn btn-sm" data-ulogout="${u.id}" ${u.sessions ? '' : 'disabled'}>Déconnecter</button> <button class="btn btn-sm" data-ureset="${u.id}">Nouveau mot de passe</button></td></tr>`).join('')}
+          <td class="num nowrap"><button class="btn btn-sm" data-ulogout="${u.id}" ${u.sessions ? '' : 'disabled'}>Déconnecter</button> <button class="btn btn-sm" data-ureset="${u.id}">Réinitialiser</button></td></tr>`).join('')}
       </tbody></table></div>`;
     };
     $('#view').innerHTML = `<div class="toolbar"><input type="search" id="uq" placeholder="Nom, e-mail, commerce…"></div><div id="utable"></div>`;
     $('#uq').addEventListener('input', (e) => render(e.target.value));
     render('');
   }
-  async function resetPassword(id, after) {
+  // Réinitialiser : lien à transmettre (recommandé, la personne choisit elle-même son mot de passe) ou mot de passe temporaire.
+  function resetPassword(id, after) {
+    const body = openModal('Réinitialiser le mot de passe', `
+      <p>Recommandé : envoyez un <strong>lien</strong> (valable 30 minutes, usage unique). La personne choisit elle-même son nouveau mot de passe : personne d'autre ne le connaît.</p>
+      <div class="modal-foot"><div><button class="btn" id="rpTemp">Mot de passe temporaire</button></div><div class="right"><button class="btn" id="rpCancel">Annuler</button><button class="btn btn-primary" id="rpLink">Envoyer un lien</button></div></div>`);
+    $('#rpCancel', body).addEventListener('click', closeModal);
+    $('#rpTemp', body).addEventListener('click', () => tempPassword(id, after));
+    $('#rpLink', body).addEventListener('click', async (e) => {
+      e.currentTarget.disabled = true;
+      try {
+        const r = await api(`/console/users/${id}/reset-link`, { method: 'POST', body: {} });
+        const first = String(r.name || '').split(' ')[0];
+        const text = `Bonjour${first ? ' ' + first : ''}, voici le lien pour choisir un nouveau mot de passe Comptoir (valable 30 minutes) : ${r.url}`;
+        const wa = r.phone_intl || '';
+        openModal('Lien de réinitialisation', `
+          <p>À transmettre à <strong>${esc(r.name || r.email)}</strong>${r.phone ? ` (${esc(r.phone)})` : ''}. Valable 30 minutes, une seule fois.</p>
+          <div class="share-row"><a class="btn" href="https://wa.me/${wa}?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">WhatsApp</a>
+            <a class="btn" href="mailto:${encodeURIComponent(r.email)}?subject=${encodeURIComponent('Votre nouveau mot de passe Comptoir')}&body=${encodeURIComponent(text)}">E-mail</a>
+            <button class="btn" id="rlCopy">Copier le lien</button></div>
+          <input class="rl-url" readonly value="${esc(r.url)}">
+          <div class="modal-foot"><div class="right"><button class="btn btn-primary" id="rlOk">Terminé</button></div></div>`);
+        $('#rlCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(r.url); } catch { $('.rl-url').select(); document.execCommand('copy'); } toast('Lien copié'); });
+        $('#rlOk').addEventListener('click', () => { closeModal(); after?.(); });
+      } catch (ex) { fail(ex); }
+    });
+  }
+  async function tempPassword(id, after) {
     if (!confirm('Générer un mot de passe temporaire ? La personne sera déconnectée et devra en choisir un nouveau.')) return;
     try {
       const r = await api(`/console/users/${id}/reset`, { method: 'POST', body: {} });
@@ -985,7 +1011,7 @@ async function viewUsers() {
     } else if (tab === 'equipe') {
       body.innerHTML = `<div class="table-wrap"><table><tbody>${d.team.map((u) => `<tr><td><span class="cell-main">${esc(u.name)}</span><div class="cell-sub">${esc(u.email)}, ${u.role === 'owner' ? 'propriétaire' : 'employé'}</div></td>
         <td class="muted">${u.last_login_at ? 'connecté ' + since(u.last_login_at) : 'jamais connecté'}</td>
-        <td class="num"><button class="btn btn-sm" data-ureset="${u.id}">Nouveau mot de passe</button></td></tr>`).join('')}</tbody></table></div>`;
+        <td class="num"><button class="btn btn-sm" data-ureset="${u.id}">Réinitialiser</button></td></tr>`).join('')}</tbody></table></div>`;
     } else if (tab === 'journal') {
       body.innerHTML = `<ul class="timeline compact">${d.events.map((e) => `<li><span class="t-type">${esc(EVENT_LABEL[e.type] || e.type)}</span><span>${esc(e.detail)}${e.user_name ? ` <span class="muted">(${esc(e.user_name)})</span>` : ''}</span><span class="t-when" title="${esc(e.created_at)}">${since(e.created_at)}</span></li>`).join('') || '<li class="muted">Aucun événement.</li>'}</ul>`;
     }

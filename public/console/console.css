@@ -358,3 +358,7 @@ code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .84rem;
   .side-search { margin-bottom: 4px; padding-top: 7px; padding-bottom: 7px; }
   .side-foot .refreshed { display: none; }
 }
+
+/* Lien de réinitialisation à transmettre (support) */
+.share-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 10px; }
+.rl-url { width: 100%; box-sizing: border-box; font: inherit; font-size: .85rem; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--zinc); color: var(--ink); }
